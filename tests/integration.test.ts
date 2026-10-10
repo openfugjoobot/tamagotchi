@@ -8,10 +8,11 @@ import type { GameState } from "@/engine/types";
 const MIN = 60_000;
 
 function run(s: GameState, ms: number, step = MIN): GameState {
-  let t = 0;
+  let t = s.lastTickAt;
+  const end = t + ms;
   let cur = s;
-  while (t < ms) {
-    t += step;
+  while (t < end) {
+    t = Math.min(end, t + step);
     cur = maybeEvolve(advance(cur, t), t);
     if (cur.hungry === 0) cur = applyAction(cur, { type: "feed", kind: "meal" }, t);
     if (cur.happy === 0) cur = applyAction(cur, { type: "feed", kind: "snack" }, t);
