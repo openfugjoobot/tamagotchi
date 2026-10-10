@@ -27,7 +27,7 @@ export function pressButton(
         switch (m.selection) {
           case "feed": m.mode = "feed"; m.sub = "meal"; break;
           case "light": m.mode = "light"; m.sub = "off"; break;
-          case "play": m.mode = "play"; m.sub = "0"; break;
+          case "play": m.mode = "play"; m.sub = "0:0"; break;
           case "meter": m.mode = "meter"; m.meterPage = 0; break;
           case "medicine": action = { type: "medicine" }; m.mode = "idle"; m.selection = null; break;
           case "duck": action = { type: "clean" }; m.mode = "idle"; m.selection = null; break;

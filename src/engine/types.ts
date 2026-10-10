@@ -59,6 +59,7 @@ export interface GameState {
   lastMealAt: number;
   lastPoopAt: number;
   nextPoopAt: number;
+  nextCallAt: number;
   clock: ClockState;
   /** Bruch-Reste der Decay-Fortschritte in ms (verhindert Verlust bei Intervall-Teilung). */
   decayCarry: { hungryMs: number; happyMs: number };

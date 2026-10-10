@@ -45,6 +45,7 @@ export function advance(state: GameState, nowMs: number): GameState {
 function nextBoundary(s: GameState, from: number, to: number): number {
   let b = to;
   if (s.nextPoopAt > from && s.nextPoopAt < b) b = s.nextPoopAt;
+  if (s.nextCallAt > from && s.nextCallAt < b) b = s.nextCallAt;
   if (s.sickSince !== null && s.sickSince + config.lifespan.sicknessDeathMs < b) {
     b = s.sickSince + config.lifespan.sicknessDeathMs;
   }
@@ -69,6 +70,7 @@ function applyInterval(s: GameState, from: number, to: number) {
   }
   updateSleep(s, to);
   updateSickness(s, to);
+  updateCalls(s, to);
   updateAttention(s, to);
 }
 
@@ -108,6 +110,30 @@ function updateAttention(s: GameState, nowMs: number) {
       s.attentionSince = nowMs;
       s.attentionReason = s.hungry === 0 ? "hungry" : "happy";
     }
+  }
+  // Unbeantworteter Call nach Ablauf des Fensters ⇒ Care Mistake.
+  if (s.flags.attention && s.attentionSince !== null &&
+      nowMs - s.attentionSince >= config.attention.careMistakeWindowMs) {
+    s.careMistakes += 1;
+    s.careMistakesThisStage += 1;
+    s.flags.attention = false;
+    s.flags.misbehaving = false;
+    s.attentionSince = null;
+    s.attentionReason = null;
+  }
+}
+
+// Regelmäßige Rufe: bei leerem Herz ein Bedürfnis-Ruf, sonst „misbehaving“.
+function updateCalls(s: GameState, nowMs: number) {
+  while (s.nextCallAt <= nowMs) {
+    const needEmpty = s.hungry === 0 || s.happy === 0;
+    if (!needEmpty && !s.flags.sleeping && !s.flags.attention) {
+      s.flags.attention = true;
+      s.attentionSince = s.nextCallAt;
+      s.attentionReason = "misbehave";
+      s.flags.misbehaving = true;
+    }
+    s.nextCallAt += config.attention.callIntervalMs;
   }
 }
 

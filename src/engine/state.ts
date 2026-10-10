@@ -1,4 +1,5 @@
 import type { GameState } from "./types";
+import { config } from "./config";
 
 export const SCHEMA_VERSION = 1;
 
@@ -27,6 +28,7 @@ export function createInitialState(nowMs: number, seed: number): GameState {
     lastMealAt: nowMs,
     lastPoopAt: nowMs,
     nextPoopAt: nowMs + 15 * 60_000,
+    nextCallAt: nowMs + config.attention.callIntervalMs,
     clock: { offsetMinutes: 0 },
     decayCarry: { hungryMs: 0, happyMs: 0 },
     menu: { mode: "idle", selection: null, sub: null, meterPage: 0 },

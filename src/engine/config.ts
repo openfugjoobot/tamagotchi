@@ -82,7 +82,7 @@ export const config = {
     babySicknessMs: 33 * MIN,
   },
 
-  attention: { windowMs: 15 * MIN, careMistakeWindowMs: 15 * MIN },
+  attention: { windowMs: 15 * MIN, careMistakeWindowMs: 15 * MIN, callIntervalMs: 45 * MIN },
   careMistake: { windowMs: 15 * MIN },
 
   clock: { minutesPerDay: 24 * 60 },

@@ -53,6 +53,9 @@ export function applyAction(state: GameState, action: Action, nowMs: number): Ga
       if (!s.flags.misbehaving) return state;
       s.discipline = Math.min(100, s.discipline + config.discipline.scoldGain) as GameState["discipline"];
       s.flags.misbehaving = false;
+      s.flags.attention = false;
+      s.attentionSince = null;
+      s.attentionReason = null;
       break;
     case "attention":
       s.flags.attention = false;

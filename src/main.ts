@@ -7,6 +7,7 @@ import { createInitialState } from "./engine/state";
 import { createFramebuffer, blitToCanvas } from "./render/canvas";
 import { renderScreen } from "./render/screen";
 import { pressButton, handleKey } from "./input/menus";
+import { resolveRound, sessionWon, PLAY_ROUNDS } from "./engine/minigame";
 import { createSound } from "./audio/sound";
 import { loadState, createAutosave, clearSave } from "./storage/persist";
 import type { GameState } from "./engine/types";
@@ -34,14 +35,20 @@ function onButton(b: "A" | "B" | "C") {
   const { state: next, action } = pressButton(state, b, now);
   state = next;
   if (action) state = applyAction(state, action, now);
-  // Play-Minigame: Rundenergebnis per RNG.
-  if (state.menu.mode === "play") {
-    const round = Number(state.menu.sub ?? "0");
-    const win = rng.nextInt(2) === 0;
-    if (b === "A" || b === "B") {
-      state = applyAction(state, { type: "play", result: win ? "win" : "lose" }, now);
-      state.menu.sub = String(round + 1);
-      if (round + 1 >= 5) state.menu.mode = "idle";
+  // Play-Minigame: 5 Runden, Gegner per RNG; Sieg ≥3 Runden ⇒ +1 Happy.
+  if (state.menu.mode === "play" && (b === "A" || b === "B")) {
+    const [rStr, wStr] = (state.menu.sub ?? "0:0").split(":");
+    let round = Number(rStr), wins = Number(wStr);
+    const player = b === "A" ? "left" : "right";
+    const { win } = resolveRound(player, rng);
+    round += 1;
+    if (win) wins += 1;
+    if (round >= PLAY_ROUNDS) {
+      state = applyAction(state, { type: "play", result: sessionWon(wins) ? "win" : "lose" }, now);
+      state.menu.mode = "idle";
+      state.menu.sub = null;
+    } else {
+      state.menu.sub = `${round}:${wins}`;
     }
   }
   sound.play("click", state.soundOn);
