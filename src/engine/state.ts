@@ -28,6 +28,7 @@ export function createInitialState(nowMs: number, seed: number): GameState {
     lastPoopAt: nowMs,
     nextPoopAt: nowMs + 15 * 60_000,
     clock: { offsetMinutes: 0 },
+    decayCarry: { hungryMs: 0, happyMs: 0 },
     menu: { mode: "idle", selection: null, sub: null, meterPage: 0 },
     rngSeed: seed,
     soundOn: true,
@@ -50,6 +51,7 @@ export function migrate(obj: unknown): GameState {
     ...(src as Partial<GameState>),
     flags: { ...base.flags, ...((src.flags as object) ?? {}) },
     clock: { ...base.clock, ...((src.clock as object) ?? {}) },
+    decayCarry: { ...base.decayCarry, ...((src.decayCarry as object) ?? {}) },
     menu: { ...base.menu, ...((src.menu as object) ?? {}) },
     schemaVersion: SCHEMA_VERSION,
   };
