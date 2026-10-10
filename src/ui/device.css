@@ -1,0 +1,25 @@
+:root { --shell: #d9c3a5; --shell-edge: #b89b78; --lcd-bg: #b8c9a0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #222; font-family: system-ui, sans-serif; }
+body { display: grid; place-items: center; }
+#device {
+  width: min(90vw, 360px);
+  aspect-ratio: 3 / 4;
+  background: var(--shell);
+  border: 6px solid var(--shell-edge);
+  border-radius: 46% / 38%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6%; padding: 8%;
+}
+#lcd {
+  width: 100%; height: auto; image-rendering: pixelated;
+  background: var(--lcd-bg); border: 4px solid #7d8a6a; border-radius: 8px;
+}
+#buttons { display: flex; gap: 12%; }
+#buttons button {
+  width: 52px; height: 52px; border-radius: 50%; border: none;
+  background: var(--shell-edge); color: #3a2f22; font-weight: 700; font-size: 18px;
+  touch-action: manipulation; cursor: pointer;
+}
+#buttons button:active { transform: translateY(2px); filter: brightness(0.9); }
+@media (max-width: 480px) { #device { width: 94vw; } }
