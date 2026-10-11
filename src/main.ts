@@ -27,11 +27,11 @@ if (shell === "pink" || shell === "blue") {
 // ---- Hintergrund-Themes ----
 const BG_KEY = "tamagotchi.bg";
 const THEMES: { id: string; c: string }[] = [
-  { id: "navy", c: "#173a5c" },
-  { id: "midnight", c: "#14161f" },
-  { id: "sunset", c: "#6a2b53" },
-  { id: "forest", c: "#17402c" },
-  { id: "paper", c: "#e9e4d8" },
+  { id: "day", c: "#bcd7ff" },
+  { id: "forest", c: "#cfe6cf" },
+  { id: "dusk", c: "#e08a5a" },
+  { id: "night", c: "#14233a" },
+  { id: "midnight", c: "#05060a" },
 ];
 function applyBg(id: string): void {
   document.body.dataset.bg = id;
@@ -55,7 +55,7 @@ function initUI(): void {
       b.addEventListener("click", () => applyBg(t.id));
       bgbtns.appendChild(b);
     }
-    applyBg(localStorage.getItem(BG_KEY) ?? "navy");
+    applyBg(localStorage.getItem(BG_KEY) ?? "day");
   }
 
   const menu = document.getElementById("menu");
