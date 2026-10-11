@@ -1,19 +1,32 @@
 # Tamagotchi P1 (Emulator)
 
 Originalgetreue P1-Emulation im Browser: Die **echte Firmware** läuft in einer
-WASM-Emulation (TamaLIB) — Logik, Menü, Icons, Animation und Timing sind damit
-1:1 das Original. Geräte-Optik, Buttons, Sound und PWA drumherum. Nur privater Gebrauch.
+WASM-Emulation ([TamaLIB](https://github.com/jcrona/tamalib)) — Logik, Menü, Icons,
+Animation und Timing sind damit 1:1 das Original. Geräte-Optik, Buttons, Sound und
+PWA drumherum.
+
+Live: <https://tamagotchi.fugjoo.com> · Quellcode, aber **ohne** Firmware (siehe unten).
 
 ## Start
 
 ```bash
 npm install
 npm run dev      # Dev-Server
-npm run build    # Produktions-Build (dist/)
-npm run test     # Vitest
+npm run build    # Produktions-Build (dist/) + Precache-Liste für den Service Worker
+npm run verify   # tsc + Tests + Build
 ```
 
-Emulator-Build (nur nötig, wenn `emu/` geändert wird):
+## Firmware (nicht im Repo)
+
+`public/emu/rom0.bin` ist ein gedumptes Original-P1-ROM und **urheberrechtlich
+geschützt** — es liegt deshalb nicht im Repo und muss selbst bereitgestellt werden.
+Erwartet wird ein 12 KiB ROM mit MD5 `3fce172403c27274e59723bbb9f6d8e9`
+(z. B. `tama.bin` aus dem MAME-Set `tama.zip`) als `public/emu/rom0.bin`.
+Nur für privaten Gebrauch.
+
+## Emulator bauen
+
+Nur nötig, wenn `emu/` geändert wird (braucht Zig, kein Emscripten/Docker):
 
 ```bash
 ZIG=/pfad/zu/zig bash emu/build.sh   # → public/emu/tamalib.wasm
@@ -22,20 +35,30 @@ ZIG=/pfad/zu/zig bash emu/build.sh   # → public/emu/tamalib.wasm
 ## Bedienung
 
 - **A / B / C** = linke / mittlere / rechte Taste (Klick, Touch oder Tastatur:
-  `A`/`←`, `Enter`/`Space`, `Esc`/`→`).
+  `A`/`←`, `Enter`/`Space`, `→`; `Esc` schließt nur Dialoge).
 - **`?speed=N`** — Emulation N× schneller (z. B. `?speed=600`).
 - **`?shell=pink`** — pinkes Gehäuse (Default blau).
 
 ## Aufbau
 
 ```
-emu/        C→WASM-Build (TamaLIB + HAL-Glue, Zig) + ROM
-public/emu/ tamalib.wasm, rom0.bin (Artefakte)
-src/emu/    TS-Wrapper, Input-Map, Piezo-Audio
-src/render/ LCD-Canvas
-src/storage/ Emulator-Snapshot in localStorage
-src/ui/     Geräte-Gehäuse
-src/main.ts Verdrahtung (Frame-Loop, Buttons, Sound, Save)
+emu/         C→WASM-Build (TamaLIB + HAL-Glue, Zig)
+public/emu/  tamalib.wasm (+ rom0.bin, selbst bereitstellen)
+src/emu/     TS-Wrapper, Input-Map, Piezo-Audio, Zeitmodell (clock.ts)
+src/render/  LCD-Canvas, Icon-Leiste
+src/storage/ Emulator-Snapshot + localStorage-Keys
+src/theme.ts Hintergrund-Themes (Start + Guide)
+src/ui/      Geräte-Gehäuse
+src/main.ts  Verdrahtung (Frame-Loop, Buttons, Sound, Save, Nachhol-Logik)
 ```
 
-Weiter: [ARCHITECTURE.md](./ARCHITECTURE.md) · [DECISIONS.md](./DECISIONS.md)
+Weiter: [ARCHITECTURE.md](./ARCHITECTURE.md) · [DECISIONS.md](./DECISIONS.md) ·
+[GAMEPLAY.md](./GAMEPLAY.md)
+
+## Lizenzen
+
+- **TamaLIB** ist GPLv2 — die Emulator-Bestandteile dieses Projekts stehen damit
+  ebenfalls unter GPLv2 (kein separater LICENSE-Text im Repo).
+- Das P1-ROM ist nicht enthalten (siehe oben), die Icon-Grafiken stammen aus
+  [`GMMan/flipperzero-tamagotch-p1`](https://github.com/GMMan/flipperzero-tamagotch-p1)
+  (Lizenz dort unklar).

@@ -2,3 +2,6 @@ node_modules/
 dist/
 *.local
 .vite/
+
+# Copyright-Firmware – nicht ins öffentliche Repo (siehe docs/README.md).
+public/emu/rom0.bin
