@@ -6,6 +6,7 @@ import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu } from "./storage/persist";
 import { SHELLS, applyShell, savedShell } from "./shell";
+import { buildGrass } from "./grass";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -205,6 +206,17 @@ function initUI(): void {
 
   const y = document.getElementById("year");
   if (y) y.textContent = String(new Date().getFullYear());
+
+  // Gras am Boden
+  const grassEl = document.getElementById("grass");
+  if (grassEl) {
+    buildGrass(grassEl);
+    let rt: ReturnType<typeof setTimeout> | null = null;
+    window.addEventListener("resize", () => {
+      if (rt) clearTimeout(rt);
+      rt = setTimeout(() => buildGrass(grassEl), 250);
+    });
+  }
 }
 initUI();
 
