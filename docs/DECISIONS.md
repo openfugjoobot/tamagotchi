@@ -32,3 +32,13 @@ Timing im Browser deterministisch und speed-skalierbar bleibt.
 
 Geräteuhr-Manipulation und Browser-Throttling bei inaktivem Tab beeinflussen die
 Echtzeit; der Frame-Loop klemmt große Deltas, um Sprünge zu begrenzen.
+
+## Icons
+
+Die 8 Menü-Icons sind beim P1 **feste LCD-Segmente** und nicht als Bitmap im ROM —
+der Emulator liefert dafür also keine Grafik (`icons()` bleibt leer; die ROM zeichnet
+ihr aktives Menü-Icon selbst im 32×16-Raster). Für die sichtbare Icon-Leiste werden
+die echten P1-Icon-Grafiken aus dem Open-Source-Projekt
+`GMMan/flipperzero-tamagotch-p1` (`icons/icon_0..7.png`) verwendet; der weiße
+Hintergrund wird zur Laufzeit per Luminanz weggekeyt. Lizenz dort nicht eindeutig
+ausgewiesen — für privaten Gebrauch unkritisch. Aktive Icons voll, inaktive dezent.
