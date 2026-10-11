@@ -32,26 +32,29 @@ body {
 /* Pixel-Motive */
 #device::after {
   content: "";
-  position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g fill='%23ffffff' fill-opacity='0.95'><path d='M20 12l2.6 6 6 .6-4.5 4.1 1.3 6-5.4-3.3-5.4 3.3 1.3-6L11 18.6l6-.6z'/><path d='M74 40l2.2 5 5 .5-3.8 3.4 1.1 5-4.5-2.8-4.5 2.8 1.1-5-3.8-3.4 5-.5z'/><rect x='54' y='12' width='5' height='5'/><rect x='16' y='64' width='5' height='5'/><rect x='82' y='70' width='4' height='4'/><path d='M52 62c-3.2-4-8.6.9-4.2 4.7L52 70l4.2-3.3c4.4-3.8-1-8.7-4.2-4.7z'/><path d='M30 40l3.4-6 3.4 6z'/></g></svg>");
   background-size: 96px 96px;
   opacity: .9;
 }
 
-/* ---- LCD (32×16) ---- */
-.screen-wrap { position: absolute; left: 50%; top: 47%; transform: translate(-50%, -50%); width: 46%; }
+/* ---- LCD-Block: Icons + Pixel + Icons ---- */
+.screen-wrap { position: absolute; left: 50%; top: 47%; transform: translate(-50%, -50%); width: 50%; z-index: 2; }
 .star { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 128%; aspect-ratio: 1; height: auto; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
-.screen-well {
-  position: relative; width: 100%; aspect-ratio: 2 / 1;
+.screen-stack {
+  position: relative; width: 100%;
+  display: flex; flex-direction: column; align-items: center;
   background: var(--lcd-bg);
   border: 2px solid #b9900f; border-radius: 3px;
   box-shadow: inset 0 0 0 2px #f2dd7e, inset 0 2px 8px rgba(0,0,0,.3), inset 0 -2px 5px rgba(255,255,255,.5);
-  display: grid; place-items: center; overflow: hidden;
+  overflow: hidden;
 }
+.icons { width: 100%; height: auto; display: block; image-rendering: pixelated; }
+.screen-well { position: relative; width: 100%; aspect-ratio: 2 / 1; background: var(--lcd-bg); display: grid; place-items: center; overflow: hidden; }
 #lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
 
 /* ---- Buttons + Labels (klein, tief) ---- */
-#controls { position: absolute; left: 50%; top: 74%; transform: translateX(-50%); display: flex; gap: clamp(16px, 6vw, 30px); align-items: flex-start; }
+#controls { position: absolute; left: 50%; top: 74%; transform: translateX(-50%); display: flex; gap: clamp(16px, 6vw, 30px); align-items: flex-start; z-index: 2; }
 .ctrl { width: clamp(32px, 10vw, 44px); display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .ctrl button {
   position: relative; width: 100%; aspect-ratio: 1; border-radius: 50%; border: none; cursor: pointer;
