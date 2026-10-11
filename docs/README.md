@@ -57,8 +57,9 @@ Weiter: [ARCHITECTURE.md](./ARCHITECTURE.md) · [DECISIONS.md](./DECISIONS.md) �
 
 ## Lizenzen
 
-- **TamaLIB** ist GPLv2 — die Emulator-Bestandteile dieses Projekts stehen damit
-  ebenfalls unter GPLv2 (kein separater LICENSE-Text im Repo).
+- Dieses Projekt steht unter **GPLv2** (siehe [`../LICENSE`](../LICENSE)) — weil
+  [TamaLIB](https://github.com/jcrona/tamalib), auf dem die Emulation basiert,
+  GPLv2 ist. Copyright (C) 2026 fugjoo.
 - Das P1-ROM ist nicht enthalten (siehe oben), die Icon-Grafiken stammen aus
   [`GMMan/flipperzero-tamagotch-p1`](https://github.com/GMMan/flipperzero-tamagotch-p1)
   (Lizenz dort unklar).

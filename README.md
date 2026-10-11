@@ -23,6 +23,9 @@ Full manual: [docs/README.md](./docs/README.md) ·
 
 ## Licence
 
-TamaLIB is GPLv2, so the emulator parts of this project are GPLv2 as well. The P1
-firmware is not distributed here; icon artwork comes from
+This project is licensed under the **GNU General Public License v2.0** — see
+[LICENSE](./LICENSE). TamaLIB, which the emulation is built on, is GPLv2 as well.
+Copyright (C) 2026 fugjoo.
+
+The P1 firmware is not distributed here; icon artwork comes from
 [`GMMan/flipperzero-tamagotch-p1`](https://github.com/GMMan/flipperzero-tamagotch-p1).

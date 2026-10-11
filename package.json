@@ -2,6 +2,8 @@
   "name": "tamagotchi",
   "version": "0.1.0",
   "private": true,
+  "license": "GPL-2.0-only",
+  "repository": { "type": "git", "url": "git+https://github.com/openfugjoobot/tamagotchi.git" },
   "type": "module",
   "scripts": {
     "dev": "vite",
