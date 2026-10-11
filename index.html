@@ -56,7 +56,7 @@
     <section class="hero">
       <div class="device-wrap">
       <div class="hanger" aria-hidden="true"><span class="chain"></span><span class="ring"></span></div>
-      <div id="device" class="shell-teal">
+      <div id="device" class="shell-teal" data-shell="teal">
         <div class="screen-wrap">
           <svg class="star" viewBox="0 0 100 100" aria-hidden="true" preserveAspectRatio="none">
             <defs>
@@ -88,7 +88,15 @@
   </main>
 
   <footer class="site-footer">
-    <p>For personal use · real P1 firmware via TamaLIB · <span id="year"></span></p>
+    <div class="container footer-inner">
+      <span class="footer-brand">Tamagotchi<span>P1</span></span>
+      <span class="footer-dot">·</span>
+      <span>real 1996 firmware via TamaLIB</span>
+      <span class="footer-dot">·</span>
+      <span>for personal use</span>
+      <span class="footer-dot">·</span>
+      <span id="year"></span>
+    </div>
   </footer>
 
   <div id="modal" hidden>
@@ -106,6 +114,10 @@
 
   <div class="menu" id="menu" hidden>
     <div class="menu-head"><b>Menu</b><button class="menu-x" id="menu-close" aria-label="Close">✕</button></div>
+    <div class="menu-sec">
+      <span class="menu-label">Shell</span>
+      <div class="shellbtns" id="shellbtns"></div>
+    </div>
     <div class="menu-sec">
       <span class="menu-label">Background</span>
       <div class="bgbtns" id="bgbtns"></div>

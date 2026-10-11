@@ -5,6 +5,7 @@ import { drawIconRow, loadIcons, type IconImages } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu } from "./storage/persist";
+import { SHELLS, applyShell, savedShell } from "./shell";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -19,10 +20,7 @@ const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
 // Testmodus: feste Schrittzahl, ein Frame, dann Stopp (kein rAF-Loop).
 const STATIC = Number(params.get("static") ?? "0") || 0;
-const shell = params.get("shell");
-if (shell === "pink" || shell === "blue") {
-  document.getElementById("device")!.className = `shell-${shell}`;
-}
+const shellParam = params.get("shell");
 
 // ---- Hintergrund-Themes ----
 const BG_KEY = "tamagotchi.bg";
@@ -81,6 +79,27 @@ function initUI(): void {
       bgbtns.appendChild(b);
     }
     applyBg(localStorage.getItem(BG_KEY) ?? "day");
+  }
+
+  const shellbtns = document.getElementById("shellbtns");
+  const deviceEl = document.getElementById("device");
+  if (shellbtns && deviceEl) {
+    for (const s of SHELLS) {
+      const b = document.createElement("button");
+      b.className = "shellbtn";
+      b.dataset.id = s.id;
+      b.title = s.id;
+      b.style.background = `linear-gradient(180deg, ${s.top}, ${s.bot})`;
+      b.setAttribute("aria-label", "Shell: " + s.id);
+      b.addEventListener("click", () => {
+        applyShell(deviceEl, s.id, localStorage);
+        document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === s.id));
+      });
+      shellbtns.appendChild(b);
+    }
+    const initial = shellParam && SHELLS.some((s) => s.id === shellParam) ? shellParam : savedShell(localStorage);
+    applyShell(deviceEl, initial, localStorage);
+    document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === initial));
   }
 
   const menu = document.getElementById("menu");
