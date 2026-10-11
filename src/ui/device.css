@@ -142,6 +142,12 @@ main, .site-footer { position: relative; z-index: 1; }
 .hamburger:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .hamburger:active { transform: translateY(1px); }
 .back { color: var(--ink); text-decoration: none; font-weight: 700; font-size: 14px; }
+.header-actions { display: flex; align-items: center; gap: 6px; }
+.nav-link {
+  color: var(--ink); text-decoration: none; font-weight: 700; font-size: 14px;
+  padding: 9px 11px; border-radius: 11px; transition: background .15s ease;
+}
+.nav-link:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
 
 /* ================= Menu ================= */
 #scrim { position: fixed; inset: 0; z-index: 29; background: rgba(20,28,40,.28); backdrop-filter: blur(2px); }
@@ -435,15 +441,6 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
-
-/* ---- Sprachwahl ---- */
-.langbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 2px; }
-.langbtn {
-  min-height: 28px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 12.5px;
-  border: 1px solid var(--border); background: transparent; color: var(--ink); font-family: inherit;
-}
-.langbtn[aria-pressed="true"] { background: var(--accent); color: #4a3400; border-color: transparent; }
-.langbtn:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
 
 /* ---- A11y ---- */
 .skip {

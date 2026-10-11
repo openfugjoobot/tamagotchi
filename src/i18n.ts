@@ -1,6 +1,3 @@
-import { LANG_KEY } from "./storage/keys";
-export { LANG_KEY };
-
 export type Lang = "de" | "en" | "it";
 export const LANGS: Lang[] = ["de", "en", "it"];
 
@@ -16,7 +13,6 @@ const DICT: Record<Lang, Dict> = {
     notifications: "Notifications",
     guide: "Guide",
     restart: "Restart",
-    language: "Language",
     install: "Install app",
     on: "on",
     off: "off",
@@ -53,7 +49,6 @@ const DICT: Record<Lang, Dict> = {
     notifications: "Benachrichtigungen",
     guide: "Anleitung",
     restart: "Neu starten",
-    language: "Sprache",
     install: "App installieren",
     on: "an",
     off: "aus",
@@ -90,7 +85,6 @@ const DICT: Record<Lang, Dict> = {
     notifications: "Notifiche",
     guide: "Guida",
     restart: "Riavvia",
-    language: "Lingua",
     install: "Installa app",
     on: "on",
     off: "off",
@@ -120,17 +114,10 @@ const DICT: Record<Lang, Dict> = {
   },
 };
 
+/** Sprache aus der Browsersprache (de/it, sonst en). */
 export function currentLang(): Lang {
-  try {
-    const v = localStorage.getItem(LANG_KEY);
-    if (v === "de" || v === "en" || v === "it") return v;
-  } catch { /* ignore */ }
   const n = (navigator.language || "en").slice(0, 2).toLowerCase();
   return n === "de" ? "de" : n === "it" ? "it" : "en";
-}
-
-export function setLang(l: Lang): void {
-  try { localStorage.setItem(LANG_KEY, l); } catch { /* ignore */ }
 }
 
 export function t(key: string): string {

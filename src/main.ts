@@ -8,7 +8,7 @@ import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu } from "./storage/persist";
 import { SHELLS, applyShell, savedShell } from "./shell";
 import { buildGrass } from "./grass";
-import { applyI18n, currentLang, setLang, LANGS, t, type Lang } from "./i18n";
+import { applyI18n, currentLang, t } from "./i18n";
 import { THEMES, BG_KEY, savedBg } from "./theme";
 import { SOUND_KEY, NOTIFY_KEY, EMU_KEY } from "./storage/keys";
 
@@ -233,31 +233,9 @@ function initUI(): void {
     updateNotifyLabel();
   });
 
-  // ---- i18n ----
+  // ---- i18n (Sprache folgt der Browsersprache) ----
   applyI18n();
   document.documentElement.lang = currentLang();
-  const langbtns = document.getElementById("langbtns");
-  if (langbtns) {
-    const mark = () => langbtns.querySelectorAll<HTMLElement>(".langbtn").forEach((el) => el.setAttribute("aria-pressed", String(el.dataset.lang === currentLang())));
-    for (const l of LANGS) {
-      const b = document.createElement("button");
-      b.className = "langbtn";
-      b.dataset.lang = l;
-      b.textContent = { de: "🇩🇪", en: "🇬🇧", it: "🇮🇹" }[l];
-      b.title = { de: "Deutsch", en: "English", it: "Italiano" }[l];
-      b.setAttribute("aria-label", { de: "Deutsch", en: "English", it: "Italiano" }[l]);
-      b.addEventListener("click", () => {
-        setLang(l as Lang);
-        applyI18n();
-        document.documentElement.lang = l;
-        updateSoundLabel();
-        updateNotifyLabel();
-        mark();
-      });
-      langbtns.appendChild(b);
-    }
-    mark();
-  }
 
   // ---- Install-Hinweis (PWA) ----
   const installBtn = document.getElementById("btn-install");

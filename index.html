@@ -50,7 +50,10 @@
   <header class="site-header">
     <div class="container">
       <a class="brand" href="#top">Tamagotchi<span>P1</span></a>
-      <button class="hamburger" id="btn-menu" aria-label="Menu" aria-expanded="false" aria-controls="menu" aria-haspopup="dialog">☰</button>
+      <div class="header-actions">
+        <a class="nav-link" href="/guide.html" data-i18n="guide">Guide</a>
+        <button class="hamburger" id="btn-menu" aria-label="Menu" aria-expanded="false" aria-controls="menu" aria-haspopup="dialog">☰</button>
+      </div>
     </div>
   </header>
 
@@ -125,15 +128,10 @@
       <span class="menu-label" data-i18n="background">Background</span>
       <div class="bgbtns" id="bgbtns"></div>
     </div>
-    <div class="menu-sec">
-      <span class="menu-label" data-i18n="language">Language</span>
-      <div class="langbtns" id="langbtns"></div>
-    </div>
     <div class="menu-divider"></div>
     <nav class="menu-list">
       <button class="menu-row" id="btn-sound" aria-pressed="true"><span data-i18n="sound">Sound</span> <span class="chev" id="sound-state">on</span></button>
       <button class="menu-row" id="btn-notify" aria-pressed="false"><span data-i18n="notifications">Notifications</span> <span class="chev" id="notify-state">off</span></button>
-      <a class="menu-row" href="/guide.html"><span data-i18n="guide">Guide</span> <span class="chev">›</span></a>
       <button class="menu-row danger" id="btn-reset"><span data-i18n="restart">Restart</span> <span class="chev">›</span></button>
       <button class="menu-row" id="btn-install" hidden><span data-i18n="install">Install app</span> <span class="chev">›</span></button>
     </nav>
