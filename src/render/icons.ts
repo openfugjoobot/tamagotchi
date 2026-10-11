@@ -49,10 +49,11 @@ export function drawIconRow(
   row: 0 | 1,
   scale: number,
   color = "#26302a",
+  bg = "#cdd5c4",
 ): void {
   ctx.imageSmoothingEnabled = false;
-  ctx.clearRect(0, 0, LCD_WIDTH * scale, ICON_H * scale);
-  // 4 Slots, je 8 breit → passt auf 32.
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, LCD_WIDTH * scale, ICON_H * scale);
   for (let i = 0; i < 4; i++) {
     if (bits[row * 4 + i]) {
       drawBitmap(ctx, ICON_BITMAPS[row * 4 + i], i * ICON_W, 0, scale, color);

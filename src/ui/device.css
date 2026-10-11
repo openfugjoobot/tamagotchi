@@ -44,32 +44,27 @@ body {
   mix-blend-mode: normal;
 }
 
-/* kleine Nase oben, an der die Öse hängt */
-#device::before {
-  content: "";
-  position: absolute; top: -13px; left: 11%;
-  width: 32px; height: 24px;
-  background: linear-gradient(180deg, var(--shell-top), var(--shell-bot));
-  border-radius: 10px 10px 4px 4px;
-  box-shadow: inset 0 5px 6px rgba(255,255,255,.45), inset 0 -4px 6px rgba(0,0,0,.3);
-  z-index: 2;
-}
+/* kleine Nase entfernt (Öse weg) */
 
-/* ---- Ball-Chain ---- */
-.keychain { position: absolute; top: -46px; left: 11%; width: 32px; display: flex; flex-direction: column; align-items: center; z-index: 3; }
-.keychain .chain { width: 9px; height: 26px; background: repeating-linear-gradient(#eef1f3 0 3px, #9aa0a6 3px 6px); border-radius: 5px; box-shadow: 0 1px 2px rgba(0,0,0,.4); }
-.keychain .ring { width: 26px; height: 26px; border: 4px solid #dce0e3; border-radius: 50%; margin-top: -5px; box-shadow: inset 0 0 4px rgba(0,0,0,.35), inset 0 2px 2px rgba(255,255,255,.8), 0 2px 3px rgba(0,0,0,.45); }
+/* ---- Ball-Chain entfernt ---- */
 
-/* ---- LCD mit Zacken-Rahmen ---- */
+/* (Öse entfernt) */
+
+/* ---- LCD als eine Fläche: Icons oben + Pixel + Icons unten ---- */
 .screen-frame { position: relative; width: 100%; aspect-ratio: 1; display: grid; place-items: center; margin-top: 1%; z-index: 1; }
 .star { position: absolute; inset: -6%; width: 112%; height: 112%; filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
-.screen-stack { position: relative; width: 90%; display: flex; flex-direction: column; align-items: center; }
+.screen-stack {
+  position: relative; width: 90%;
+  display: flex; flex-direction: column; align-items: center;
+  background: var(--lcd-bg);
+  border: 2px solid #b9900f; border-radius: 4px;
+  box-shadow: inset 0 0 0 2px #f2dd7e, inset 0 3px 10px rgba(0,0,0,.3), inset 0 -2px 6px rgba(255,255,255,.5);
+  overflow: hidden;
+}
 .icons { width: 100%; height: auto; display: block; image-rendering: pixelated; }
 .screen-well {
   position: relative; width: 100%; aspect-ratio: 2 / 1;
   background: var(--lcd-bg);
-  border: 2px solid #b9900f; border-radius: 3px;
-  box-shadow: inset 0 0 0 2px #f2dd7e, inset 0 3px 10px rgba(0,0,0,.35), inset 0 -2px 6px rgba(255,255,255,.5);
   display: grid; place-items: center; overflow: hidden;
 }
 #lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
