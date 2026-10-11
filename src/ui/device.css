@@ -42,6 +42,7 @@ body[data-bg="day"] {
     radial-gradient(58% 46% at 16% 10%, #ffe9c9 0%, rgba(255,233,201,0) 60%),
     radial-gradient(54% 44% at 84% 6%, #cfe6ff 0%, rgba(207,230,255,0) 62%),
     radial-gradient(90% 60% at 50% 112%, #d9f2e6 0%, rgba(217,242,230,0) 66%);
+  --motif: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><g fill='%236b93c4'><path d='M28 18l2.4 10 10 2.4-10 2.4-2.4 10-2.4-10-10-2.4 10-2.4z'/><path d='M84 70l1.8 7.5 7.5 1.8-7.5 1.8-1.8 7.5-1.8-7.5-7.5-1.8 7.5-1.8z'/><circle cx='100' cy='26' r='2'/></g></svg>");
 }
 /* blossom – soft pink (light) */
 body[data-bg="blossom"] {
@@ -49,6 +50,7 @@ body[data-bg="blossom"] {
   --blobs:
     radial-gradient(60% 46% at 18% 10%, #ffd9e6 0%, rgba(255,217,230,0) 60%),
     radial-gradient(56% 44% at 84% 8%, #e6ddff 0%, rgba(230,221,255,0) 62%);
+  --motif: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><g fill='%23e08aa8'><path d='M40 30c-3-4-8 .8-4 3.6L40 37l4-3.4c4-2.8-1-7.6-4-3.6z'/><path d='M92 80c-2.4-3.2-6.4.6-3.2 2.9L92 85.6l3.2-2.7c3.2-2.3-.8-6.1-3.2-2.9z'/><circle cx='24' cy='88' r='2.2'/><circle cx='70' cy='18' r='1.8'/></g></svg>");
 }
 /* forest – calm, muted green (light) */
 body[data-bg="forest"] {
@@ -56,6 +58,7 @@ body[data-bg="forest"] {
   --blobs:
     radial-gradient(60% 46% at 18% 8%, #d7ecd2 0%, rgba(215,236,210,0) 60%),
     radial-gradient(70% 50% at 84% 14%, #fdf3d8 0%, rgba(253,243,216,0) 60%);
+  --motif: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><g fill='%235f9a6a'><ellipse cx='32' cy='30' rx='9' ry='5' transform='rotate(-35 32 30)'/><ellipse cx='92' cy='82' rx='7' ry='4' transform='rotate(25 92 82)'/><circle cx='72' cy='18' r='2'/><circle cx='20' cy='92' r='1.8'/></g></svg>");
 }
 /* dusk – warm sunset (mid) */
 body[data-bg="dusk"] {
@@ -68,6 +71,7 @@ body[data-bg="dusk"] {
   --blobs:
     radial-gradient(70% 52% at 18% 8%, #ffb27a 0%, rgba(255,178,122,0) 56%),
     radial-gradient(80% 58% at 82% 18%, #c06a97 0%, rgba(192,106,151,0) 60%);
+  --motif: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><g fill='%23ffd9a8'><path d='M30 20l2.2 9 9 2.2-9 2.2-2.2 9-2.2-9-9-2.2 9-2.2z'/><path d='M86 74l1.6 6.6 6.6 1.6-6.6 1.6-1.6 6.6-1.6-6.6-6.6-1.6 6.6-1.6z'/><circle cx='102' cy='30' r='1.8'/></g></svg>");
 }
 /* night – deep blue (dark) */
 body[data-bg="night"] {
@@ -78,6 +82,7 @@ body[data-bg="night"] {
   --shadow: 0 24px 50px rgba(0,0,0,.55);
   background-image: linear-gradient(180deg, #0a1a2e 0%, #061123 100%);
   --blobs: radial-gradient(60% 45% at 50% 0%, #173a5c 0%, rgba(23,58,92,0) 60%);
+  --motif: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><g fill='%23cfe4ff'><circle cx='24' cy='26' r='1.6'/><circle cx='70' cy='40' r='2'/><circle cx='100' cy='18' r='1.4'/><circle cx='46' cy='92' r='1.8'/><path d='M84 78l1.6 6.4 6.4 1.6-6.4 1.6-1.6 6.4-1.6-6.4-6.4-1.6 6.4-1.6z'/></g></svg>");
 }
 /* midnight – near black */
 body[data-bg="midnight"] {
@@ -88,6 +93,7 @@ body[data-bg="midnight"] {
   --shadow: 0 24px 50px rgba(0,0,0,.6);
   background-image: radial-gradient(70% 55% at 50% 0%, #14161f 0%, #05060a 65%);
   --blobs: radial-gradient(60% 45% at 50% 4%, #1b1f2c 0%, rgba(27,31,44,0) 62%);
+  --motif: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><g fill='%238fa6c0'><circle cx='30' cy='30' r='1.4'/><circle cx='90' cy='70' r='1.6'/><circle cx='64' cy='18' r='1.1'/></g></svg>");
 }
 
 /* dezente Hintergrund-Bewegung */
@@ -96,6 +102,11 @@ body[data-bg="midnight"] {
   background-image: var(--blobs, none);
   animation: drift 26s ease-in-out infinite alternate;
   will-change: transform;
+}
+.bg-anim::after {
+  content: ""; position: absolute; inset: 0;
+  background-image: var(--motif, none); background-size: 120px 120px;
+  opacity: .07; animation: drift 40s ease-in-out infinite alternate-reverse;
 }
 @keyframes drift {
   0%   { transform: translate3d(-1.6%, -1.2%, 0) scale(1.03); }
