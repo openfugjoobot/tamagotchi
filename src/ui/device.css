@@ -438,6 +438,7 @@ code { background: color-mix(in srgb, var(--ink) 10%, transparent); padding: 1px
 /* ================= Modal ================= */
 .modal { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 20px; background: rgba(10,20,35,.45); backdrop-filter: blur(6px); }
 .modal[hidden] { display: none; }
+.modal-top { z-index: 60; }
 .modal .card { width: min(92vw, 380px); color: var(--ink); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }
 .modal h2 { margin: 0 0 8px; font-size: 18px; }
 .modal .hint { color: var(--ink-dim); font-size: 13.5px; line-height: 1.6; margin: 0; }

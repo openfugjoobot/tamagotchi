@@ -55,6 +55,17 @@ export async function deleteRemote(token: string, deps: CloudDeps = {}): Promise
 }
 
 /**
+ * Gibt es einen echten Konflikt? Nur wenn beide Stände existieren und sich
+ * unterscheiden – dann soll der Nutzer entscheiden, nicht wir.
+ */
+export function hasConflict(localAt: number | null, cloudUpdatedAt: string | null): boolean {
+  const cloudAt = cloudUpdatedAt ? Date.parse(cloudUpdatedAt) : NaN;
+  if (typeof localAt !== "number" || !Number.isFinite(localAt)) return false;
+  if (!Number.isFinite(cloudAt)) return false;
+  return localAt !== cloudAt;
+}
+
+/**
  * Was beim Start tun? Es gibt kein Merging — nur „welcher Snapshot ist neuer".
  * localAt = Zeitstempel des lokalen Speicherns (ms), cloudUpdatedAt = ISO aus der Cloud.
  */

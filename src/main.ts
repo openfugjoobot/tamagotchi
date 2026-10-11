@@ -9,6 +9,7 @@ import { saveEmu, loadEmu, readSaveRecord } from "./storage/persist";
 import { AUTH_ENABLED } from "./auth/config";
 import { currentSession, restoreSession, renderSignInButton, signOut, type Session } from "./auth/google";
 import { decideSync, deleteRemote, pullSave, pushSave } from "./sync/cloud";
+import { hasConflict } from "./sync/cloud";
 import { SHELLS, applyShell, savedShell, starPolygon } from "./shell";
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, t } from "./i18n";
@@ -417,13 +418,45 @@ async function flushCloud(): Promise<void> {
   if (ok) cloudDirty = false;
 }
 
+/** Fragt, welcher Spielstand gelten soll (Cloud oder dieses Gerät). */
+function askWhichSave(localAt: number, cloudAt: string): Promise<"push" | "pull"> {
+  return new Promise((resolve) => {
+    const panel = document.getElementById("save-modal");
+    const hint = document.getElementById("save-hint");
+    const keepBtn = document.getElementById("save-keep");
+    const cloudBtn = document.getElementById("save-cloud");
+    if (!panel || !hint || !keepBtn || !cloudBtn) {
+      resolve("pull");
+      return;
+    }
+    const fmt = (v: number | string): string =>
+      new Date(v).toLocaleString(currentLang(), { dateStyle: "short", timeStyle: "short" });
+    hint.textContent = t("saveBody").replace("{cloud}", fmt(cloudAt)).replace("{local}", fmt(localAt));
+    const finish = (choice: "push" | "pull"): void => {
+      panel.hidden = true;
+      keepBtn.removeEventListener("click", onKeep);
+      cloudBtn.removeEventListener("click", onCloud);
+      resolve(choice);
+    };
+    const onKeep = (): void => finish("push");
+    const onCloud = (): void => finish("pull");
+    keepBtn.addEventListener("click", onKeep);
+    cloudBtn.addEventListener("click", onCloud);
+    panel.hidden = false;
+  });
+}
+
 /** Vor dem Laden des Spielstands: Cloud und lokal abgleichen (neuerer gewinnt). */
 async function syncBeforeBoot(): Promise<void> {
   const s = currentSession();
   if (!s) return;
   const local = readSaveRecord(localStorage);
   const cloud = await withTimeout(pullSave(s.token), 4000);
-  const action = decideSync(local?.t ?? null, cloud?.updatedAt ?? null);
+  // Beide da und unterschiedlich? Dann fragen, statt still zu ueberschreiben.
+  let action = decideSync(local?.t ?? null, cloud?.updatedAt ?? null);
+  if (local && cloud && hasConflict(local.t, cloud.updatedAt)) {
+    action = await askWhichSave(local.t, cloud.updatedAt);
+  }
   if (action === "pull" && cloud) {
     const at = Date.parse(cloud.updatedAt);
     try {
