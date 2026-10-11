@@ -452,6 +452,7 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
   .device-shadow { width: 300px; }
 }
 /* ---- Konto: Avatar in der Kopfzeile + Popover ---- */
+.header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .header-actions { position: relative; }
 .account-btn {
   width: 44px; height: 44px; border-radius: 13px; padding: 0; cursor: pointer;
