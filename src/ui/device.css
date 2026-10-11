@@ -305,8 +305,8 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 }
 
 /* Shell-Swatches im Menü */
-.shell-stage { display: flex; justify-content: center; align-items: flex-start; height: 186px; overflow: hidden; margin: 6px 0 10px; }
-.shell-stage .mini-device { width: 300px; flex: none; margin-top: 0; transform: scale(0.36); transform-origin: top center; pointer-events: none; animation: none; }
+.shell-stage { display: flex; justify-content: center; align-items: flex-start; height: 128px; overflow: hidden; margin: 2px 0 8px; }
+.shell-stage .mini-device { width: 300px; flex: none; margin-top: 0; transform: scale(0.4); transform-origin: top center; pointer-events: none; animation: none; }
 .shell-stage .mini-device .device-shadow { display: none; }
 .shellbtns { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .shell-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
