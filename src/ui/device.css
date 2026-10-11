@@ -113,6 +113,8 @@ body[data-bg="paper"] .iconbtn { color:#2a2f3a; border-color: rgba(0,0,0,.25); b
 
 #overlay { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 20px; background: rgba(3,8,16,.6); backdrop-filter: blur(6px); }
 #overlay[hidden] { display: none; }
+#overlay[data-view="help"] .sec[data-sec="theme"] { display: none; }
+#overlay[data-view="theme"] .sec[data-sec="help"] { display: none; }
 #overlay .card {
   width: min(92vw, 420px); max-height: 86vh; overflow: auto;
   background: rgba(14,30,50,.96); color: #dceaf7;

@@ -53,8 +53,8 @@ function initUI(): void {
     swatches.appendChild(b);
   }
   applyBg(localStorage.getItem(BG_KEY) ?? "navy");
-  document.getElementById("btn-help")!.addEventListener("click", () => { overlay.hidden = false; });
-  document.getElementById("btn-bg")!.addEventListener("click", () => { overlay.hidden = false; });
+  document.getElementById("btn-help")!.addEventListener("click", () => { overlay.dataset.view = "help"; overlay.hidden = false; });
+  document.getElementById("btn-bg")!.addEventListener("click", () => { overlay.dataset.view = "theme"; overlay.hidden = false; });
   document.getElementById("btn-close")!.addEventListener("click", () => { overlay.hidden = true; });
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.hidden = true; });
   window.addEventListener("keydown", (e) => { if (e.key === "Escape") overlay.hidden = true; });
