@@ -41,8 +41,8 @@ function applyBg(id: string): void {
   });
 }
 
-// ---- Anleitung: die 8 Icons (nur Namen) ----
-const ICON_NAMES = ["Futter", "Licht", "Spiel", "Medizin", "Bad", "Status", "Disziplin", "Aufmerksamkeit"];
+// ---- Guide: the 8 icons (names only) ----
+const ICON_NAMES = ["Food", "Light", "Game", "Medicine", "Bath", "Status", "Discipline", "Attention"];
 
 function initUI(): void {
   const bgbtns = document.getElementById("bgbtns");
@@ -75,15 +75,28 @@ function initUI(): void {
     });
   }
 
-  document.getElementById("btn-guide")?.addEventListener("click", () => {
+  const menu = document.getElementById("menu");
+  const menuBtn = document.getElementById("btn-menu");
+  const closeMenu = () => { if (menu) menu.hidden = true; menuBtn?.setAttribute("aria-expanded", "false"); };
+  menuBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!menu) return;
+    menu.hidden = !menu.hidden;
+    menuBtn.setAttribute("aria-expanded", String(!menu.hidden));
+  });
+  document.addEventListener("click", (e) => {
+    if (menu && !menu.hidden && e.target instanceof Node && !menu.contains(e.target) && e.target !== menuBtn) closeMenu();
+  });
+  document.getElementById("menu-guide")?.addEventListener("click", () => {
+    closeMenu();
     document.getElementById("guide")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   const modal = document.getElementById("modal");
-  document.getElementById("btn-reset")?.addEventListener("click", () => { if (modal) modal.hidden = false; });
+  document.getElementById("btn-reset")?.addEventListener("click", () => { closeMenu(); if (modal) modal.hidden = false; });
   document.getElementById("btn-cancel")?.addEventListener("click", () => { if (modal) modal.hidden = true; });
   modal?.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
-  window.addEventListener("keydown", (e) => { if (e.key === "Escape" && modal) modal.hidden = true; });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMenu(); if (modal) modal.hidden = true; } });
   document.getElementById("btn-confirm-reset")?.addEventListener("click", () => {
     try { localStorage.removeItem("tamagotchi.emu.v1"); } catch { /* ignore */ }
     location.reload();
