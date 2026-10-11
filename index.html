@@ -49,19 +49,6 @@
       <a class="brand" href="#top">Tamagotchi<span>P1</span></a>
       <button class="hamburger" id="btn-menu" aria-label="Menu" aria-expanded="false" aria-controls="menu">☰</button>
     </div>
-    <div class="menu" id="menu" hidden>
-      <div class="menu-head"><b>Menu</b><button class="menu-x" id="menu-close" aria-label="Close">✕</button></div>
-      <div class="menu-sec">
-        <span class="menu-label">Background</span>
-        <div class="bgbtns" id="bgbtns"></div>
-      </div>
-      <div class="menu-divider"></div>
-      <nav class="menu-list">
-        <a class="menu-row" href="/guide.html">Guide <span class="chev">›</span></a>
-        <button class="menu-row danger" id="btn-reset">Restart <span class="chev">›</span></button>
-      </nav>
-    </div>
-    <div id="scrim" hidden></div>
   </header>
 
   <main id="top">
@@ -115,6 +102,20 @@
   </div>
 
   <div id="loading"><div class="spin"></div><div class="loadtxt">loading …</div></div>
+
+  <div class="menu" id="menu" hidden>
+    <div class="menu-head"><b>Menu</b><button class="menu-x" id="menu-close" aria-label="Close">✕</button></div>
+    <div class="menu-sec">
+      <span class="menu-label">Background</span>
+      <div class="bgbtns" id="bgbtns"></div>
+    </div>
+    <div class="menu-divider"></div>
+    <nav class="menu-list">
+      <a class="menu-row" href="/guide.html">Guide <span class="chev">›</span></a>
+      <button class="menu-row danger" id="btn-reset">Restart <span class="chev">›</span></button>
+    </nav>
+  </div>
+  <div id="scrim" hidden></div>
   <script type="module" src="/src/main.ts"></script>
   <script>
     if ("serviceWorker" in navigator) {
