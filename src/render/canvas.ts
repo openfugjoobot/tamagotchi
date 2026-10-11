@@ -8,7 +8,7 @@ export interface Framebuffer {
   clear(): void;
 }
 
-export function createFramebuffer(width = config.lcd.width, height = config.lcd.height): Framebuffer {
+export function createFramebuffer(width: number = config.lcd.width, height: number = config.lcd.height): Framebuffer {
   const buf = new Uint8Array(width * height);
   const idx = (x: number, y: number) => y * width + x;
   return {

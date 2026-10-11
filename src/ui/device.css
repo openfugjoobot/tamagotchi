@@ -1,25 +1,71 @@
-:root { --shell: #d9c3a5; --shell-edge: #b89b78; --lcd-bg: #b8c9a0; }
+:root { --lcd-bg: #a6c65a; }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: #222; font-family: system-ui, sans-serif; }
-body { display: grid; place-items: center; }
+html, body { margin: 0; height: 100%; background: #141414; font-family: system-ui, sans-serif; }
+body { display: grid; place-items: center; padding: 40px 18px 24px; }
+
+/* ---- Ei-Gehäuse ---- */
 #device {
-  width: min(90vw, 360px);
-  aspect-ratio: 3 / 4;
-  background: var(--shell);
-  border: 6px solid var(--shell-edge);
-  border-radius: 46% / 38%;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 6%; padding: 8%;
+  position: relative;
+  width: min(92vw, 330px);
+  aspect-ratio: 0.78;
+  border-radius: 50% 50% 50% 50% / 57% 57% 43% 43%;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 15% 12% 12%;
+  box-shadow:
+    inset 0 -20px 34px rgba(0,0,0,.20),
+    inset 0 14px 26px rgba(255,255,255,.30),
+    0 20px 44px rgba(0,0,0,.55);
 }
-#lcd {
-  width: 100%; height: auto; image-rendering: pixelated;
-  background: var(--lcd-bg); border: 4px solid #7d8a6a; border-radius: 8px;
+
+/* Gehäuse-Varianten (Muster) */
+.shell-blue {
+  background-color: #25c7e0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><polygon points='18,12 30,32 6,32' fill='%23ff3ea5'/><polygon points='96,78 108,98 84,98' fill='%23ff3ea5'/><polyline points='12,66 20,58 28,66 36,58 44,66' fill='none' stroke='%23ffd400' stroke-width='4'/><circle cx='70' cy='22' r='4' fill='%23ffffff'/><circle cx='46' cy='104' r='4' fill='%23ffffff'/><path d='M92 20 a7 7 0 1 1 -0.1 0' fill='none' stroke='%237b3fe4' stroke-width='4'/></svg>");
+  background-size: 120px 120px;
 }
-#buttons { display: flex; gap: 12%; }
+.shell-pink {
+  background-color: #ff2f8e;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><path d='M20 14 l4 8 9 1 -6.5 6 1.5 9 -8-4.5 -8 4.5 1.5-9 -6.5-6 9-1z' fill='%23ffd400'/><path d='M92 70 l3 6 7 .8 -5 4.6 1.2 7 -6.2-3.5 -6.2 3.5 1.2-7 -5-4.6 7-.8z' fill='%23ffd400'/><polyline points='14,70 22,62 30,70 38,62 46,70' fill='none' stroke='%233a7bff' stroke-width='4'/><path d='M70 96 c-6-6 -12 2 -6 8 l6 6 6-6 c6-6 0-14 -6-8z' fill='%23ffc0dd'/><path d='M98 24 c-5-5 -10 2 -5 6 l5 5 5-5 c5-4 0-11 -5-6z' fill='%23ffc0dd'/></svg>");
+  background-size: 120px 120px;
+}
+
+/* ---- Ball-Chain + Öse ---- */
+.keychain { position: absolute; top: -36px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
+.keychain .chain { width: 9px; height: 20px; background: repeating-linear-gradient(#d7dade 0 3px, #9298a0 3px 6px); border-radius: 5px; }
+.keychain .ring { width: 22px; height: 22px; border: 4px solid #cfd3d8; border-radius: 50%; margin-top: -3px; box-shadow: inset 0 0 3px rgba(0,0,0,.3); }
+
+/* ---- Schriftzug ---- */
+.brand {
+  margin-top: 1%;
+  font-weight: 900; letter-spacing: 1.5px;
+  font-size: clamp(13px, 4.4vw, 18px);
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0,0,0,.18), 0 -1px 0 rgba(255,255,255,.6);
+  -webkit-text-stroke: 0.6px rgba(0,0,0,.18);
+  font-family: "Trebuchet MS", "Comic Sans MS", system-ui, sans-serif;
+}
+
+/* ---- LCD mit Zacken-Rahmen ---- */
+.screen-frame { position: relative; width: 80%; aspect-ratio: 1; display: grid; place-items: center; margin-top: 3%; }
+.star { position: absolute; inset: -10%; width: 120%; height: 120%; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); }
+.star polygon { fill: #ffd400; }
+.screen-well {
+  position: relative; width: 72%; aspect-ratio: 2 / 1;
+  background: var(--lcd-bg);
+  border: 3px solid #b98b00; border-radius: 5px;
+  box-shadow: inset 0 0 0 2px #eac74c, inset 0 0 8px rgba(0,0,0,.25);
+  display: grid; place-items: center; overflow: hidden;
+}
+#lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
+
+/* ---- Buttons ---- */
+#buttons { display: flex; gap: 15%; margin-top: 7%; }
 #buttons button {
-  width: 52px; height: 52px; border-radius: 50%; border: none;
-  background: var(--shell-edge); color: #3a2f22; font-weight: 700; font-size: 18px;
-  touch-action: manipulation; cursor: pointer;
+  width: clamp(30px, 9vw, 40px); aspect-ratio: 1; border-radius: 50%;
+  border: 2px solid #e0a800; background: #ffd400; cursor: pointer;
+  box-shadow: inset 0 -3px 5px rgba(0,0,0,.28), inset 0 2px 3px rgba(255,255,255,.5), 0 3px 4px rgba(0,0,0,.35);
+  touch-action: manipulation;
 }
-#buttons button:active { transform: translateY(2px); filter: brightness(0.9); }
-@media (max-width: 480px) { #device { width: 94vw; } }
+#buttons button:active { transform: translateY(2px); filter: brightness(.92); }
+
+@media (max-width: 480px) { #device { width: 86vw; } }

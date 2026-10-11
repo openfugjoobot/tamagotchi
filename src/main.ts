@@ -14,12 +14,36 @@ import type { GameState } from "./engine/types";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
-const clock = createClock();
 const sound = createSound(() => new AudioContext());
 const autosave = createAutosave(localStorage, 2000);
 const rng = createRng((Math.random() * 2 ** 32) >>> 0);
 
-let state: GameState = loadState(localStorage, clock.now(), (Math.random() * 2 ** 32) >>> 0);
+// Test-Speed: ?speed=600 lässt die Spielzeit 600× schneller laufen.
+// Bei Speed > 1 wird nicht persistiert (frischer Lauf pro Reload).
+const params = new URLSearchParams(location.search);
+const rawSpeed = params.get("speed");
+const SPEED = Math.max(1, Number(rawSpeed ?? "1") || 1);
+const shell = params.get("shell");
+if (shell === "pink" || shell === "blue") {
+  document.getElementById("device")!.className = `shell-${shell}`;
+}
+const persist = SPEED === 1;
+const startReal = Date.now();
+const clock = persist
+  ? createClock()
+  : { now: () => startReal + (Date.now() - startReal) * SPEED };
+
+let state: GameState = persist
+  ? loadState(localStorage, clock.now(), (Math.random() * 2 ** 32) >>> 0)
+  : createInitialState(clock.now(), (Math.random() * 2 ** 32) >>> 0);
+
+if (SPEED > 1) {
+  const badge = document.createElement("div");
+  badge.textContent = `×${SPEED}`;
+  badge.style.cssText =
+    "position:fixed;top:8px;right:10px;font:700 14px system-ui;color:#c4ff3d;background:#0c0c0c;padding:2px 8px;border-radius:6px;z-index:9";
+  document.body.appendChild(badge);
+}
 
 function tick(): GameState {
   const now = clock.now();
@@ -52,7 +76,7 @@ function onButton(b: "A" | "B" | "C") {
     }
   }
   sound.play("click", state.soundOn);
-  autosave.schedule(() => state);
+  if (persist) autosave.schedule(() => state);
 }
 
 const held = new Set<string>();
