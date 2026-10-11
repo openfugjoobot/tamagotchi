@@ -143,4 +143,7 @@ export function applyI18n(root: Document | HTMLElement = document): void {
   root.querySelectorAll<HTMLElement>("[data-i18n-aria]").forEach((el) => {
     el.setAttribute("aria-label", t(el.dataset.i18nAria!));
   });
+  root.querySelectorAll<HTMLElement>("[data-i18n-title]").forEach((el) => {
+    el.setAttribute("title", t(el.dataset.i18nTitle!));
+  });
 }

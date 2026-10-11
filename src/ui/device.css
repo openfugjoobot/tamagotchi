@@ -143,11 +143,14 @@ main, .site-footer { position: relative; z-index: 1; }
 .hamburger:active { transform: translateY(1px); }
 .back { color: var(--ink); text-decoration: none; font-weight: 700; font-size: 14px; }
 .header-actions { display: flex; align-items: center; gap: 6px; }
-.nav-link {
-  color: var(--ink); text-decoration: none; font-weight: 700; font-size: 14px;
-  padding: 9px 11px; border-radius: 11px; transition: background .15s ease;
+.icon-link {
+  width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center;
+  border: 1px solid var(--border-strong); background: transparent; color: var(--ink);
+  text-decoration: none; transition: background .15s ease, transform .1s ease;
 }
-.nav-link:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.icon-link:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.icon-link:active { transform: translateY(1px); }
+.icon-link svg { width: 21px; height: 21px; display: block; }
 
 /* ================= Menu ================= */
 #scrim { position: fixed; inset: 0; z-index: 29; background: rgba(20,28,40,.28); backdrop-filter: blur(2px); }
