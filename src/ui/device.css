@@ -451,6 +451,11 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
   .device { width: 360px; }
   .device-shadow { width: 300px; }
 }
+/* ---- Konto ---- */
+.account-body { display: grid; gap: 6px; }
+.account-line { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-dim); }
+.gsi-slot { min-height: 32px; }
+
 /* ---- Kurzes Crossfade beim Theme-/Gehäuse-Wechsel ---- */
 .theme-fade { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 1; animation: theme-fade-out .38s ease forwards; }
 @keyframes theme-fade-out { from { opacity: 1; } to { opacity: 0; } }

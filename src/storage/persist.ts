@@ -31,6 +31,18 @@ async function gunzip(data: Uint8Array): Promise<Uint8Array> {
 
 export interface LoadedEmu { bytes: Uint8Array; at: number }
 
+/** Roher gespeicherter Datensatz (ohne Dekomprimieren) – für den Cloud-Abgleich. */
+export function readSaveRecord(storage: Storage): { d: string; t: number } | null {
+  try {
+    const raw = storage.getItem(EMU_KEY);
+    if (!raw || !raw.startsWith("{")) return null;
+    const o = JSON.parse(raw) as { t?: number; d?: string };
+    return typeof o.d === "string" && typeof o.t === "number" ? { d: o.d, t: o.t } : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function saveEmu(storage: Storage, state: Uint8Array): Promise<void> {
   const packed = await gzip(state);
   storage.setItem(EMU_KEY, JSON.stringify({ t: Date.now(), d: bytesToB64(packed) }));

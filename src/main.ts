@@ -5,7 +5,10 @@ import { drawLcd } from "./render/lcd";
 import { drawIconRow, loadIcons, type IconImages } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
-import { saveEmu, loadEmu } from "./storage/persist";
+import { saveEmu, loadEmu, readSaveRecord } from "./storage/persist";
+import { AUTH_ENABLED } from "./auth/config";
+import { currentSession, restoreSession, renderSignInButton, signOut } from "./auth/google";
+import { decideSync, deleteRemote, pullSave, pushSave } from "./sync/cloud";
 import { SHELLS, applyShell, savedShell, starPolygon } from "./shell";
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, t } from "./i18n";
@@ -308,6 +311,9 @@ function initUI(): void {
   });
   window.addEventListener("appinstalled", () => { if (installBtn) installBtn.hidden = true; });
 
+  // Konto (nur wenn eine Client-ID hinterlegt ist)
+  initAccount();
+
   // Gras am Boden
   const grassEl = document.getElementById("grass");
   if (grassEl) {
@@ -372,10 +378,101 @@ async function catchUpAll(units: number): Promise<void> {
   if (loadbarEl) loadbarEl.hidden = true;
 }
 
+// ---- Konto & Cloud-Speicher (siehe docs/AUTH-SYNC.md) ----
+let cloudDirty = false;
+let cloudTimer: number | null = null;
+
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  let timer = 0;
+  const limit = new Promise<null>((resolve) => { timer = window.setTimeout(() => resolve(null), ms); });
+  const res = await Promise.race([p, limit]);
+  window.clearTimeout(timer);
+  return res;
+}
+
+// Nach jedem lokalen Speichern den Cloud-Push entprellt nachziehen (max. alle 90 s).
+function markCloudDirty(): void {
+  if (!AUTH_ENABLED) return;
+  cloudDirty = true;
+  if (cloudTimer !== null) return;
+  cloudTimer = window.setTimeout(() => { cloudTimer = null; void flushCloud(); }, 90_000);
+}
+
+async function flushCloud(): Promise<void> {
+  const s = currentSession();
+  if (!s || !cloudDirty) return;
+  const rec = readSaveRecord(localStorage);
+  if (!rec) return;
+  const ok = await pushSave(s.token, { snapshot: rec.d, updatedAt: new Date(rec.t).toISOString(), saveVer: 1 });
+  if (ok) cloudDirty = false;
+}
+
+/** Vor dem Laden des Spielstands: Cloud und lokal abgleichen (neuerer gewinnt). */
+async function syncBeforeBoot(): Promise<void> {
+  const s = currentSession();
+  if (!s) return;
+  const local = readSaveRecord(localStorage);
+  const cloud = await withTimeout(pullSave(s.token), 4000);
+  const action = decideSync(local?.t ?? null, cloud?.updatedAt ?? null);
+  if (action === "pull" && cloud) {
+    const at = Date.parse(cloud.updatedAt);
+    try {
+      localStorage.setItem(EMU_KEY, JSON.stringify({ t: Number.isFinite(at) ? at : Date.now(), d: cloud.snapshot }));
+    } catch { /* Quota */ }
+  } else if (action === "push" && local) {
+    void pushSave(s.token, { snapshot: local.d, updatedAt: new Date(local.t).toISOString(), saveVer: 1 });
+  }
+}
+
+function initAccount(): void {
+  const sec = document.getElementById("account-sec");
+  const body = document.getElementById("account-body");
+  if (!AUTH_ENABLED || !sec || !body) return;
+  sec.hidden = false;
+
+  const render = (): void => {
+    const s = currentSession();
+    body.replaceChildren();
+    if (!s) {
+      const hint = document.createElement("p");
+      hint.className = "account-line";
+      hint.textContent = t("accountHint");
+      const slot = document.createElement("div");
+      slot.className = "gsi-slot";
+      body.append(hint, slot);
+      void renderSignInButton(slot, () => render());
+      return;
+    }
+    const line = document.createElement("p");
+    line.className = "account-line";
+    line.textContent = `${t("signedInAs")} ${s.email ?? s.name ?? ""}`;
+    const out = document.createElement("button");
+    out.className = "menu-row";
+    out.textContent = t("signOut");
+    out.addEventListener("click", () => { signOut(); render(); });
+    const del = document.createElement("button");
+    del.className = "menu-row danger";
+    del.textContent = t("deleteData");
+    del.addEventListener("click", () => {
+      void (async () => {
+        const tok = currentSession()?.token;
+        if (tok) await deleteRemote(tok);
+        signOut();
+        render();
+      })();
+    });
+    body.append(line, out, del);
+  };
+
+  restoreSession();
+  render();
+}
+
 function saveNow(): void {
   if (SPEED !== 1 || !emu) return;
   const state = emu.saveState();
   void saveEmu(localStorage, state).catch(() => { /* Quota */ });
+  markCloudDirty();
 }
 
 async function boot(): Promise<void> {
@@ -390,6 +487,8 @@ async function boot(): Promise<void> {
     w.__emu = emu;
     w.__notify = notify;
   }
+
+  if (AUTH_ENABLED) await syncBeforeBoot();
 
   let saved: Awaited<ReturnType<typeof loadEmu>> = null;
   if (SPEED === 1) {
@@ -409,7 +508,7 @@ async function boot(): Promise<void> {
   // Robust speichern: beim Verlassen/Verstecken der Seite sofort sichern.
   window.addEventListener("pagehide", saveNow);
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) { saveNow(); return; }
+    if (document.hidden) { saveNow(); void flushCloud(); return; }
     // Zurück im Vordergrund: verpasste Zeit nachholen (Mobile drosselt Timer im
     // Hintergrund). Kurze Lücken frisst der Frame-Loop; lange laufen mit Fortschritt.
     const dt = Math.min(performance.now() - lastTs, 30 * 24 * 3600 * 1000);
@@ -502,6 +601,7 @@ function frame(ts: number): void {
   // periodisch speichern (alle ~5s)
   if (SPEED === 1 && STATIC === 0 && ++saveTick % 300 === 0) {
     void saveEmu(localStorage, emu.saveState()).catch(() => { /* Quota */ });
+    markCloudDirty();
   }
   if (!booted && pacer.owedUnits <= 0) { booted = true; loadingEl?.classList.add("hidden"); }
   if (STATIC === 0) requestAnimationFrame(frame);

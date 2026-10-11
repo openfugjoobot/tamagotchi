@@ -66,3 +66,18 @@ ausgewiesen — für privaten Gebrauch unkritisch. Aktive Icons voll, inaktive d
   flackerfreien Start – dupliziert in `public/theme-init.js`.
 - Bei `auto` prüft ein 60-s-Intervall, ob die Tageszeit ein anderes Theme verlangt
   (nur dann wird neu angewendet, damit das Gras nicht ständig neu aufgebaut wird).
+
+## Konto & Cloud-Spielstand (2026-10-11)
+
+- Weg: **Cloudflare Worker + KV** statt eigenem Server oder Supabase, weil die Domain
+  ohnehin über Cloudflare läuft → `/api/save` liegt same-origin (kein CORS). Entwurf:
+  [AUTH-SYNC.md](./AUTH-SYNC.md).
+- Anmeldung über **Google Identity Services** (ID-Token); der Worker prüft die Signatur
+  gegen Googles JWKS. Kein Secret im Worker, keins im Browser.
+- **Kein Merging**: Snapshot + Zeitstempel, „der neuere gewinnt"; das andere Gerät holt
+  beim Start per catch-up bis „jetzt" auf. Last-Write-Wins prüft der Server.
+- Die Funktion ist **standardmäßig aus** (`src/auth/config.ts`: leere Client-ID) — kein
+  UI, keine Requests. Zum Aktivieren: Google-Client-ID eintragen, KV-Namespace anlegen,
+  Worker deployen (siehe `worker/README.md`).
+- CSP in `deploy/nginx.conf` erlaubt `accounts.google.com` bereits (sonst würde GIS
+  blockiert).
