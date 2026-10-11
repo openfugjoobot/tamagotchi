@@ -30,13 +30,10 @@ const loadingEl = document.getElementById("loading");
 const menuEl = document.getElementById("menu");
 
 // Service Worker registrieren (ausgelagert, damit kein Inline-Script nötig ist → strikte CSP).
+// Der SW ist network-first, Inhalte kommen also ohnehin frisch. Kein Auto-Reload bei
+// Updates: der erzeugte beim SW-Wechsel (controllerchange) einen zweiten Lade-Spinner.
 if ("serviceWorker" in navigator) {
-  const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("/sw.js?v=3", { updateViaCache: "none" }).then((r) => r.update()).catch(() => { /* ignore */ });
-  let refreshing = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (hadController && !refreshing) { refreshing = true; location.reload(); }
-  });
 }
 
 const params = new URLSearchParams(location.search);
