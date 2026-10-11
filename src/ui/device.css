@@ -473,7 +473,13 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
   width: min(94vw, 360px); max-height: calc(100dvh - 84px); overflow: auto;
   padding: 12px; display: grid; gap: 8px;
   color: var(--ink); background: var(--surface-2);
-  border: 1px solid var(--border-strong); border-radius: 16px; box-shadow: var(--shadow);
+  border: 1px solid var(--border-strong); border-radius: 20px;
+  box-shadow: var(--shadow); backdrop-filter: blur(18px);
+  animation: account-in .16s ease-out;
+}
+@keyframes account-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to   { opacity: 1; transform: none; }
 }
 .account-pop[hidden] { display: none; }
 .account-body { display: grid; gap: 8px; }

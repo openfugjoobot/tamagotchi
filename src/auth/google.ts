@@ -13,7 +13,12 @@ export interface Session {
 }
 
 interface GsiId {
-  initialize(cfg: { client_id: string; callback: (r: { credential?: string }) => void }): void;
+  initialize(cfg: {
+    client_id: string;
+    callback: (r: { credential?: string }) => void;
+    use_fedcm_for_button?: boolean;
+    auto_select?: boolean;
+  }): void;
   renderButton(el: HTMLElement, opts: Record<string, string | number>): void;
   disableAutoSelect?(): void;
 }
@@ -112,6 +117,10 @@ export async function renderSignInButton(el: HTMLElement, onSession: (s: Session
     const id = await loadScript();
     id.initialize({
       client_id: GOOGLE_CLIENT_ID,
+      // Kein FedCM: dann oeffnet Google den klassischen Dialog im eigenen Fenster
+      // statt des weissen "Als … fortfahren"-Waehlers mitten in unserer Seite.
+      use_fedcm_for_button: false,
+      auto_select: false,
       callback: (res) => {
         if (!res.credential) return;
         const s = toSession(res.credential);
@@ -125,7 +134,7 @@ export async function renderSignInButton(el: HTMLElement, onSession: (s: Session
       theme: "filled_black",
       size: "large",
       shape: "rectangular",
-      text: "continue_with",
+      text: "signin_with",
       locale: currentLang(),
     });
     return true;
