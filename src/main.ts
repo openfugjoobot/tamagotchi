@@ -293,7 +293,10 @@ function initUI(): void {
     };
 
     for (let set = 0; set < 3; set++) for (const s of SHELLS) cards.push(makeCard(s));
-    carousel.replaceChildren(...cards);
+    const track = document.createElement("span");
+    track.className = "shell-track";
+    track.append(...cards);
+    carousel.replaceChildren(track);
 
     const initial = shellParam && SHELLS.some((s) => s.id === shellParam) ? shellParam : savedShell(localStorage);
     const idx = Math.max(0, SHELLS.findIndex((s) => s.id === initial));
