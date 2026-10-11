@@ -190,7 +190,15 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   background: radial-gradient(circle, color-mix(in srgb, var(--shell-top) 26%, transparent), transparent 60%);
   pointer-events: none; z-index: -1;
 }
-.device-shadow { width: min(66vw, 260px); height: 28px; margin: 20px auto 0; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(20,40,50,.4), rgba(0,0,0,0) 70%); filter: blur(6px); }
+.device-shadow {
+  width: min(66vw, 260px); height: 28px; margin: 20px auto 0; border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(20,40,50,.4), rgba(0,0,0,0) 70%); filter: blur(6px);
+  animation: shadow-move 7.5s ease-in-out infinite;
+}
+@keyframes shadow-move {
+  0%, 100% { transform: translateX(-3.2%); }
+  50%      { transform: translateX(3.2%); }
+}
 
 /* ---- Öse + Kette (über dem Ei) + leichtes Mitschwingen ---- */
 .device-wrap {
