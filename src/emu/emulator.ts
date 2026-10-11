@@ -12,6 +12,7 @@ export interface Emulator {
   lcd(): Uint8Array;
   icons(): Uint8Array;
   buzzer(): { freq: number; on: boolean };
+  takeBuzzer(): boolean;
   now(): number;
   saveState(): Uint8Array;
   loadState(buf: Uint8Array): void;
@@ -27,6 +28,7 @@ interface RawExports {
   emu_icons(): number;
   emu_freq(): number;
   emu_en(): number;
+  emu_take_buzzer(): number;
   emu_now(): number;
 }
 
@@ -56,6 +58,7 @@ export async function createEmulator(opts: EmulatorOptions): Promise<Emulator> {
     lcd() { refresh(); return mem.subarray(lcdPtr, lcdPtr + LCD_WIDTH * LCD_HEIGHT); },
     icons() { refresh(); return mem.subarray(iconsPtr, iconsPtr + ICON_COUNT); },
     buzzer() { return { freq: ex.emu_freq(), on: ex.emu_en() !== 0 }; },
+    takeBuzzer() { return ex.emu_take_buzzer() !== 0; },
     now() { return ex.emu_now(); },
     saveState() { refresh(); return mem.slice(); },
     loadState(buf) {

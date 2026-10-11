@@ -11,6 +11,7 @@ static u8_t lcd_buf[LCD_WIDTH * LCD_HEIGHT];
 static u8_t icon_buf[ICON_NUM];
 static u32_t buzzer_freq = 0;
 static bool_t buzzer_en = 0;
+static bool_t buzzer_latch = 0;
 static timestamp_t now_us = 0;
 
 /* ---- HAL ---- */
@@ -27,7 +28,7 @@ static void h_set_lcd_matrix(u8_t x, u8_t y, bool_t val) {
 }
 static void h_set_lcd_icon(u8_t icon, bool_t val) { if (icon < ICON_NUM) icon_buf[icon] = val ? 1 : 0; }
 static void h_set_frequency(u32_t freq) { buzzer_freq = freq; }
-static void h_play_frequency(bool_t en) { buzzer_en = en; }
+static void h_play_frequency(bool_t en) { buzzer_en = en; if (en) buzzer_latch = 1; }
 static int h_handler(void) { return 0; }
 
 static hal_t hal = {
@@ -58,4 +59,5 @@ u8_t *emu_lcd(void) { return lcd_buf; }
 u8_t *emu_icons(void) { return icon_buf; }
 u32_t emu_freq(void) { return buzzer_freq; }
 u32_t emu_en(void) { return buzzer_en; }
+u32_t emu_take_buzzer(void) { u32_t v = buzzer_latch; buzzer_latch = 0; return v; }
 u32_t emu_now(void) { return now_us; }

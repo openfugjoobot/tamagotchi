@@ -236,7 +236,11 @@ async function boot(): Promise<void> {
   ]);
   emu = await createEmulator({ wasm, rom: new Uint8Array(romBuf) });
   iconImgs = await loadIcons();
-  if (params.has("debug")) (window as unknown as { __emu: Emulator }).__emu = emu;
+  if (params.has("debug")) {
+    const w = window as unknown as { __emu: Emulator; __notify: (t: string, b: string) => Promise<void> };
+    w.__emu = emu;
+    w.__notify = notify;
+  }
 
   if (SPEED === 1) {
     const saved = await loadEmu(localStorage);
@@ -338,6 +342,9 @@ function frame(ts: number): void {
 
   const b = emu.buzzer();
   piezo.update(b.freq, b.on);
+  if (emu.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
+    void notify("Your Tamagotchi needs you", "It's calling — feed it, clean up or play.");
+  }
 
   // periodisch speichern (alle ~5s)
   if (SPEED === 1 && STATIC === 0 && ++saveTick % 300 === 0) {
@@ -357,7 +364,9 @@ setInterval(() => {
   const steps = Math.min(MAX_STEPS_PER_FRAME, Math.floor(pendingSteps));
   pendingSteps -= steps;
   if (steps > 0) emu.step(steps);
-  if (emu.buzzer().on) void notify("Your Tamagotchi needs you", "It's calling — feed it, clean up or play.");
+  if (emu.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
+    void notify("Your Tamagotchi needs you", "It's calling — feed it, clean up or play.");
+  }
 }, 5000);
 
 boot();
