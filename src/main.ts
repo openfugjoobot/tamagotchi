@@ -61,6 +61,7 @@ function initUI(): void {
   const menu = document.getElementById("menu");
   const menuBtn = document.getElementById("btn-menu");
   const closeMenu = () => { if (menu) menu.hidden = true; menuBtn?.setAttribute("aria-expanded", "false"); };
+  document.getElementById("menu-close")?.addEventListener("click", closeMenu);
   menuBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
     if (!menu) return;

@@ -5,8 +5,8 @@ export const ICON_SRCS = Array.from({ length: 8 }, (_, i) => `/emu/icons/${i}.pn
 
 const ICON_SLOT = 8;   // logische Breite pro Icon
 const ICON_ROW_H = 8;  // logische Höhe der Leiste
-const ICON_PAD = 2;  // Luft um jedes Icon
-const ICON_INNER = ICON_SLOT - 2 * ICON_PAD; // 4
+const ICON_PAD = 2.5;  // Luft um jedes Icon
+const ICON_INNER = ICON_SLOT - 2 * ICON_PAD; // 3
 
 export type IconImages = (HTMLCanvasElement | null)[];
 
