@@ -5,6 +5,8 @@ export const ICON_SRCS = Array.from({ length: 8 }, (_, i) => `/emu/icons/${i}.pn
 
 const ICON_SLOT = 8;   // logische Breite pro Icon
 const ICON_ROW_H = 8;  // logische Höhe der Leiste
+const ICON_PAD = 1;    // Luft um jedes Icon
+const ICON_INNER = ICON_SLOT - 2 * ICON_PAD; // 6
 
 export type IconImages = (HTMLCanvasElement | null)[];
 
@@ -58,7 +60,10 @@ export function drawIconRow(
     const img = imgs[idx];
     if (!img) continue;
     ctx.globalAlpha = bits[idx] ? 1 : 0.25;
-    ctx.drawImage(img, i * ICON_SLOT * scale, 0, ICON_SLOT * scale, ICON_ROW_H * scale);
+    const size = ICON_INNER * scale;
+    const dx = (i * ICON_SLOT + ICON_PAD) * scale;
+    const dy = ICON_PAD * scale;
+    ctx.drawImage(img, dx, dy, size, size);
   }
   ctx.globalAlpha = 1;
 }
