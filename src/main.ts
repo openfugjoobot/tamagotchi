@@ -83,7 +83,17 @@ function initUI(): void {
 
   const shellbtns = document.getElementById("shellbtns");
   const deviceEl = document.querySelector(".device-wrap") as HTMLElement | null;
+  const shellPreview = document.getElementById("shell-preview");
   if (shellbtns && deviceEl) {
+    const setShell = (id: string) => {
+      applyShell(deviceEl, id, localStorage);
+      if (shellPreview) {
+        shellPreview.dataset.shell = id;
+        shellPreview.classList.add("pop");
+        window.setTimeout(() => shellPreview.classList.remove("pop"), 150);
+      }
+      document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === id));
+    };
     for (const s of SHELLS) {
       const b = document.createElement("button");
       b.className = "shellbtn";
@@ -91,15 +101,11 @@ function initUI(): void {
       b.title = s.id;
       b.style.background = `linear-gradient(180deg, ${s.top}, ${s.bot})`;
       b.setAttribute("aria-label", "Shell: " + s.id);
-      b.addEventListener("click", () => {
-        applyShell(deviceEl, s.id, localStorage);
-        document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === s.id));
-      });
+      b.addEventListener("click", () => setShell(s.id));
       shellbtns.appendChild(b);
     }
     const initial = shellParam && SHELLS.some((s) => s.id === shellParam) ? shellParam : savedShell(localStorage);
-    applyShell(deviceEl, initial, localStorage);
-    document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === initial));
+    setShell(initial);
   }
 
   const menu = document.getElementById("menu");
