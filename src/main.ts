@@ -93,6 +93,24 @@ function initUI(): void {
     location.reload();
   });
 
+  // ---- Benachrichtigungen ----
+  updateNotifyLabel();
+  document.getElementById("btn-notify")?.addEventListener("click", async () => {
+    if (notifyEnabled) {
+      notifyEnabled = false;
+      try { localStorage.setItem(NOTIFY_KEY, "0"); } catch { /* ignore */ }
+      updateNotifyLabel();
+      return;
+    }
+    if (!("Notification" in window)) return;
+    try {
+      const perm = await Notification.requestPermission();
+      notifyEnabled = perm === "granted";
+      try { localStorage.setItem(NOTIFY_KEY, notifyEnabled ? "1" : "0"); } catch { /* ignore */ }
+    } catch { notifyEnabled = false; }
+    updateNotifyLabel();
+  });
+
   const y = document.getElementById("year");
   if (y) y.textContent = String(new Date().getFullYear());
 }
@@ -106,6 +124,30 @@ const STEPS_PER_SECOND = Math.round(TS_FREQ / TS_PER_STEP); // ≈ 5802
 const MAX_STEPS_PER_FRAME = 120 * STEPS_PER_SECOND; // Aufholen: bis 120 s Emulation pro Frame
 const MAX_CATCHUP_S = 2 * 3600; // höchstens 2 h nachholen
 let pendingSteps = 0;
+
+// ---- Benachrichtigungen ----
+const NOTIFY_KEY = "tamagotchi.notify";
+let notifyEnabled = false;
+try { notifyEnabled = localStorage.getItem(NOTIFY_KEY) === "1"; } catch { /* ignore */ }
+let lastNotify = 0;
+
+function updateNotifyLabel(): void {
+  const el = document.getElementById("notify-state");
+  if (el) el.textContent = notifyEnabled ? "on" : "off";
+}
+
+async function notify(title: string, body: string): Promise<void> {
+  if (!notifyEnabled || !("Notification" in window) || Notification.permission !== "granted") return;
+  const now = Date.now();
+  if (now - lastNotify < 60_000) return;
+  lastNotify = now;
+  const opts: NotificationOptions = { body, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: "tamagotchi" };
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg) await reg.showNotification(title, opts);
+    else new Notification(title, opts);
+  } catch { /* ignore */ }
+}
 
 let emu: Emulator | null = null;
 let iconImgs: IconImages = [];
@@ -227,5 +269,18 @@ function frame(ts: number): void {
   if (!booted && pendingSteps < 1) { booted = true; loadingEl?.classList.add("hidden"); }
   if (STATIC === 0) requestAnimationFrame(frame);
 }
+
+// Im Hintergrund weiterlaufen lassen und bei Rufen benachrichtigen.
+setInterval(() => {
+  if (!document.hidden || !emu || SPEED !== 1) return;
+  const now = performance.now();
+  const dt = Math.min((now - lastTs) / 1000, 3600);
+  lastTs = now;
+  pendingSteps += dt * STEPS_PER_SECOND;
+  const steps = Math.min(MAX_STEPS_PER_FRAME, Math.floor(pendingSteps));
+  pendingSteps -= steps;
+  if (steps > 0) emu.step(steps);
+  if (emu.buzzer().on) void notify("Your Tamagotchi needs you", "It's calling — feed it, clean up or play.");
+}, 5000);
 
 boot();
