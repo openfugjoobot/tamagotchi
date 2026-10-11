@@ -3,68 +3,88 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Tamagotchi</title>
+  <title>Tamagotchi P1 – im Browser</title>
+  <meta name="description" content="Die originale Tamagotchi P1 (1996) Firmware läuft im Browser – mit Speichern, Sound und Anleitung." />
   <link rel="manifest" href="/manifest.webmanifest" />
-  <meta name="theme-color" content="#0b1e33" />
+  <meta name="theme-color" content="#0a1a2e" />
   <link rel="stylesheet" href="/src/ui/device.css" />
 </head>
-<body>
-  <header id="topbar">
-    <button class="iconbtn" id="btn-help" title="Hilfe">?</button>
-    <button class="iconbtn" id="btn-bg" title="Hintergrund">&#9680;</button>
+<body data-bg="navy">
+  <header class="site-header">
+    <a class="brand" href="#top">Tamagotchi<span>P1</span></a>
+    <nav class="nav">
+      <div class="bgbtns" id="bgbtns" aria-label="Hintergrund"></div>
+      <button class="navbtn" id="btn-guide">Anleitung</button>
+      <button class="navbtn danger" id="btn-reset">Neustart</button>
+    </nav>
   </header>
-  <div id="overlay" hidden>
+
+  <main id="top">
+    <section class="hero">
+      <p class="eyebrow">Original 1996er-Firmware · im Browser</p>
+      <h1>Dein Tamagotchi P1</h1>
+      <p class="sub">Echtes ROM, echtes Verhalten – füttern, spielen, großziehen. Dein Stand wird automatisch gespeichert.</p>
+
+      <div id="device" class="shell-teal">
+        <div class="screen-wrap">
+          <svg class="star" viewBox="0 0 100 100" aria-hidden="true" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ffe45c" />
+                <stop offset="0.5" stop-color="#ffd21e" />
+                <stop offset="1" stop-color="#f0b400" />
+              </linearGradient>
+            </defs>
+            <polygon points="50.0,0.0 57.1,9.6 67.1,3.0 70.5,14.5 82.1,11.7 81.4,23.6 93.3,25.0 88.5,36.0 99.2,41.3 91.0,50.0 99.2,58.7 88.5,64.0 93.3,75.0 81.4,76.4 82.1,88.3 70.5,85.5 67.1,97.0 57.1,90.4 50.0,100.0 42.9,90.4 32.9,97.0 29.5,85.5 17.9,88.3 18.6,76.4 6.7,75.0 11.5,64.0 0.8,58.7 9.0,50.0 0.8,41.3 11.5,36.0 6.7,25.0 18.6,23.6 17.9,11.7 29.5,14.5 32.9,3.0 42.9,9.6" fill="url(#sun)" />
+          </svg>
+          <div class="screen-stack">
+            <canvas class="icons" id="icons-top" width="32" height="8"></canvas>
+            <div class="screen-well">
+              <canvas id="lcd" width="32" height="16"></canvas>
+            </div>
+            <canvas class="icons" id="icons-bottom" width="32" height="8"></canvas>
+          </div>
+        </div>
+        <div id="controls">
+          <div class="ctrl"><button id="btn-a" aria-label="Select"></button><span>SELECT</span></div>
+          <div class="ctrl"><button id="btn-b" aria-label="Confirm"></button><span>CONFIRM</span></div>
+          <div class="ctrl"><button id="btn-c" aria-label="Next"></button><span>NEXT</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="guide" id="guide">
+      <h2>Die Icons</h2>
+      <p class="section-lead">Über <b>SELECT</b> blätterst du durch die acht Funktionen – mit <b>CONFIRM</b> bestätigst du, mit <b>NEXT</b> brichst du ab.</p>
+      <div class="icon-grid" id="icon-grid"></div>
+
+      <h2>So spielst du</h2>
+      <ol class="steps">
+        <li><b>Uhr stellen:</b> Beim ersten Start mit <b>CONFIRM</b> durch die Felder, mit <b>SELECT</b> den Wert ändern.</li>
+        <li><b>Schlüpfen:</b> Nach ~5 Minuten schlüpft das Ei. (Oder direkt: <code>?speed=60</code> an die URL.)</li>
+        <li><b>Füttern:</b> SELECT bis zum Napf-Icon, dann CONFIRM (Mahlzeit/Snack).</li>
+        <li><b>Kümmern:</b> Licht beim Schlafen aus, Häufchen wegräumen, bei Krankheit Medizin, bei Aufrufen reagieren, bei Ungehorsam schimpfen.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Für privaten Gebrauch · echte P1-Firmware via TamaLIB · <span id="year"></span></p>
+  </footer>
+
+  <!-- Neustart-Bestätigung -->
+  <div id="modal" hidden>
     <div class="card">
-      <div class="sec" data-sec="help">
-        <h2>Tamagotchi P1</h2>
-        <p class="lead">Original-Firmware in deinem Browser. So geht's:</p>
-        <ul>
-          <li><b>SELECT</b> (links) – Icon-Menü durchblättern / Wert ändern</li>
-          <li><b>CONFIRM</b> (mitte) – bestätigen (z. B. Futter); ohne Menü: Uhr</li>
-          <li><b>NEXT</b> (rechts) – zurück / abbrechen</li>
-        </ul>
-        <p class="hint">Erst die Uhr stellen (CONFIRM durch die Felder), dann schlüpft das Ei (~5&nbsp;Min). Füttern: SELECT → Napf-Icon → CONFIRM. Dein Stand wird automatisch gespeichert.</p>
-      </div>
-      <div class="sec" data-sec="theme">
-        <h2>Hintergrund</h2>
-        <p class="lead">Wähle eine Kulisse – wird gespeichert.</p>
-        <div class="swatches" id="swatches"></div>
-        <div class="row">
-          <button id="btn-reset">Neu starten</button>
-        </div>
-      </div>
+      <h2>Wirklich neu starten?</h2>
+      <p class="hint">Der aktuelle Stand wird verworfen und ein neues Ei beginnt.</p>
       <div class="row">
-        <button id="btn-close">Schließen</button>
+        <button id="btn-cancel">Abbrechen</button>
+        <button id="btn-confirm-reset">Neu starten</button>
       </div>
     </div>
   </div>
+
   <div id="loading"><div class="spin"></div><div class="loadtxt">lädt …</div></div>
-  <div id="device" class="shell-teal">
-    <div class="screen-wrap">
-      <svg class="star" viewBox="0 0 100 100" aria-hidden="true" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#ffe45c" />
-            <stop offset="0.5" stop-color="#ffd21e" />
-            <stop offset="1" stop-color="#f0b400" />
-          </linearGradient>
-        </defs>
-        <polygon points="50.0,0.0 57.1,9.6 67.1,3.0 70.5,14.5 82.1,11.7 81.4,23.6 93.3,25.0 88.5,36.0 99.2,41.3 91.0,50.0 99.2,58.7 88.5,64.0 93.3,75.0 81.4,76.4 82.1,88.3 70.5,85.5 67.1,97.0 57.1,90.4 50.0,100.0 42.9,90.4 32.9,97.0 29.5,85.5 17.9,88.3 18.6,76.4 6.7,75.0 11.5,64.0 0.8,58.7 9.0,50.0 0.8,41.3 11.5,36.0 6.7,25.0 18.6,23.6 17.9,11.7 29.5,14.5 32.9,3.0 42.9,9.6" fill="url(#sun)" />
-      </svg>
-      <div class="screen-stack">
-        <canvas class="icons" id="icons-top" width="32" height="8"></canvas>
-        <div class="screen-well">
-          <canvas id="lcd" width="32" height="16"></canvas>
-        </div>
-        <canvas class="icons" id="icons-bottom" width="32" height="8"></canvas>
-      </div>
-    </div>
-    <div id="controls">
-      <div class="ctrl"><button id="btn-a" aria-label="Select"></button><span>SELECT</span></div>
-      <div class="ctrl"><button id="btn-b" aria-label="Confirm"></button><span>CONFIRM</span></div>
-      <div class="ctrl"><button id="btn-c" aria-label="Next"></button><span>NEXT</span></div>
-    </div>
-  </div>
   <script type="module" src="/src/main.ts"></script>
   <script>
     if ("serviceWorker" in navigator) {
@@ -72,7 +92,6 @@
       navigator.serviceWorker.register("/sw.js?v=3", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
       let refreshing = false;
       navigator.serviceWorker.addEventListener("controllerchange", () => {
-        // Nur bei einem echten Update neu laden (nicht beim Erst-Install).
         if (hadController && !refreshing) { refreshing = true; location.reload(); }
       });
     }

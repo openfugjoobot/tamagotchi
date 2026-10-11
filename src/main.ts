@@ -36,33 +36,72 @@ const THEMES: { id: string; c: string }[] = [
 function applyBg(id: string): void {
   document.body.dataset.bg = id;
   try { localStorage.setItem(BG_KEY, id); } catch { /* ignore */ }
-  document.querySelectorAll<HTMLElement>(".swatch").forEach((el) => {
+  document.querySelectorAll<HTMLElement>(".bgbtn").forEach((el) => {
     el.classList.toggle("active", el.dataset.id === id);
   });
 }
+
+// ---- Anleitung: die 8 Icons ----
+const ICON_INFO: { name: string; desc: string }[] = [
+  { name: "Futter", desc: "Mahlzeit oder Snack geben – hebt das Hungry-Herz." },
+  { name: "Licht", desc: "Licht an/aus. Beim Schlafen aus lassen, sonst gibt's Ärger." },
+  { name: "Spiel", desc: "Kleines Minispiel – hebt die Laune." },
+  { name: "Medizin", desc: "Gibt dem kranken Tamagotchi Medizin." },
+  { name: "Bad", desc: "Räumt Häufchen weg (Reinigen)." },
+  { name: "Status", desc: "Zeigt Alter, Gewicht, Herzen und Disziplin." },
+  { name: "Disziplin", desc: "Ausschimpfen, wenn es ungehorsam ist." },
+  { name: "Aufmerksamkeit", desc: "Leuchtet, wenn dein Tamagotchi Aufmerksamkeit braucht." },
+];
+
 function initUI(): void {
-  const overlay = document.getElementById("overlay")!;
-  const swatches = document.getElementById("swatches")!;
-  for (const t of THEMES) {
-    const b = document.createElement("button");
-    b.className = "swatch";
-    b.dataset.id = t.id;
-    b.style.background = t.c;
-    b.title = t.id;
-    b.addEventListener("click", () => applyBg(t.id));
-    swatches.appendChild(b);
+  const bgbtns = document.getElementById("bgbtns");
+  if (bgbtns) {
+    for (const t of THEMES) {
+      const b = document.createElement("button");
+      b.className = "bgbtn";
+      b.dataset.id = t.id;
+      b.style.background = t.c;
+      b.title = t.id;
+      b.setAttribute("aria-label", "Hintergrund " + t.id);
+      b.addEventListener("click", () => applyBg(t.id));
+      bgbtns.appendChild(b);
+    }
+    applyBg(localStorage.getItem(BG_KEY) ?? "navy");
   }
-  applyBg(localStorage.getItem(BG_KEY) ?? "navy");
-  document.getElementById("btn-help")!.addEventListener("click", () => { overlay.dataset.view = "help"; overlay.hidden = false; });
-  document.getElementById("btn-bg")!.addEventListener("click", () => { overlay.dataset.view = "theme"; overlay.hidden = false; });
-  document.getElementById("btn-close")!.addEventListener("click", () => { overlay.hidden = true; });
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.hidden = true; });
-  window.addEventListener("keydown", (e) => { if (e.key === "Escape") overlay.hidden = true; });
-  document.getElementById("btn-reset")!.addEventListener("click", () => {
-    if (!confirm("Neu starten? Der aktuelle Stand wird verworfen.")) return;
+
+  const grid = document.getElementById("icon-grid");
+  if (grid) {
+    ICON_INFO.forEach((info, i) => {
+      const card = document.createElement("article");
+      card.className = "icon-card";
+      const img = document.createElement("img");
+      img.src = `/emu/icons/${i}.png`;
+      img.alt = "";
+      const h3 = document.createElement("h3");
+      h3.textContent = info.name;
+      const p = document.createElement("p");
+      p.textContent = info.desc;
+      card.append(img, h3, p);
+      grid.appendChild(card);
+    });
+  }
+
+  document.getElementById("btn-guide")?.addEventListener("click", () => {
+    document.getElementById("guide")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  const modal = document.getElementById("modal");
+  document.getElementById("btn-reset")?.addEventListener("click", () => { if (modal) modal.hidden = false; });
+  document.getElementById("btn-cancel")?.addEventListener("click", () => { if (modal) modal.hidden = true; });
+  modal?.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape" && modal) modal.hidden = true; });
+  document.getElementById("btn-confirm-reset")?.addEventListener("click", () => {
     try { localStorage.removeItem("tamagotchi.emu.v1"); } catch { /* ignore */ }
     location.reload();
   });
+
+  const y = document.getElementById("year");
+  if (y) y.textContent = String(new Date().getFullYear());
 }
 initUI();
 
