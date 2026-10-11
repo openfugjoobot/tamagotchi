@@ -14,15 +14,15 @@ function initGuide(): void {
   const grid = document.getElementById("icon-grid");
   if (grid) {
     ICON_NAMES.forEach((name, i) => {
-      const card = document.createElement("article");
-      card.className = "icon-card";
+      const item = document.createElement("div");
+      item.className = "lcd-item";
       const img = document.createElement("img");
       img.src = `/emu/icons/${i}.png`;
       img.alt = name;
-      const h3 = document.createElement("h3");
-      h3.textContent = name;
-      card.append(img, h3);
-      grid.appendChild(card);
+      const span = document.createElement("span");
+      span.textContent = name;
+      item.append(img, span);
+      grid.appendChild(item);
     });
   }
 
