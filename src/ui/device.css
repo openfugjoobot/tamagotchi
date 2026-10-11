@@ -33,7 +33,7 @@ body[data-bg="navy"]     { background-color:#0a1a2e; background-image: radial-gr
 body[data-bg="midnight"] { background-color:#05060a; background-image: radial-gradient(ellipse at 50% 0%, #161922 0%, #05060a 60%); }
 body[data-bg="sunset"]   { background-color:#1a0f22; background-image: radial-gradient(ellipse at 50% 0%, #7a2f5c 0%, #2a1030 50%, #120718 100%); }
 body[data-bg="forest"]   { background-color:#08160f; background-image: radial-gradient(ellipse at 50% 0%, #1b4a33 0%, #08160f 60%, #04100a 100%); }
-body[data-bg="paper"]    { background-color:#e9e4d8; background-image: radial-gradient(ellipse at 50% 0%, #f8f4ea 0%, #d9d2c2 75%); color:#1d2129; --ink:#1d2129; --ink-dim:#414a57; --accent-text:#9a6c00; --line: rgba(0,0,0,.10); --card: rgba(0,0,0,.04); }
+body[data-bg="paper"]    { background-color:#e9e4d8; background-image: radial-gradient(ellipse at 50% 0%, #f8f4ea 0%, #d9d2c2 75%); color:#161a20; --ink:#161a20; --ink-dim:#333b46; --accent-text:#6f4d00; --line: rgba(0,0,0,.12); --card: rgba(0,0,0,.05); }
 body[data-bg="paper"] .site-header { background: rgba(255,255,255,.7); border-color: rgba(0,0,0,.08); }
 body[data-bg="paper"] .hamburger { color:#1d2129; border-color: rgba(0,0,0,.16); background: rgba(0,0,0,.04); }
 
@@ -58,13 +58,13 @@ body[data-bg="paper"] .hamburger { color:#1d2129; border-color: rgba(0,0,0,.16);
 /* ---- Dropdown-Menü ---- */
 .menu {
   position: absolute; right: var(--pad); top: calc(100% - 4px); z-index: 31;
-  width: min(80vw, 240px); padding: 12px;
-  background: rgba(14,30,50,.98); border: 1px solid var(--line); border-radius: 14px;
+  width: min(80vw, 240px); padding: 12px; color: #eaf3fb;
+  background: rgba(14,30,50,.98); border: 1px solid rgba(205,234,255,.18); border-radius: 14px;
   box-shadow: 0 20px 50px rgba(0,0,0,.55); backdrop-filter: blur(10px);
   display: grid; gap: 8px;
 }
 .menu[hidden] { display: none; }
-.menu-label { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-dim); }
+.menu-label { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #9db4c8; }
 .bgbtns { display: flex; gap: 8px; }
 .bgbtn { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); cursor: pointer; padding: 0; transition: transform .12s ease; }
 .bgbtn.active { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -72,7 +72,7 @@ body[data-bg="paper"] .hamburger { color:#1d2129; border-color: rgba(0,0,0,.16);
 .menuitem {
   display: block; width: 100%; text-align: left; text-decoration: none; box-sizing: border-box;
   min-height: 42px; line-height: 42px; padding: 0 14px; border-radius: 10px; cursor: pointer; font-weight: 700; font-size: 14px;
-  border: 1px solid var(--line); background: rgba(205,234,255,.07); color: var(--ink);
+  border: 1px solid rgba(205,234,255,.2); background: rgba(205,234,255,.08); color: #eaf3fb;
 }
 .menuitem:hover { background: rgba(205,234,255,.14); }
 .menuitem.danger { border-color: rgba(255,120,120,.35); color: #ffd7d7; }
