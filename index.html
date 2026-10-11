@@ -39,7 +39,7 @@
   <script>
     if ("serviceWorker" in navigator) {
       const hadController = !!navigator.serviceWorker.controller;
-      navigator.serviceWorker.register("/sw.js").then((r) => r.update()).catch(() => {});
+      navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
       let refreshing = false;
       navigator.serviceWorker.addEventListener("controllerchange", () => {
         // Nur bei einem echten Update neu laden (nicht beim Erst-Install).
