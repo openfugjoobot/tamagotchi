@@ -328,6 +328,33 @@ function initUI(): void {
         carousel.scrollTo({ left: centerOf(card), behavior: "smooth" });
       });
     }
+
+    // Maus-Ziehen (Desktop): Touch scrollt nativ, mit der Maus hilft nur Shift.
+    let dragging = false;
+    let dragStartX = 0;
+    let dragStartLeft = 0;
+    carousel.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "touch" || e.button !== 0) return;
+      dragging = true;
+      dragStartX = e.clientX;
+      dragStartLeft = carousel.scrollLeft;
+      carousel.classList.add("is-dragging");
+      try { carousel.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    });
+    carousel.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      carousel.scrollLeft = dragStartLeft - (e.clientX - dragStartX);
+    });
+    const endDrag = (e: PointerEvent): void => {
+      if (!dragging) return;
+      dragging = false;
+      carousel.classList.remove("is-dragging");
+      try { carousel.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      const card = cards[centeredIndex()];
+      if (card) carousel.scrollTo({ left: centerOf(card), behavior: "smooth" });
+    };
+    carousel.addEventListener("pointerup", endDrag);
+    carousel.addEventListener("pointercancel", endDrag);
   }
 
   const menu = document.getElementById("menu");
