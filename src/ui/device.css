@@ -455,22 +455,18 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 .header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .header-actions { position: relative; }
 .account-btn {
-  width: 44px; height: 44px; border-radius: 13px; padding: 0; cursor: pointer;
+  width: 44px; height: 44px; border-radius: 13px; padding: 0; cursor: pointer; overflow: hidden;
   border: 1px solid var(--border-strong); background: transparent; color: var(--ink-dim);
   display: grid; place-items: center; transition: background .15s ease, color .15s ease;
 }
 .account-btn:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
 .account-btn[hidden] { display: none; }
-.account-btn.signed-in { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--ink); }
-.account-face {
-  width: 30px; height: 30px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
-}
-.account-btn.signed-in .account-face {
+.account-btn.signed-in {
   background: color-mix(in srgb, var(--accent) 70%, transparent); color: #4a3400;
-  font-weight: 800; font-size: 14px; text-transform: uppercase;
+  font-weight: 800; font-size: 16px; text-transform: uppercase;
 }
-.account-face svg { width: 19px; height: 19px; }
+.account-face { width: 100%; height: 100%; display: grid; place-items: center; }
+.account-face svg { width: 21px; height: 21px; }
 .account-face-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .account-pop {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;

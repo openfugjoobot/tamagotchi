@@ -121,7 +121,13 @@ export async function renderSignInButton(el: HTMLElement, onSession: (s: Session
         }
       },
     });
-    id.renderButton(el, { theme: "outline", size: "medium", shape: "pill", text: "signin_with", locale: currentLang() });
+    id.renderButton(el, {
+      theme: "filled_black",
+      size: "large",
+      shape: "rectangular",
+      text: "continue_with",
+      locale: currentLang(),
+    });
     return true;
   } catch {
     return false;
