@@ -158,7 +158,7 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 .hero {
   position: relative; flex: 1;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 24px var(--pad);
+  text-align: center; padding: 24px var(--pad); padding-top: max(24px, 11vh);
 }
 .hero::before {
   content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
