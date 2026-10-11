@@ -17,11 +17,13 @@ let st: Storage;
 beforeEach(() => { st = memStorage(); });
 
 describe("emu persist", () => {
-  it("round-trip erhält die Bytes", async () => {
+  it("round-trip erhält Bytes und Zeitstempel", async () => {
     const bytes = new Uint8Array([0, 1, 2, 254, 255, 42]);
     await saveEmu(st, bytes);
     expect(st.getItem(EMU_KEY)).toBeTruthy();
-    expect(Array.from((await loadEmu(st))!)).toEqual(Array.from(bytes));
+    const loaded = await loadEmu(st);
+    expect(Array.from(loaded!.bytes)).toEqual(Array.from(bytes));
+    expect(loaded!.at).toBeGreaterThan(0);
   });
   it("leer ⇒ null; clear entfernt", async () => {
     expect(await loadEmu(st)).toBeNull();

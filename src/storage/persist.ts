@@ -28,16 +28,23 @@ async function gunzip(data: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
+export interface LoadedEmu { bytes: Uint8Array; at: number }
+
 export async function saveEmu(storage: Storage, state: Uint8Array): Promise<void> {
   const packed = await gzip(state);
-  storage.setItem(EMU_KEY, bytesToB64(packed));
+  storage.setItem(EMU_KEY, JSON.stringify({ t: Date.now(), d: bytesToB64(packed) }));
 }
 
-export async function loadEmu(storage: Storage): Promise<Uint8Array | null> {
+export async function loadEmu(storage: Storage): Promise<LoadedEmu | null> {
   const raw = storage.getItem(EMU_KEY);
   if (!raw) return null;
   try {
-    return await gunzip(b64ToBytes(raw));
+    if (raw.startsWith("{")) {
+      const o = JSON.parse(raw) as { t: number; d: string };
+      return { bytes: await gunzip(b64ToBytes(o.d)), at: o.t };
+    }
+    // Legacy-Format (ohne Zeitstempel)
+    return { bytes: await gunzip(b64ToBytes(raw)), at: 0 };
   } catch {
     return null;
   }

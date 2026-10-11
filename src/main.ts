@@ -30,6 +30,7 @@ const TS_FREQ = 32768;
 const TS_PER_STEP = 5.648;
 const STEPS_PER_SECOND = Math.round(TS_FREQ / TS_PER_STEP); // ≈ 5802
 const MAX_STEPS_PER_FRAME = STEPS_PER_SECOND; // max. ~1s Emulation pro Frame (sanftes Aufholen)
+const MAX_CATCHUP_S = 12 * 3600; // höchstens 12 h nachholen
 let pendingSteps = 0;
 
 let emu: Emulator | null = null;
@@ -55,7 +56,14 @@ async function boot(): Promise<void> {
 
   if (SPEED === 1) {
     const saved = await loadEmu(localStorage);
-    if (saved) { try { emu.loadState(saved); } catch { /* inkompatibler Save */ } }
+    if (saved) {
+      try { emu.loadState(saved.bytes); } catch { /* inkompatibler Save */ }
+      // Wanduhr-Zeit seit dem Speichern nachholen (App war geschlossen).
+      if (saved.at) {
+        const elapsedSec = Math.min(MAX_CATCHUP_S, Math.max(0, (Date.now() - saved.at) / 1000));
+        pendingSteps += elapsedSec * STEPS_PER_SECOND;
+      }
+    }
   }
 
   bindButtons();
@@ -133,7 +141,7 @@ function frame(ts: number): void {
   if (SPEED === 1 && STATIC === 0 && ++saveTick % 300 === 0) {
     void saveEmu(localStorage, emu.saveState()).catch(() => { /* Quota */ });
   }
-  if (!booted) { booted = true; loadingEl?.classList.add("hidden"); }
+  if (!booted && pendingSteps <= 0) { booted = true; loadingEl?.classList.add("hidden"); }
   if (STATIC === 0) requestAnimationFrame(frame);
 }
 
