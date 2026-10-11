@@ -1,40 +1,41 @@
-# Tamagotchi Gen-1 Nachbau (Web/PWA)
+# Tamagotchi P1 (Emulator)
 
-Originalgetreue Nachbildung des klassischen **Tamagotchi Gen 1 (P1, 1996/97)** als
-leichtgewichtige Web-App/PWA. Nur für privaten Gebrauch.
+Originalgetreue P1-Emulation im Browser: Die **echte Firmware** läuft in einer
+WASM-Emulation (TamaLIB) — Logik, Menü, Icons, Animation und Timing sind damit
+1:1 das Original. Geräte-Optik, Buttons, Sound und PWA drumherum. Nur privater Gebrauch.
 
-## Installation & Start
+## Start
 
 ```bash
 npm install
-npm run dev      # Dev-Server (Vite)
-npm run build    # Produktions-Build nach dist/
-npm run preview  # Build lokal testen
-npm run test     # Test-Suite (Vitest)
+npm run dev      # Dev-Server
+npm run build    # Produktions-Build (dist/)
+npm run test     # Vitest
+```
+
+Emulator-Build (nur nötig, wenn `emu/` geändert wird):
+
+```bash
+ZIG=/pfad/zu/zig bash emu/build.sh   # → public/emu/tamalib.wasm
 ```
 
 ## Bedienung
 
-- **Tasten A / B / C** (anklickbar oder Tastatur):
-  - `A` / `←` = A · `Enter` / `Space` = B · `Esc` / `→` = C
-- **Menü:** ohne Auswahl `A` öffnet die Icon-Auswahl, `B` zeigt die Uhr,
-  `A`+`C` zusammen schaltet den Ton.
-- **Neustart:** nach dem Tod `A`+`C`.
+- **A / B / C** = linke / mittlere / rechte Taste (Klick, Touch oder Tastatur:
+  `A`/`←`, `Enter`/`Space`, `Esc`/`→`).
+- **`?speed=N`** — Emulation N× schneller (z. B. `?speed=600`).
+- **`?shell=pink`** — pinkes Gehäuse (Default blau).
 
-## Projektstruktur
+## Aufbau
 
 ```
-src/
-  engine/    Reine Spiellogik (Zustand, Simulation, Evolution) — deterministisch testbar
-  render/    Canvas-2D-LCD-Framebuffer (32×16), Sprites, Icons, Kompositor
-  input/     A/B/C-Tasten und Menü-State-Machine
-  audio/     Prozeduraler WebAudio-Beeper
-  storage/   Versionierte localStorage-Persistenz + Autosave
-  ui/        Geräte-Gehäuse (CSS)
-  main.ts    Verdrahtung aller Module
-public/      PWA-Manifest, Service Worker, Icons
-tests/       Vitest-Suites
-docs/        README, ARCHITECTURE, GAMEPLAY, DECISIONS
+emu/        C→WASM-Build (TamaLIB + HAL-Glue, Zig) + ROM
+public/emu/ tamalib.wasm, rom0.bin (Artefakte)
+src/emu/    TS-Wrapper, Input-Map, Piezo-Audio
+src/render/ LCD-Canvas
+src/storage/ Emulator-Snapshot in localStorage
+src/ui/     Geräte-Gehäuse
+src/main.ts Verdrahtung (Frame-Loop, Buttons, Sound, Save)
 ```
 
-Weiter: [ARCHITECTURE.md](./ARCHITECTURE.md) · [GAMEPLAY.md](./GAMEPLAY.md) · [DECISIONS.md](./DECISIONS.md)
+Weiter: [ARCHITECTURE.md](./ARCHITECTURE.md) · [DECISIONS.md](./DECISIONS.md)

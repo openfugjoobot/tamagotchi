@@ -1,42 +1,34 @@
 # Entscheidungen
 
-## Quellen
+## Ansatz: Emulation statt Nachbau
 
-Recherche zum klassischen P1 (1996/97) — **nicht** die Rerelease-Varianten 2017/18:
+Der erste Versuch (eigene Engine + handgezeichnete Sprites) wirkte nicht
+originalgetreu. Abgelöst durch **Ausführen der echten Firmware**:
 
-- thaao.net/tama/p1 (Care Guide + Character Guide)
-- tamatalk.com P1/P2 Evolution Guide
-- tamagotchi.fandom.com (Life Cycle)
+- **TamaLIB** (`jcrona/tamalib`, GPLv2) — hardware-agnostische P1-Emulation
+  (Epson E0C6S46 @ 32768 Hz, LCD 32×16 B/W, 8 Icons).
+- **ROM**: `tama.bin` aus dem MAME-Romset `tama.zip`
+  (MD5 `3fce172403c27274e59723bbb9f6d8e9`, 12288 Bytes).
+- Ergebnis: Logik, Menü, Icons, Animation und Timing sind 1:1 das Original.
 
-## Bewusste Näherungen
+## Build ohne Emscripten/Docker/root
 
-- **Baby-Evolution:** 65 min (Quellen nennen teils 60 vs. 65 min). Zentral in
-  `config.stages.BABY.durationMs`, in Tests fixiert.
-- **Child/Teen-Grenzen:** altersbasiert (`ageYears >= 3` bzw. `>= 6`) statt
-  exakter Aufwach-Zählung des Originals. In `config.stages` konfiguriert.
-- **Hidden-Charakter:** Default **Bill** (EN); Oyajitchi per Konfig-Flag.
-- **Growth-Chart-Grenzfälle:** wo die Quellen unscharf sind, ist die Regel
-  explizit in `config.ts`/`lifecycle.ts` festgeschrieben und per Tabellentests
-  abgedeckt.
+Statt Emscripten wurde **Zig** (`zig cc`, `wasm32-freestanding`) gewählt: ein
+einzelnes ~45-MB-Binary, kein root, kein 1,5-GB-Image — passt auch auf eine
+volle Platte. `emu/build.sh` ist reproduzierbar.
 
-## Rendering
+## Timing
 
-32×16-LCD-Logikauflösung, Integer-Scaling, `imageSmoothingEnabled = false`.
-Die Sprite-Pixelkunst ist zunächst als Gerüst angelegt (Struktur + Breite ≤ 32
-getestet) und wird beim Spielen verfeinert.
+Schrittbasiert kalibriert (~5,65 µs/Schritt). Kein `sleep` im HAL, damit das
+Timing im Browser deterministisch und speed-skalierbar bleibt.
 
-## Sound
+## Lizenz & Rechtliches
 
-Prozedurale WebAudio-Beeps statt Audiodateien. Mute via `A`+`C`, Zustand wird
-im Save persistiert.
+- TamaLIB ist **GPLv2**. Für privaten Gebrauch unkritisch; eine Veröffentlichung
+  müsste die Lizenzpflichten erfüllen.
+- ROM und Firmware nur für **privaten Gebrauch**, keine öffentliche Distribution.
 
-## Restrisiko: Uhr-Manipulation
+## Nicht abwehrbar
 
-Die Geräteuhr des Nutzers lässt sich nicht vollständig gegen Manipulation
-absichern; negative Zeitdifferenzen werden geklemmt. Bewusst als Restrisiko
-akzeptiert.
-
-## Sprite-Copyright
-
-Es werden Original-Gen1-Sprites verwendet. Die App ist **nur für privaten
-Gebrauch** und wird nicht öffentlich distribuiert.
+Geräteuhr-Manipulation und Browser-Throttling bei inaktivem Tab beeinflussen die
+Echtzeit; der Frame-Loop klemmt große Deltas, um Sprünge zu begrenzen.
