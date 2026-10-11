@@ -150,7 +150,7 @@ function frame(ts: number): void {
   if (SPEED === 1 && STATIC === 0 && ++saveTick % 300 === 0) {
     void saveEmu(localStorage, emu.saveState()).catch(() => { /* Quota */ });
   }
-  if (!booted && pendingSteps <= 0) { booted = true; loadingEl?.classList.add("hidden"); }
+  if (!booted && pendingSteps < 1) { booted = true; loadingEl?.classList.add("hidden"); }
   if (STATIC === 0) requestAnimationFrame(frame);
 }
 
