@@ -17,15 +17,25 @@ body {
 /* ---- Ei-Gehäuse ---- */
 #device {
   position: relative;
-  width: min(92vw, 340px);
+  width: min(94vw, 360px);
   aspect-ratio: 0.8;
   border-radius: 50% 50% 50% 50% / 56% 56% 44% 44%;
   display: flex; flex-direction: column; align-items: center;
-  padding: 13% 11% 10%;
+  padding: 9% 8% 8%;
   box-shadow:
     inset 0 -22px 36px rgba(0,0,0,.28),
     inset 0 16px 28px rgba(255,255,255,.35),
     0 24px 50px rgba(0,0,0,.6);
+}
+
+/* kleine Nase oben, an der die Öse hängt */
+#device::before {
+  content: "";
+  position: absolute; top: -12px; left: 11%;
+  width: 30px; height: 22px;
+  background: #16b8b0;
+  border-radius: 9px 9px 4px 4px;
+  box-shadow: inset 0 4px 5px rgba(255,255,255,.35), inset 0 -3px 5px rgba(0,0,0,.25);
 }
 
 /* Teal-Shell mit weißen Pixel-Motiven */
@@ -35,17 +45,17 @@ body {
   background-size: 96px 96px;
 }
 
-/* ---- Ball-Chain (oben links) ---- */
-.keychain { position: absolute; top: -34px; left: 16%; display: flex; flex-direction: column; align-items: center; }
-.keychain .chain { width: 9px; height: 22px; background: repeating-linear-gradient(#e2e5e8 0 3px, #9aa0a6 3px 6px); border-radius: 5px; }
-.keychain .ring { width: 22px; height: 22px; border: 4px solid #d3d7db; border-radius: 50%; margin-top: -3px; box-shadow: inset 0 0 3px rgba(0,0,0,.35); }
+/* ---- Ball-Chain (an der Nase oben links) ---- */
+.keychain { position: absolute; top: -44px; left: 11%; width: 30px; display: flex; flex-direction: column; align-items: center; z-index: 1; }
+.keychain .chain { width: 9px; height: 24px; background: repeating-linear-gradient(#e2e5e8 0 3px, #9aa0a6 3px 6px); border-radius: 5px; }
+.keychain .ring { width: 24px; height: 24px; border: 4px solid #d3d7db; border-radius: 50%; margin-top: -4px; box-shadow: inset 0 0 3px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.4); }
 
 /* ---- LCD mit Zacken-Rahmen ---- */
-.screen-frame { position: relative; width: 96%; aspect-ratio: 1; display: grid; place-items: center; margin-top: 2%; }
-.star { position: absolute; inset: -8%; width: 116%; height: 116%; filter: drop-shadow(0 2px 2px rgba(0,0,0,.3)); }
+.screen-frame { position: relative; width: 100%; aspect-ratio: 1; display: grid; place-items: center; margin-top: 1%; }
+.star { position: absolute; inset: -6%; width: 112%; height: 112%; filter: drop-shadow(0 2px 2px rgba(0,0,0,.3)); }
 .star polygon { fill: #ffd21e; }
 .screen-well {
-  position: relative; width: 84%; aspect-ratio: 2 / 1;
+  position: relative; width: 90%; aspect-ratio: 2 / 1;
   background: var(--lcd-bg);
   border: 3px solid #b9900f; border-radius: 4px;
   box-shadow: inset 0 0 0 2px #ecd35a, inset 0 0 10px rgba(0,0,0,.2);
@@ -54,7 +64,7 @@ body {
 #lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
 
 /* ---- Buttons ---- */
-#buttons { display: flex; gap: 14%; margin-top: 7%; }
+#buttons { display: flex; gap: 14%; margin-top: 6%; }
 #buttons button {
   width: clamp(34px, 10vw, 46px); aspect-ratio: 1; border-radius: 50%;
   border: none; background: #ffd21e; cursor: pointer;
