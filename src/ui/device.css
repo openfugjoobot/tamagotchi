@@ -500,7 +500,8 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 .account-avatar .account-letter { font-size: 18px; }
 .account-btn .account-letter { font-size: 16px; }
 .account-line { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink); opacity: .82; }
-.account-mail { color: var(--ink); opacity: 1; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.account-mail { color: var(--ink); opacity: .7; font-weight: 500; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-name { color: var(--ink); opacity: 1; font-weight: 700; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gsi-slot { min-height: 32px; display: flex; align-items: center; justify-content: center; }
 .gsi-slot iframe { max-width: 100%; }
 

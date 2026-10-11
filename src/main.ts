@@ -510,13 +510,16 @@ function initAccount(): void {
       av.append(avatarEl(s));
       const text = document.createElement("div");
       text.className = "account-id-text";
+      const name = document.createElement("p");
+      name.className = "account-line account-name";
+      name.textContent = s.name ?? s.email ?? "";
       const mail = document.createElement("p");
       mail.className = "account-line account-mail";
-      mail.textContent = s.email ?? s.name ?? "";
+      mail.textContent = s.name && s.email ? s.email : "";
       const sync = document.createElement("p");
       sync.className = "account-line";
       sync.textContent = t("accountSynced");
-      text.append(mail, sync);
+      text.append(name, mail, sync);
       idRow.append(av, text);
       const out = document.createElement("button");
       out.className = "menu-row";
