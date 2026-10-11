@@ -1,25 +1,18 @@
 import { createEmulator, LCD_WIDTH, LCD_HEIGHT } from "./emu/emulator";
 import type { Emulator } from "./emu/emulator";
 import { drawLcd } from "./render/lcd";
-import { drawIconRow } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu } from "./storage/persist";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
-const iconsTop = document.getElementById("icons-top") as HTMLCanvasElement;
-const iconsBottom = document.getElementById("icons-bottom") as HTMLCanvasElement;
-const ctxTop = iconsTop.getContext("2d")!;
-const ctxBottom = iconsBottom.getContext("2d")!;
 const piezo = createPiezo(() => new AudioContext());
 
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
 // Testmodus: feste Schrittzahl, ein Frame, dann Stopp (kein rAF-Loop).
 const STATIC = Number(params.get("static") ?? "0") || 0;
-// Debug: alle 8 Icons erzwingen (Layout-Check).
-const FORCE_ICONS = params.get("icons") === "all";
 const shell = params.get("shell");
 if (shell === "pink" || shell === "blue") {
   document.getElementById("device")!.className = `shell-${shell}`;
@@ -107,13 +100,6 @@ function frame(ts: number): void {
   canvas.width = LCD_WIDTH * scale;
   canvas.height = LCD_HEIGHT * scale;
   drawLcd(ctx, emu.lcd(), scale);
-
-  const icons = FORCE_ICONS ? new Uint8Array([1, 1, 1, 1, 1, 1, 1, 1]) : emu.icons();
-  for (const [el, c, row] of [[iconsTop, ctxTop, 0], [iconsBottom, ctxBottom, 1]] as const) {
-    el.width = LCD_WIDTH * scale;
-    el.height = 7 * scale;
-    drawIconRow(c, icons, row, scale);
-  }
 
   const b = emu.buzzer();
   piezo.update(b.freq, b.on);
