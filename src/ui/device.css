@@ -179,8 +179,8 @@ main, .site-footer { position: relative; z-index: 1; }
 .bgbtn.active { box-shadow: 0 0 0 2px var(--surface-2), 0 0 0 4px var(--accent-text), inset 0 1px 2px rgba(255,255,255,.5); }
 .bgbtn-a {
   position: absolute; inset: 0; display: grid; place-items: center;
-  font-family: var(--mono); font-weight: 800; font-size: 11px; color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,.6), 0 0 1px rgba(0,0,0,.8);
+  font-family: var(--mono); font-weight: 800; font-size: 14px; color: #111;
+  text-shadow: 0 1px 0 rgba(255,255,255,.45);
 }
 .bgbtn:hover { transform: translateY(-1px); }
 .bgbtn:active { transform: scale(.92); }
