@@ -102,7 +102,7 @@ function initUI(): void {
   const shellbtns = document.getElementById("shellbtns");
   const deviceEl = document.querySelector(".device-wrap") as HTMLElement | null;
   const shellStage = document.getElementById("shell-stage");
-  const deviceSrc = document.getElementById("device");
+  const deviceSrc = document.querySelector(".device-wrap") as HTMLElement | null;
   if (shellStage && deviceSrc) {
     const clone = deviceSrc.cloneNode(true) as HTMLElement;
     clone.removeAttribute("id");
