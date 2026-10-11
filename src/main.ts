@@ -233,9 +233,6 @@ function initUI(): void {
     updateNotifyLabel();
   });
 
-  const y = document.getElementById("year");
-  if (y) y.textContent = String(new Date().getFullYear());
-
   // ---- i18n ----
   applyI18n();
   document.documentElement.lang = currentLang();

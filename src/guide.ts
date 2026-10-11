@@ -29,8 +29,6 @@ function initGuide(): void {
   applyI18n();
   document.documentElement.lang = currentLang();
   renderIcons();
-  const y = document.getElementById("year");
-  if (y) y.textContent = String(new Date().getFullYear());
 }
 
 initGuide();
