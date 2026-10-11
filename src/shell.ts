@@ -23,6 +23,9 @@ export const SHELLS: Shell[] = [
   { id: "purple", top: "#b98cff", bot: "#6b3fc9", star: { points: 7,  inner: 0.58, rot: 12 } },
   { id: "sunset", top: "#ffb066", bot: "#e0563f", star: { points: 22, inner: 0.90, rot: 0 } },
   { id: "mono",   top: "#3a3f47", bot: "#16181d", star: { points: 5,  inner: 0.50, rot: 0 } },
+  { id: "mint",   top: "#7ee6b0", bot: "#1f9e6a", star: { points: 12, inner: 0.72, rot: 15 } },
+  { id: "coral",  top: "#ff9a8b", bot: "#d94a3d", star: { points: 9,  inner: 0.62, rot: 4 } },
+  { id: "pearl",  top: "#f3efe4", bot: "#c9bda4", star: { points: 16, inner: 0.88, rot: 0 } },
 ];
 
 /** Polygon-Punkte ("x,y …") für einen Stern im 100×100-Raster. */

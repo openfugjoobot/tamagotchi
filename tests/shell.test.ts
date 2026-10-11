@@ -18,10 +18,10 @@ function fakeDevice(): HTMLElement {
 }
 
 describe("shell", () => {
-  it("hat 6 Varianten mit eindeutigen IDs", () => {
+  it("hat 9 Varianten mit eindeutigen IDs", () => {
     const ids = SHELLS.map((s) => s.id);
-    expect(ids.length).toBe(6);
-    expect(new Set(ids).size).toBe(6);
+    expect(ids.length).toBe(9);
+    expect(new Set(ids).size).toBe(9);
   });
   it("applyShell setzt Attribut und speichert", () => {
     const st = memStorage();
