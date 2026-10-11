@@ -42,6 +42,14 @@ body[data-bg="day"] {
     radial-gradient(90% 60% at 50% 112%, #d9f2e6 0%, rgba(217,242,230,0) 66%),
     linear-gradient(180deg, #f4f8ff 0%, #fdf8f0 100%);
 }
+/* blossom – soft pink (light) */
+body[data-bg="blossom"] {
+  background-color:#fdeef2;
+  background-image:
+    radial-gradient(60% 46% at 18% 10%, #ffd9e6 0%, rgba(255,217,230,0) 60%),
+    radial-gradient(56% 44% at 84% 8%, #e6ddff 0%, rgba(230,221,255,0) 62%),
+    linear-gradient(180deg, #fff2f6 0%, #f6eefb 100%);
+}
 /* forest – calm, muted green (light) */
 body[data-bg="forest"] {
   background-color:#eaf3ea;

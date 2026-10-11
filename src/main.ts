@@ -28,6 +28,7 @@ if (shell === "pink" || shell === "blue") {
 const BG_KEY = "tamagotchi.bg";
 const THEMES: { id: string; c: string }[] = [
   { id: "day", c: "#bcd7ff" },
+  { id: "blossom", c: "#ffc2d6" },
   { id: "forest", c: "#cfe6cf" },
   { id: "dusk", c: "#e08a5a" },
   { id: "night", c: "#14233a" },
