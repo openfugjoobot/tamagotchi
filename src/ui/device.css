@@ -51,10 +51,10 @@ body {
 /* (Öse entfernt) */
 
 /* ---- LCD als eine Fläche: Icons oben + Pixel + Icons unten ---- */
-.screen-frame { position: relative; width: 100%; aspect-ratio: 1; display: grid; place-items: center; margin-top: 1%; z-index: 1; }
-.star { position: absolute; inset: -6%; width: 112%; height: 112%; filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
+.screen-frame { position: relative; width: 84%; aspect-ratio: 1; display: grid; place-items: center; margin-top: 1%; z-index: 1; }
+.star { position: absolute; inset: -2%; width: 104%; height: 104%; filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
 .screen-stack {
-  position: relative; width: 90%;
+  position: relative; width: 82%;
   display: flex; flex-direction: column; align-items: center;
   background: var(--lcd-bg);
   border: 2px solid #b9900f; border-radius: 4px;
