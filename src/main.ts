@@ -55,6 +55,15 @@ let notifyEnabled = false;
 try { notifyEnabled = localStorage.getItem(NOTIFY_KEY) === "1"; } catch { /* ignore */ }
 let lastNotify = 0;
 
+// ---- Sound ----
+const SOUND_KEY = "***";
+let soundOn = true;
+try { soundOn = localStorage.getItem(SOUND_KEY) !== "0"; } catch { /* ignore */ }
+function updateSoundLabel(): void {
+  const el = document.getElementById("sound-state");
+  if (el) el.textContent = soundOn ? "on" : "off";
+}
+
 function updateNotifyLabel(): void {
   const el = document.getElementById("notify-state");
   if (el) el.textContent = notifyEnabled ? "on" : "off";
@@ -168,6 +177,16 @@ function initUI(): void {
 
   // ---- Benachrichtigungen ----
   updateNotifyLabel();
+  // ---- Sound ----
+  updateSoundLabel();
+  piezo.setMuted(!soundOn);
+  document.getElementById("btn-sound")?.addEventListener("click", () => {
+    soundOn = !soundOn;
+    try { localStorage.setItem(SOUND_KEY, soundOn ? "1" : "0"); } catch { /* ignore */ }
+    piezo.setMuted(!soundOn);
+    updateSoundLabel();
+  });
+
   document.getElementById("btn-notify")?.addEventListener("click", async () => {
     if (notifyEnabled) {
       notifyEnabled = false;
