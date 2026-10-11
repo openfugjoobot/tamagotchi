@@ -14,6 +14,7 @@ EXPORTS=(
   -Wl,--export=emu_rom_byte
   -Wl,--export=emu_init
   -Wl,--export=emu_step
+  -Wl,--export=emu_step_n
   -Wl,--export=emu_advance
   -Wl,--export=emu_set_button
   -Wl,--export=emu_lcd

@@ -225,7 +225,7 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   z-index: 1; pointer-events: none; opacity: .45;
 }
 .grass svg { display: block; width: 100%; height: 100%; }
-.grass-blade {
+.grass-g {
   transform-box: fill-box; transform-origin: 50% 100%;
   animation: blade-sway var(--dur, 4s) ease-in-out infinite;
   animation-delay: var(--delay, 0s);

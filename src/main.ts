@@ -25,6 +25,7 @@ let miniLcdCtx: CanvasRenderingContext2D | null = null;
 let miniBottomCtx: CanvasRenderingContext2D | null = null;
 const piezo = createPiezo(() => new AudioContext());
 const loadingEl = document.getElementById("loading");
+const menuEl = document.getElementById("menu");
 
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
@@ -334,19 +335,19 @@ function frame(ts: number): void {
   if (steps > 0) emu.step(steps);
 
   const scale = Math.max(1, Math.floor(canvas.clientWidth / LCD_WIDTH));
-  canvas.width = LCD_WIDTH * scale;
-  canvas.height = LCD_HEIGHT * scale;
+  if (canvas.width !== LCD_WIDTH * scale) {
+    canvas.width = LCD_WIDTH * scale;
+    canvas.height = LCD_HEIGHT * scale;
+    for (const el of [iconsTop, iconsBottom]) { el.width = LCD_WIDTH * scale; el.height = 8 * scale; }
+  }
   drawLcd(ctx, emu.lcd(), scale);
 
   const icons = emu.icons();
-  for (const [el, c, row] of [[iconsTop, ctxTop, 0], [iconsBottom, ctxBottom, 1]] as const) {
-    el.width = LCD_WIDTH * scale;
-    el.height = 8 * scale;
-    drawIconRow(c, icons, row, scale, iconImgs);
-  }
+  drawIconRow(ctxTop, icons, 0, scale, iconImgs);
+  drawIconRow(ctxBottom, icons, 1, scale, iconImgs);
 
-  // Mini-Vorschau spiegeln
-  if (miniLcd && miniLcdCtx) {
+  // Mini-Vorschau nur spiegeln, wenn das Menü offen ist.
+  if (miniLcd && miniLcdCtx && menuEl && !menuEl.hidden) {
     const ms = 4;
     miniLcd.width = LCD_WIDTH * ms; miniLcd.height = LCD_HEIGHT * ms;
     drawLcd(miniLcdCtx, emu.lcd(), ms);

@@ -51,6 +51,7 @@ void emu_init(void) {
 }
 
 void emu_step(void) { tamalib_step(); }
+void emu_step_n(u32_t n) { for (u32_t i = 0; i < n; i++) tamalib_step(); }
 void emu_advance(u32_t us) { now_us += us; }
 void emu_set_button(u32_t btn, u32_t state) {
   tamalib_set_button((button_t)btn, state ? BTN_STATE_PRESSED : BTN_STATE_RELEASED);

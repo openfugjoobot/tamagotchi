@@ -11,6 +11,17 @@ export function buildGrass(container: HTMLElement): void {
   svg.setAttribute("preserveAspectRatio", "none");
 
   const count = Math.round(w / 3);
+  const groups: SVGGElement[] = [];
+  const NG = 10;
+  for (let gi = 0; gi < NG; gi++) {
+    const g = document.createElementNS(NS, "g");
+    g.classList.add("grass-g");
+    g.style.setProperty("--dur", (2.6 + Math.random() * 4.6).toFixed(2) + "s");
+    g.style.setProperty("--delay", (-Math.random() * 6).toFixed(2) + "s");
+    g.style.setProperty("--amp", (0.8 + Math.random() * 3.2).toFixed(2) + "deg");
+    svg.appendChild(g);
+    groups.push(g);
+  }
   const cs = getComputedStyle(container);
   const baseHue = parseFloat(cs.getPropertyValue("--grass-hue")) || 150;
   const sat = (cs.getPropertyValue("--grass-sat") || "40%").trim();
@@ -32,11 +43,7 @@ export function buildGrass(container: HTMLElement): void {
     p.setAttribute("stroke-width", thick.toFixed(2));
     p.setAttribute("fill", "none");
     p.setAttribute("stroke-linecap", "round");
-    p.classList.add("grass-blade");
-    p.style.setProperty("--dur", (2.6 + Math.random() * 4.6).toFixed(2) + "s");
-    p.style.setProperty("--delay", (-Math.random() * 6).toFixed(2) + "s");
-    p.style.setProperty("--amp", (0.8 + Math.random() * 3.4).toFixed(2) + "deg");
-    svg.appendChild(p);
+    groups[i % NG].appendChild(p);
   }
   container.replaceChildren(svg);
 }

@@ -23,6 +23,7 @@ interface RawExports {
   emu_rom_byte(i: number, v: number): void;
   emu_init(): void;
   emu_step(): void;
+  emu_step_n(n: number): void;
   emu_set_button(btn: number, state: number): void;
   emu_lcd(): number;
   emu_icons(): number;
@@ -53,7 +54,7 @@ export async function createEmulator(opts: EmulatorOptions): Promise<Emulator> {
   const refresh = () => { if (mem.buffer !== ex.memory.buffer) mem = new Uint8Array(ex.memory.buffer); };
 
   return {
-    step(n = 1) { for (let i = 0; i < n; i++) ex.emu_step(); },
+    step(n = 1) { if (n > 0) ex.emu_step_n(n); },
     setButton(b, down) { ex.emu_set_button(BTN_INDEX[b], down ? 1 : 0); },
     lcd() { refresh(); return mem.subarray(lcdPtr, lcdPtr + LCD_WIDTH * LCD_HEIGHT); },
     icons() { refresh(); return mem.subarray(iconsPtr, iconsPtr + ICON_COUNT); },
