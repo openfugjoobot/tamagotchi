@@ -59,7 +59,7 @@ export function drawIconRow(
     const idx = row * 4 + i;
     const img = imgs[idx];
     if (!img) continue;
-    ctx.globalAlpha = bits[idx] ? 1 : 0.45;
+    ctx.globalAlpha = bits[idx] ? 1 : 0.6;
     const size = ICON_INNER * scale;
     const dx = (i * ICON_SLOT + ICON_PAD) * scale;
     const dy = ICON_PAD * scale;
