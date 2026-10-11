@@ -276,15 +276,20 @@ function initUI(): void {
         el.setAttribute("aria-selected", String(el.dataset.shell === current));
       });
     };
+    // Kurzer Puls am Geraet statt bildschirmgrosser Kreuzblende – wirkt fluessiger.
+    const pulse = (): void => {
+      deviceEl2.classList.remove("shell-swap");
+      void deviceEl2.offsetWidth; // Animation neu anstossen
+      deviceEl2.classList.add("shell-swap");
+      window.setTimeout(() => deviceEl2.classList.remove("shell-swap"), 320);
+    };
     const pickShell = (id: string, animate = true): void => {
       current = id;
-      const commit = (): void => {
-        applyShell(deviceEl2, id, localStorage);
-        const shape = SHELLS.find((s) => s.id === id)?.star;
-        if (shape) deviceEl2.querySelector("svg.star polygon")?.setAttribute("points", starPolygon(shape));
-        markCards();
-      };
-      if (animate) withFade(commit); else commit();
+      applyShell(deviceEl2, id, localStorage);
+      const shape = SHELLS.find((s) => s.id === id)?.star;
+      if (shape) deviceEl2.querySelector("svg.star polygon")?.setAttribute("points", starPolygon(shape));
+      markCards();
+      if (animate) pulse();
     };
 
     for (let set = 0; set < 3; set++) for (const s of SHELLS) cards.push(makeCard(s));

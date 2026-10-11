@@ -330,6 +330,9 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 }
 
 /* Shell-Swatches im Menü */
+@keyframes shell-pulse { 0% { opacity: 1; } 45% { opacity: .7; } 100% { opacity: 1; } }
+.device-wrap.shell-swap { animation: shell-pulse .26s ease; }
+
 /* ---- Shell-Karussell: horizontal scrollbar, endlos, Auswahl in der Mitte ---- */
 .shell-carousel {
   height: 136px; overflow-x: auto; overflow-y: hidden;
