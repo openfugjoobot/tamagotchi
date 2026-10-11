@@ -42,6 +42,30 @@ function applyBg(id: string): void {
   });
 }
 
+// ---- Benachrichtigungen ----
+const NOTIFY_KEY = "tamagotchi.notify";
+let notifyEnabled = false;
+try { notifyEnabled = localStorage.getItem(NOTIFY_KEY) === "1"; } catch { /* ignore */ }
+let lastNotify = 0;
+
+function updateNotifyLabel(): void {
+  const el = document.getElementById("notify-state");
+  if (el) el.textContent = notifyEnabled ? "on" : "off";
+}
+
+async function notify(title: string, body: string): Promise<void> {
+  if (!notifyEnabled || !("Notification" in window) || Notification.permission !== "granted") return;
+  const now = Date.now();
+  if (now - lastNotify < 60_000) return;
+  lastNotify = now;
+  const opts: NotificationOptions = { body, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: "tamagotchi" };
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (reg) await reg.showNotification(title, opts);
+    else new Notification(title, opts);
+  } catch { /* ignore */ }
+}
+
 // ---- Hintergrund-Themes ----
 function initUI(): void {
   const bgbtns = document.getElementById("bgbtns");
@@ -124,30 +148,6 @@ const STEPS_PER_SECOND = Math.round(TS_FREQ / TS_PER_STEP); // ≈ 5802
 const MAX_STEPS_PER_FRAME = 120 * STEPS_PER_SECOND; // Aufholen: bis 120 s Emulation pro Frame
 const MAX_CATCHUP_S = 2 * 3600; // höchstens 2 h nachholen
 let pendingSteps = 0;
-
-// ---- Benachrichtigungen ----
-const NOTIFY_KEY = "tamagotchi.notify";
-let notifyEnabled = false;
-try { notifyEnabled = localStorage.getItem(NOTIFY_KEY) === "1"; } catch { /* ignore */ }
-let lastNotify = 0;
-
-function updateNotifyLabel(): void {
-  const el = document.getElementById("notify-state");
-  if (el) el.textContent = notifyEnabled ? "on" : "off";
-}
-
-async function notify(title: string, body: string): Promise<void> {
-  if (!notifyEnabled || !("Notification" in window) || Notification.permission !== "granted") return;
-  const now = Date.now();
-  if (now - lastNotify < 60_000) return;
-  lastNotify = now;
-  const opts: NotificationOptions = { body, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: "tamagotchi" };
-  try {
-    const reg = await navigator.serviceWorker?.getRegistration();
-    if (reg) await reg.showNotification(title, opts);
-    else new Notification(title, opts);
-  } catch { /* ignore */ }
-}
 
 let emu: Emulator | null = null;
 let iconImgs: IconImages = [];
