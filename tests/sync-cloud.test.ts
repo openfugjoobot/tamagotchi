@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideSync, hasConflict, pullSave, pushSave, deleteRemote } from "@/sync/cloud";
+import { decideSync, needsPrompt, pullSave, pushSave, deleteRemote } from "@/sync/cloud";
 
 describe("sync: Entscheidung beim Start", () => {
   const cloud = (iso: string) => iso;
@@ -47,15 +47,15 @@ function stubFetch(reply: () => Response, seen: Seen): typeof fetch {
 
 const emptySeen = (): Seen => ({ url: "", method: "", auth: "", body: "" });
 
-describe("sync: Konflikt erkennen", () => {
-  it("nur wenn beide Stände existieren und abweichen", () => {
+describe("sync: Nachfrage nur wenn die Cloud neuer ist", () => {
+  it("entscheidet nach Zeitstempel", () => {
     const t = Date.parse("2026-01-01T10:00:00Z");
-    expect(hasConflict(t, null)).toBe(false);
-    expect(hasConflict(null, "2026-01-01T10:00:00Z")).toBe(false);
-    expect(hasConflict(t, "2026-01-01T10:00:00Z")).toBe(false);
-    expect(hasConflict(t, "2026-01-01T11:00:00Z")).toBe(true);
-    expect(hasConflict(t, "2025-12-31T23:00:00Z")).toBe(true);
-    expect(hasConflict(t, "keinDatum")).toBe(false);
+    expect(needsPrompt(t, null)).toBe(false);
+    expect(needsPrompt(null, "2026-01-01T10:00:00Z")).toBe(false);
+    expect(needsPrompt(t, "2026-01-01T10:00:00Z")).toBe(false);
+    expect(needsPrompt(t, "2026-01-01T11:00:00Z")).toBe(true);
+    expect(needsPrompt(t, "2025-12-31T23:00:00Z")).toBe(false);
+    expect(needsPrompt(t, "keinDatum")).toBe(false);
   });
 });
 

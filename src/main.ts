@@ -9,7 +9,7 @@ import { saveEmu, loadEmu, readSaveRecord } from "./storage/persist";
 import { AUTH_ENABLED } from "./auth/config";
 import { currentSession, restoreSession, renderSignInButton, signOut, type Session } from "./auth/google";
 import { decideSync, deleteRemote, pullSave, pushSave, type CloudSave } from "./sync/cloud";
-import { hasConflict } from "./sync/cloud";
+import { needsPrompt } from "./sync/cloud";
 import { SHELLS, applyShell, savedShell, starPolygon } from "./shell";
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, t } from "./i18n";
@@ -479,7 +479,7 @@ async function syncAfterSignIn(): Promise<void> {
     if (local) await pushSave(s.token, asCloud(local));
     return;
   }
-  if (local && hasConflict(local.t, cloud.updatedAt)) {
+  if (local && needsPrompt(local.t, cloud.updatedAt)) {
     const choice = await askWhichSave(local.t, cloud.updatedAt);
     if (choice === "pull") { applyCloudSave(cloud, true); return; }
     await pushSave(s.token, asCloud(local));
@@ -498,7 +498,7 @@ async function syncBeforeBoot(): Promise<void> {
   const cloud = await withTimeout(pullSave(s.token), 4000);
   // Beide da und unterschiedlich? Dann fragen, statt still zu ueberschreiben.
   let action = decideSync(local?.t ?? null, cloud?.updatedAt ?? null);
-  if (local && cloud && hasConflict(local.t, cloud.updatedAt)) {
+  if (local && cloud && needsPrompt(local.t, cloud.updatedAt)) {
     action = await askWhichSave(local.t, cloud.updatedAt);
   }
   if (action === "pull" && cloud) {

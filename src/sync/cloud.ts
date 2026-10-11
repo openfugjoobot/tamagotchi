@@ -55,14 +55,15 @@ export async function deleteRemote(token: string, deps: CloudDeps = {}): Promise
 }
 
 /**
- * Gibt es einen echten Konflikt? Nur wenn beide Stände existieren und sich
- * unterscheiden – dann soll der Nutzer entscheiden, nicht wir.
+ * Soll der Nutzer gefragt werden? Nur wenn die Cloud neuer ist – dann wuerde sie
+ * den lokalen Stand ueberschreiben. Ist lokal neuer (Normalfall: hier wurde gerade
+ * gespielt), wird einfach hochgeschoben, ohne Nachfrage.
  */
-export function hasConflict(localAt: number | null, cloudUpdatedAt: string | null): boolean {
+export function needsPrompt(localAt: number | null, cloudUpdatedAt: string | null): boolean {
   const cloudAt = cloudUpdatedAt ? Date.parse(cloudUpdatedAt) : NaN;
   if (typeof localAt !== "number" || !Number.isFinite(localAt)) return false;
   if (!Number.isFinite(cloudAt)) return false;
-  return localAt !== cloudAt;
+  return cloudAt > localAt;
 }
 
 /**
