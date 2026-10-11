@@ -329,12 +329,15 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 }
 [data-shell="mint"] {
   --shell-top:#7ee6b0; --shell-bot:#1f9e6a;
+  --shell-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g fill='none' stroke='%23ffffff' stroke-opacity='0.9' stroke-width='3' stroke-linecap='round'><path d='M0 22q12-11 24 0t24 0t24 0t24 0'/><path d='M0 58q12-11 24 0t24 0t24 0t24 0'/></g></svg>");
 }
 [data-shell="coral"] {
   --shell-top:#ff9a8b; --shell-bot:#d94a3d;
+  --shell-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g fill='%23ffffff' fill-opacity='0.85'><rect x='-26' y='-24' width='9' height='150' transform='rotate(35 48 48)'/><rect x='4' y='-24' width='9' height='150' transform='rotate(35 48 48)'/><rect x='34' y='-24' width='9' height='150' transform='rotate(35 48 48)'/><rect x='64' y='-24' width='9' height='150' transform='rotate(35 48 48)'/></g></svg>");
 }
 [data-shell="pearl"] {
   --shell-top:#f3efe4; --shell-bot:#c9bda4;
+  --shell-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g stroke='%23ffffff' stroke-opacity='0.85' fill='none'><g stroke-width='2.5' stroke-linecap='round'><path d='M0 20q14-12 28 0t28 0t28 0t28 0'/><path d='M0 62q14-12 28 0t28 0t28 0t28 0'/></g><g stroke-width='5'><path d='M14 6v84'/><path d='M52 6v84'/><path d='M88 6v84'/></g></g></svg>");
 }
 [data-shell="mono"] {
   --shell-top:#3a3f47; --shell-bot:#16181d;
