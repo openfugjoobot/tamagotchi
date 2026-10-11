@@ -203,6 +203,9 @@ main, .site-footer { position: relative; z-index: 1; }
 .menu-row:active { transform: translateY(1px); }
 .menu-row:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
 .menu-row .chev { color: var(--ink-dim); font-weight: 700; }
+.menu-row-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.menu-row-main .mi { width: 19px; height: 19px; flex: none; opacity: .8; }
+.menu-row:hover .mi { opacity: 1; }
 .menu-row.danger { color: #cf3f3f; border-color: rgba(207,63,63,.5); }
 body[data-bg="night"] .menu-row.danger, body[data-bg="midnight"] .menu-row.danger, body[data-bg="dusk"] .menu-row.danger { color:#ff8a8a; border-color: rgba(255,120,120,.5); }
 
