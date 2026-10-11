@@ -82,7 +82,7 @@ function initUI(): void {
   }
 
   const shellbtns = document.getElementById("shellbtns");
-  const deviceEl = document.getElementById("device");
+  const deviceEl = document.querySelector(".device-wrap") as HTMLElement | null;
   if (shellbtns && deviceEl) {
     for (const s of SHELLS) {
       const b = document.createElement("button");
