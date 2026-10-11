@@ -225,7 +225,6 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   0%, 100% { transform: rotate(calc(var(--amp, 2deg) * -1)); }
   50%      { transform: rotate(var(--amp, 2deg)); }
 }
-}
 @keyframes shadow-move {
   0%, 100% { transform: translateX(-2.1%); }
   50%      { transform: translateX(2.1%); }
