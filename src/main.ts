@@ -242,12 +242,14 @@ function initUI(): void {
       dev.className = "device";
       dev.dataset.shell = shell.id;
       dev.innerHTML =
+        `<span class="mini-screen-wrap">` +
         `<svg class="mini-star" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">` +
         `<defs><linearGradient id="sun-${shell.id}" x1="0" y1="0" x2="0" y2="1">` +
         `<stop offset="0" class="sun-1" /><stop offset="0.5" class="sun-2" /><stop offset="1" class="sun-3" />` +
         `</linearGradient></defs>` +
         `<polygon points="${starPolygon(shell.star)}" fill="url(#sun-${shell.id})" /></svg>` +
-        `<span class="mini-screen mini-lcd"></span>`;
+        `<span class="mini-screen"></span>` +
+        `</span>`;
       wrap.append(ring, dev);
       const name = document.createElement("span");
       name.className = "shell-name";

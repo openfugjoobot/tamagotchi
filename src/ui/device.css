@@ -352,11 +352,10 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 .shell-card .mini-ring {
   width: 16px; height: 16px; border: 3px solid var(--shell-top); border-radius: 50%; margin-bottom: -5px; flex: none;
 }
-.shell-card .device { width: 96px; margin: 0; flex: none; }
-.shell-card .mini-star { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 130%; aspect-ratio: 1; }
-.shell-card .mini-screen { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); width: 58%; display: grid; gap: 1px; }
-.shell-card .mini-screen img { width: 100%; display: block; image-rendering: pixelated; }
-.shell-card .mini-lcd { background: var(--lcd-bg); }
+.shell-card .device { width: 84px; margin: 0; flex: none; }
+.shell-card .mini-screen-wrap { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); width: 62%; aspect-ratio: 2 / 1; }
+.shell-card .mini-star { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 132%; aspect-ratio: 1; }
+.shell-card .mini-screen { position: absolute; inset: 0; background: var(--lcd-bg); border: 1.5px solid #b9900f; border-radius: 2px; box-shadow: inset 0 0 0 1px #f2dd7e; }
 .shell-card .shell-name { width: 56px; font-size: 11.5px; font-weight: 700; color: var(--ink-dim); text-align: left; }
 .shell-card[aria-selected="true"] .shell-name { color: var(--ink); }
 .shell-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
