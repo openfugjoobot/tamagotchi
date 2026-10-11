@@ -9,6 +9,28 @@
   <link rel="stylesheet" href="/src/ui/device.css" />
 </head>
 <body>
+  <header id="topbar">
+    <button class="iconbtn" id="btn-help" title="Hilfe">?</button>
+    <button class="iconbtn" id="btn-bg" title="Hintergrund">&#9680;</button>
+  </header>
+  <div id="overlay" hidden>
+    <div class="card">
+      <h2>Tamagotchi P1</h2>
+      <p class="lead">Original-Firmware in deinem Browser. So geht's:</p>
+      <ul>
+        <li><b>SELECT</b> (links) – Icon-Menü durchblättern / Wert ändern</li>
+        <li><b>CONFIRM</b> (mitte) – bestätigen (z. B. Futter); ohne Menü: Uhr</li>
+        <li><b>NEXT</b> (rechts) – zurück / abbrechen</li>
+      </ul>
+      <p class="hint">Erst die Uhr stellen (CONFIRM durch die Felder), dann schlüpft das Ei (~5&nbsp;Min). Füttern: SELECT → Napf-Icon → CONFIRM. Dein Stand wird automatisch gespeichert.</p>
+      <h3>Hintergrund</h3>
+      <div class="swatches" id="swatches"></div>
+      <div class="row">
+        <button id="btn-reset">Neu starten</button>
+        <button id="btn-close">Schließen</button>
+      </div>
+    </div>
+  </div>
   <div id="loading"><div class="spin"></div><div class="loadtxt">lädt …</div></div>
   <div id="device" class="shell-teal">
     <div class="screen-wrap">

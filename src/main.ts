@@ -24,6 +24,48 @@ if (shell === "pink" || shell === "blue") {
   document.getElementById("device")!.className = `shell-${shell}`;
 }
 
+// ---- Hintergrund-Themes ----
+const BG_KEY = "tamagotchi.bg";
+const THEMES: { id: string; c: string }[] = [
+  { id: "navy", c: "#173a5c" },
+  { id: "midnight", c: "#14161f" },
+  { id: "sunset", c: "#6a2b53" },
+  { id: "forest", c: "#17402c" },
+  { id: "paper", c: "#e9e4d8" },
+];
+function applyBg(id: string): void {
+  document.body.dataset.bg = id;
+  try { localStorage.setItem(BG_KEY, id); } catch { /* ignore */ }
+  document.querySelectorAll<HTMLElement>(".swatch").forEach((el) => {
+    el.classList.toggle("active", el.dataset.id === id);
+  });
+}
+function initUI(): void {
+  const overlay = document.getElementById("overlay")!;
+  const swatches = document.getElementById("swatches")!;
+  for (const t of THEMES) {
+    const b = document.createElement("button");
+    b.className = "swatch";
+    b.dataset.id = t.id;
+    b.style.background = t.c;
+    b.title = t.id;
+    b.addEventListener("click", () => applyBg(t.id));
+    swatches.appendChild(b);
+  }
+  applyBg(localStorage.getItem(BG_KEY) ?? "navy");
+  document.getElementById("btn-help")!.addEventListener("click", () => { overlay.hidden = false; });
+  document.getElementById("btn-bg")!.addEventListener("click", () => { overlay.hidden = false; });
+  document.getElementById("btn-close")!.addEventListener("click", () => { overlay.hidden = true; });
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.hidden = true; });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") overlay.hidden = true; });
+  document.getElementById("btn-reset")!.addEventListener("click", () => {
+    if (!confirm("Neu starten? Der aktuelle Stand wird verworfen.")) return;
+    try { localStorage.removeItem("tamagotchi.emu.v1"); } catch { /* ignore */ }
+    location.reload();
+  });
+}
+initUI();
+
 // Kalibriert: ~5,648 TamaLIB-Zeitstempel-Einheiten pro CPU-Schritt.
 // Zeitstempel sind in 1/32768 s (E0C6S46 @ 32768 Hz) → Echtzeit = 32768 Einheiten/s.
 const TS_FREQ = 32768;

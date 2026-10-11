@@ -12,7 +12,15 @@ body {
   background-image: radial-gradient(ellipse at 50% 34%, #173a5c 0%, #0a1a2e 58%, #061123 100%);
   display: grid; place-items: center;
   padding: 24px 16px;
+  transition: background-color .4s ease;
 }
+/* Hintergrund-Themes */
+body[data-bg="navy"]   { background-color:#0a1a2e; background-image: radial-gradient(ellipse at 50% 34%, #173a5c 0%, #0a1a2e 58%, #061123 100%); }
+body[data-bg="midnight"]{ background-color:#05060a; background-image: radial-gradient(ellipse at 50% 30%, #14161f 0%, #05060a 65%); }
+body[data-bg="sunset"] { background-color:#1a0f22; background-image: radial-gradient(ellipse at 50% 30%, #6a2b53 0%, #2a1030 55%, #120718 100%); }
+body[data-bg="forest"] { background-color:#08160f; background-image: radial-gradient(ellipse at 50% 32%, #17402c 0%, #08160f 60%, #04100a 100%); }
+body[data-bg="paper"]  { background-color:#e9e4d8; background-image: radial-gradient(ellipse at 50% 30%, #f6f2e8 0%, #d9d2c2 70%); }
+body[data-bg="paper"] .iconbtn { color:#2a2f3a; border-color: rgba(0,0,0,.25); background: rgba(0,0,0,.05); }
 
 /* ---- Ei-Gehäuse (nahezu rund wie das Original) ---- */
 #device {
@@ -90,3 +98,40 @@ body {
   animation: spin 0.9s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Topbar / Menü ---- */
+#topbar { position: fixed; top: 14px; right: 14px; display: flex; gap: 10px; z-index: 40; }
+.iconbtn {
+  width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
+  border: 1px solid rgba(205,234,255,.3); background: rgba(205,234,255,.08);
+  color: #cdeaff; font-size: 18px; font-weight: 700; line-height: 1;
+  display: grid; place-items: center; backdrop-filter: blur(4px);
+  transition: transform .1s ease, background .2s ease;
+}
+.iconbtn:active { transform: scale(.94); }
+.iconbtn:hover { background: rgba(205,234,255,.18); }
+
+#overlay { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 20px; background: rgba(3,8,16,.6); backdrop-filter: blur(6px); }
+#overlay[hidden] { display: none; }
+#overlay .card {
+  width: min(92vw, 420px); max-height: 86vh; overflow: auto;
+  background: rgba(14,30,50,.96); color: #dceaf7;
+  border: 1px solid rgba(205,234,255,.18); border-radius: 16px;
+  padding: 20px 20px 16px; box-shadow: 0 24px 60px rgba(0,0,0,.6);
+}
+#overlay h2 { margin: 0 0 6px; font-size: 18px; letter-spacing: .5px; }
+#overlay h3 { margin: 16px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: #9fc4e0; }
+#overlay .lead { margin: 0 0 8px; font-size: 14px; }
+#overlay ul { margin: 0 0 8px; padding-left: 18px; font-size: 13.5px; line-height: 1.6; }
+#overlay .hint { font-size: 12.5px; line-height: 1.6; color: #a9c2d6; }
+#overlay b { color: #ffe08a; }
+.swatches { display: flex; gap: 10px; }
+.swatch { width: 34px; height: 34px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(255,255,255,.35); }
+.swatch.active { outline: 2px solid #ffd21e; outline-offset: 2px; }
+.row { display: flex; gap: 10px; margin-top: 16px; }
+.row button {
+  flex: 1; padding: 10px 12px; border-radius: 10px; cursor: pointer; font-weight: 700;
+  border: 1px solid rgba(205,234,255,.25); background: rgba(205,234,255,.1); color: #dceaf7;
+}
+#btn-reset { background: rgba(255,80,80,.16); border-color: rgba(255,120,120,.35); color: #ffd7d7; }
+.row button:active { transform: translateY(1px); }
