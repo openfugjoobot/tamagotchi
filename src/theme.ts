@@ -4,22 +4,33 @@ export { BG_KEY };
 
 export interface Theme {
   id: string;
-  /** Swatch-Farbe im Menü. */
+  /** Swatch im Menü – Hex-Farbe oder CSS-Gradient. */
   c: string;
 }
+
+export const AUTO = "auto";
 
 export const THEMES: Theme[] = [
   { id: "day", c: "#bcd7ff" },
   { id: "blossom", c: "#ffc2d6" },
-  { id: "forest", c: "#cfe6cf" },
   { id: "dusk", c: "#e08a5a" },
   { id: "night", c: "#14233a" },
   { id: "midnight", c: "#05060a" },
+  { id: AUTO, c: "linear-gradient(135deg, #bcd7ff 0%, #e08a5a 52%, #14233a 100%)" },
 ];
 
 export const THEME_IDS: string[] = THEMES.map((t) => t.id);
 
-/** Gespeichertes Theme (validiert) oder "day". */
+/** Tageszeit → Theme (nach lokaler Uhrzeit des Geräts). */
+export function phaseForHour(hour: number): string {
+  if (hour >= 5 && hour < 9) return "blossom"; // Morgen
+  if (hour >= 9 && hour < 17) return "day"; // Tag
+  if (hour >= 17 && hour < 20) return "dusk"; // Abend
+  if (hour >= 20 && hour < 23) return "night"; // später Abend
+  return "midnight"; // Nacht
+}
+
+/** Gespeicherte Auswahl (validiert) oder "day". */
 export function savedBg(storage: Storage): string {
   try {
     const v = storage.getItem(BG_KEY);
@@ -27,4 +38,9 @@ export function savedBg(storage: Storage): string {
   } catch {
     return "day";
   }
+}
+
+/** Anzuzeigendes Theme – "auto" wird nach Tageszeit aufgelöst. */
+export function resolveTheme(id: string, now: Date = new Date()): string {
+  return id === AUTO ? phaseForHour(now.getHours()) : id;
 }

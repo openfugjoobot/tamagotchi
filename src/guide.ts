@@ -1,8 +1,8 @@
 import { applyI18n, iconNames, currentLang } from "./i18n";
-import { savedBg } from "./theme";
+import { savedBg, resolveTheme } from "./theme";
 
 function applySavedBg(): void {
-  document.body.dataset.bg = savedBg(localStorage);
+  document.body.dataset.bg = resolveTheme(savedBg(localStorage));
 }
 
 function renderIcons(): void {

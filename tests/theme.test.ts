@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BG_KEY, THEMES, THEME_IDS, savedBg } from "@/theme";
+import { BG_KEY, THEMES, THEME_IDS, AUTO, savedBg, resolveTheme, phaseForHour } from "@/theme";
 
 function memStorage(init: Record<string, string> = {}): Storage {
   const map = new Map<string, string>(Object.entries(init));
@@ -14,15 +14,29 @@ function memStorage(init: Record<string, string> = {}): Storage {
 }
 
 describe("theme", () => {
-  it("hat sechs Themes mit eindeutigen IDs", () => {
+  it("hat sechs eindeutige Themes, 'auto' am Ende, kein 'forest'", () => {
     expect(THEMES.length).toBe(6);
     expect(new Set(THEME_IDS).size).toBe(6);
     expect(THEME_IDS).toContain("day");
+    expect(THEME_IDS[THEME_IDS.length - 1]).toBe(AUTO);
+    expect(THEME_IDS).not.toContain("forest");
   });
 
   it("savedBg liefert Gespeichertes oder 'day'", () => {
     expect(savedBg(memStorage())).toBe("day");
     expect(savedBg(memStorage({ [BG_KEY]: "midnight" }))).toBe("midnight");
+    expect(savedBg(memStorage({ [BG_KEY]: AUTO }))).toBe(AUTO);
     expect(savedBg(memStorage({ [BG_KEY]: "bogus" }))).toBe("day");
+  });
+
+  it("löst 'auto' nach Tageszeit auf", () => {
+    expect(phaseForHour(2)).toBe("midnight");
+    expect(phaseForHour(6)).toBe("blossom");
+    expect(phaseForHour(12)).toBe("day");
+    expect(phaseForHour(18)).toBe("dusk");
+    expect(phaseForHour(21)).toBe("night");
+    expect(phaseForHour(23)).toBe("midnight");
+    expect(resolveTheme(AUTO, new Date(2026, 0, 1, 12, 0, 0))).toBe("day");
+    expect(resolveTheme("dusk", new Date(2026, 0, 1, 3, 0, 0))).toBe("dusk");
   });
 });

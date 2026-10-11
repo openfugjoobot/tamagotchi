@@ -9,7 +9,7 @@ import { saveEmu, loadEmu } from "./storage/persist";
 import { SHELLS, applyShell, savedShell } from "./shell";
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, t } from "./i18n";
-import { THEMES, BG_KEY, savedBg } from "./theme";
+import { THEMES, BG_KEY, AUTO, savedBg, resolveTheme } from "./theme";
 import { SOUND_KEY, NOTIFY_KEY, EMU_KEY } from "./storage/keys";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
@@ -46,8 +46,11 @@ const STATIC = Number(params.get("static") ?? "0") || 0;
 const shellParam = params.get("shell");
 
 // ---- Hintergrund-Themes (Definition in src/theme.ts) ----
+// "auto" wählt nach Tageszeit; gespeichert wird die Auswahl, angezeigt das Theme.
+let selectedBg = "day";
 function applyBg(id: string): void {
-  document.body.dataset.bg = id;
+  selectedBg = id;
+  document.body.dataset.bg = resolveTheme(id);
   try { localStorage.setItem(BG_KEY, id); } catch { /* ignore */ }
   document.querySelectorAll<HTMLElement>(".bgbtn").forEach((el) => {
     el.classList.toggle("active", el.dataset.id === id);
@@ -55,6 +58,12 @@ function applyBg(id: string): void {
   const g = document.getElementById("grass");
   if (g) buildGrass(g);
 }
+
+// Bei "auto" das Theme mit der Tageszeit mitführen (nur bei Wechsel neu anwenden).
+setInterval(() => {
+  if (selectedBg !== AUTO) return;
+  if (document.body.dataset.bg !== resolveTheme(AUTO)) applyBg(AUTO);
+}, 60_000);
 
 // ---- Benachrichtigungen ----
 let notifyEnabled = false;

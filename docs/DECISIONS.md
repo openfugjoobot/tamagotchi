@@ -56,3 +56,13 @@ ausgewiesen — für privaten Gebrauch unkritisch. Aktive Icons voll, inaktive d
 - **Theme ohne Flash**: `public/theme-init.js` (klassisches Script direkt nach
   `<body>`) setzt `body[data-bg]` vor dem ersten Paint; die Guide-Seite folgt so
   demselben Theme wie die Startseite.
+
+## Hintergrund "Auto" (2026-10-11)
+
+- `forest` ist raus; an letzter Stelle der Swatches steht **Auto**. Es speichert die
+  Auswahl `auto` und zeigt das zur Uhrzeit passende Theme:
+  `05–09 blossom` (Morgen), `09–17 day`, `17–20 dusk`, `20–23 night`, sonst `midnight`.
+- Auflösung in `src/theme.ts` (`phaseForHour`/`resolveTheme`) und – für den
+  flackerfreien Start – dupliziert in `public/theme-init.js`.
+- Bei `auto` prüft ein 60-s-Intervall, ob die Tageszeit ein anderes Theme verlangt
+  (nur dann wird neu angewendet, damit das Gras nicht ständig neu aufgebaut wird).
