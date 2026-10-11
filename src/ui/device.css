@@ -63,8 +63,10 @@ body {
 /* ---- LCD mit Zacken-Rahmen ---- */
 .screen-frame { position: relative; width: 100%; aspect-ratio: 1; display: grid; place-items: center; margin-top: 1%; z-index: 1; }
 .star { position: absolute; inset: -6%; width: 112%; height: 112%; filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
+.screen-stack { position: relative; width: 90%; display: flex; flex-direction: column; align-items: center; }
+.icons { width: 100%; height: auto; display: block; image-rendering: pixelated; }
 .screen-well {
-  position: relative; width: 90%; aspect-ratio: 2 / 1;
+  position: relative; width: 100%; aspect-ratio: 2 / 1;
   background: var(--lcd-bg);
   border: 2px solid #b9900f; border-radius: 3px;
   box-shadow: inset 0 0 0 2px #f2dd7e, inset 0 3px 10px rgba(0,0,0,.35), inset 0 -2px 6px rgba(255,255,255,.5);
