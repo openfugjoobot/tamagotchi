@@ -425,51 +425,68 @@ async function syncBeforeBoot(): Promise<void> {
 }
 
 function initAccount(): void {
-  const sec = document.getElementById("account-sec");
+  const btn = document.getElementById("account-btn");
+  const face = document.getElementById("account-face");
+  const pop = document.getElementById("account-pop");
   const body = document.getElementById("account-body");
-  const menu = document.getElementById("menu");
-  if (!AUTH_ENABLED || !sec || !body) return;
+  if (!AUTH_ENABLED || !btn || !face || !pop || !body) return;
+  const btnEl: HTMLElement = btn;
+  const faceEl: HTMLElement = face;
+  const popEl: HTMLElement = pop;
   const bodyEl: HTMLElement = body;
-  sec.hidden = false;
+  btnEl.hidden = false;
   let gsiAsked = false;
 
-  // Googles Skript erst laden, wenn das Menü offen ist und niemand angemeldet ist.
+  // Googles Skript erst laden, wenn das Popover offen ist und niemand angemeldet ist.
   function ensureButton(): void {
-    if (gsiAsked || currentSession() || !menu || menu.hidden) return;
+    if (gsiAsked || currentSession() || popEl.hidden) return;
     const slot = bodyEl.querySelector<HTMLElement>(".gsi-slot");
     if (!slot) return;
     gsiAsked = true;
     void renderSignInButton(slot, () => render()).then((ok) => { if (!ok) gsiAsked = false; });
   }
 
+  // Avatar in der Kopfzeile: Google-Bild, sonst Anfangsbuchstabe; abgemeldet ein Symbol.
+  function renderFace(): void {
+    const s = currentSession();
+    faceEl.replaceChildren();
+    btnEl.classList.toggle("signed-in", !!s);
+    if (!s) {
+      faceEl.innerHTML =
+        '<svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="8.7" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.6 19.2a7 7 0 0 1 12.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+      return;
+    }
+    const initial = (s.email ?? s.name ?? "?").trim().charAt(0).toUpperCase() || "?";
+    if (s.picture) {
+      const img = document.createElement("img");
+      img.className = "account-face-img";
+      img.alt = "";
+      img.referrerPolicy = "no-referrer";
+      img.src = s.picture;
+      img.addEventListener("error", () => { img.remove(); faceEl.textContent = initial; });
+      faceEl.append(img);
+    } else {
+      faceEl.textContent = initial;
+    }
+  }
+
   function render(): void {
     const s = currentSession();
     bodyEl.replaceChildren();
-    const card = document.createElement("div");
-    card.className = "account-card";
     if (!s) {
       const hint = document.createElement("p");
       hint.className = "account-line";
       hint.textContent = t("accountHint");
       const slot = document.createElement("div");
       slot.className = "gsi-slot";
-      card.append(hint, slot);
-      bodyEl.append(card);
+      bodyEl.append(hint, slot);
     } else {
-      const idRow = document.createElement("div");
-      idRow.className = "account-id";
-      const avatar = document.createElement("span");
-      avatar.className = "account-avatar";
-      avatar.setAttribute("aria-hidden", "true");
-      avatar.textContent = (s.email ?? s.name ?? "?").trim().charAt(0).toUpperCase() || "?";
-      const mail = document.createElement("span");
-      mail.className = "account-mail";
+      const mail = document.createElement("p");
+      mail.className = "account-line account-mail";
       mail.textContent = s.email ?? s.name ?? "";
-      idRow.append(avatar, mail);
       const sync = document.createElement("p");
       sync.className = "account-line";
       sync.textContent = t("accountSynced");
-      card.append(idRow, sync);
       const out = document.createElement("button");
       out.className = "menu-row";
       out.textContent = t("signOut");
@@ -485,13 +502,25 @@ function initAccount(): void {
           render();
         })();
       });
-      bodyEl.append(card, out, del);
+      bodyEl.append(mail, sync, out, del);
     }
+    renderFace();
     ensureButton();
   }
 
-  if (menu) new MutationObserver(ensureButton).observe(menu, { attributes: true, attributeFilter: ["hidden"] });
+  const close = (): void => { popEl.hidden = true; btnEl.setAttribute("aria-expanded", "false"); };
+  const open = (): void => { popEl.hidden = false; btnEl.setAttribute("aria-expanded", "true"); render(); };
+  btnEl.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (popEl.hidden) open(); else close();
+  });
+  document.addEventListener("click", (e) => {
+    if (!popEl.hidden && e.target instanceof Node && !popEl.contains(e.target) && e.target !== btnEl) close();
+  });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
   restoreSession();
+  renderFace();
   render();
 }
 

@@ -52,6 +52,12 @@
     <div class="container">
       <a class="brand" href="#top">Tamagotchi<span>P1</span></a>
       <div class="header-actions">
+        <button class="account-btn" id="account-btn" hidden aria-haspopup="dialog" aria-expanded="false" data-i18n-aria="account">
+          <span class="account-face" id="account-face" aria-hidden="true"></span>
+        </button>
+        <div id="account-pop" class="account-pop" hidden role="dialog" data-i18n-aria="account">
+          <div class="account-body" id="account-body"></div>
+        </div>
         <a class="icon-link" href="/guide.html" data-i18n-aria="guide" data-i18n-title="guide">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <circle cx="12" cy="12" r="9.25" fill="none" stroke="currentColor" stroke-width="1.7" />
@@ -134,10 +140,6 @@
     <div class="menu-sec">
       <span class="menu-label" data-i18n="background">Background</span>
       <div class="bgbtns" id="bgbtns"></div>
-    </div>
-    <div class="menu-sec" id="account-sec" hidden>
-      <span class="menu-label" data-i18n="account">Account</span>
-      <div class="account-body" id="account-body"></div>
     </div>
     <div class="menu-divider"></div>
     <nav class="menu-list">

@@ -9,6 +9,7 @@ export interface Session {
   exp: number;
   email?: string;
   name?: string;
+  picture?: string;
 }
 
 interface GsiId {
@@ -30,12 +31,12 @@ const SKEW_MS = 60_000; // 1 min Puffer
 let session: Session | null = null;
 let loader: Promise<GsiId> | null = null;
 
-function decodePayload(token: string): { exp?: number; email?: string; name?: string } {
+function decodePayload(token: string): { exp?: number; email?: string; name?: string; picture?: string } {
   try {
     const part = token.split(".")[1] ?? "";
     const pad = part.length % 4 === 0 ? "" : "=".repeat(4 - (part.length % 4));
     const json = atob(part.replace(/-/g, "+").replace(/_/g, "/") + pad);
-    return JSON.parse(json) as { exp?: number; email?: string; name?: string };
+    return JSON.parse(json) as { exp?: number; email?: string; name?: string; picture?: string };
   } catch {
     return {};
   }
@@ -44,7 +45,7 @@ function decodePayload(token: string): { exp?: number; email?: string; name?: st
 function toSession(token: string): Session | null {
   const p = decodePayload(token);
   if (!p.exp) return null;
-  return { token, exp: p.exp * 1000, email: p.email, name: p.name };
+  return { token, exp: p.exp * 1000, email: p.email, name: p.name, picture: p.picture };
 }
 
 function loadScript(): Promise<GsiId> {
