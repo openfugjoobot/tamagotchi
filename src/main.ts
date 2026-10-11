@@ -52,7 +52,7 @@ function initUI(): void {
       b.dataset.id = t.id;
       b.style.background = t.c;
       b.title = t.id;
-      b.setAttribute("aria-label", "Hintergrund " + t.id);
+      b.setAttribute("aria-label", "Background: " + t.id);
       b.addEventListener("click", () => applyBg(t.id));
       bgbtns.appendChild(b);
     }
@@ -61,13 +61,23 @@ function initUI(): void {
 
   const menu = document.getElementById("menu");
   const menuBtn = document.getElementById("btn-menu");
-  const closeMenu = () => { if (menu) menu.hidden = true; menuBtn?.setAttribute("aria-expanded", "false"); };
+  const scrim = document.getElementById("scrim");
+  const closeMenu = () => {
+    if (menu) menu.hidden = true;
+    if (scrim) scrim.hidden = true;
+    menuBtn?.setAttribute("aria-expanded", "false");
+  };
+  const openMenu = () => {
+    if (menu) menu.hidden = false;
+    if (scrim) scrim.hidden = false;
+    menuBtn?.setAttribute("aria-expanded", "true");
+  };
   document.getElementById("menu-close")?.addEventListener("click", closeMenu);
+  scrim?.addEventListener("click", closeMenu);
   menuBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
     if (!menu) return;
-    menu.hidden = !menu.hidden;
-    menuBtn.setAttribute("aria-expanded", String(!menu.hidden));
+    if (menu.hidden) openMenu(); else closeMenu();
   });
   document.addEventListener("click", (e) => {
     if (menu && !menu.hidden && e.target instanceof Node && !menu.contains(e.target) && e.target !== menuBtn) closeMenu();
