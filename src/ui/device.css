@@ -51,14 +51,16 @@ body {
 #lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
 
 /* ---- Buttons + Labels (klein, tief) ---- */
-#controls { position: absolute; left: 50%; top: 74%; transform: translateX(-50%); display: flex; gap: clamp(8px, 3vw, 14px); align-items: flex-start; }
-.ctrl { width: clamp(16px, 5vw, 22px); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#controls { position: absolute; left: 50%; top: 74%; transform: translateX(-50%); display: flex; gap: clamp(16px, 6vw, 30px); align-items: flex-start; }
+.ctrl { width: clamp(32px, 10vw, 44px); display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .ctrl button {
-  width: 100%; aspect-ratio: 1; border-radius: 50%; border: none; cursor: pointer;
+  position: relative; width: 100%; aspect-ratio: 1; border-radius: 50%; border: none; cursor: pointer;
   background: radial-gradient(circle at 34% 28%, #ffe98a 0%, #ffd21e 45%, #e6a800 100%);
   box-shadow: inset 0 -3px 6px rgba(0,0,0,.32), inset 0 2px 4px rgba(255,255,255,.75), 0 3px 6px rgba(0,0,0,.45);
   touch-action: manipulation;
 }
+/* größere, unsichtbare Tippfläche für Mobile */
+.ctrl button::after { content: ""; position: absolute; inset: -14px; border-radius: 50%; }
 .ctrl button:active { transform: translateY(1px); filter: brightness(.94); }
 .ctrl:nth-child(1) { transform: translateY(-3px); }
 .ctrl:nth-child(2) { transform: translateY(3px); }
