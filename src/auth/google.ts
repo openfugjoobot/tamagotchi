@@ -1,6 +1,7 @@
 // Google Identity Services: Button rendern, ID-Token holen, Session halten.
 // Ohne GOOGLE_CLIENT_ID passiert hier nichts (siehe config.ts).
 import { GOOGLE_CLIENT_ID } from "./config";
+import { currentLang } from "../i18n";
 
 export interface Session {
   token: string;
@@ -119,7 +120,7 @@ export async function renderSignInButton(el: HTMLElement, onSession: (s: Session
         }
       },
     });
-    id.renderButton(el, { theme: "outline", size: "medium", shape: "pill", text: "signin_with", locale: "de" });
+    id.renderButton(el, { theme: "outline", size: "medium", shape: "pill", text: "signin_with", locale: currentLang() });
     return true;
   } catch {
     return false;

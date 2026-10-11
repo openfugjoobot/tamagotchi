@@ -4,7 +4,7 @@ compatibility_date = "2025-09-01"
 
 # Google-OAuth-Client-ID (öffentlich) – hier eintragen, sobald der Client existiert.
 [vars]
-GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_ID = "779641556442-4oltvqom0m54n1fqh5fq4tpk3uchcl5p.apps.googleusercontent.com"
 
 # KV-Namespace für die Spielstände: `npx wrangler kv namespace create SAVES`
 # und die ausgegebene ID hier eintragen.

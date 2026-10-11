@@ -427,43 +427,56 @@ async function syncBeforeBoot(): Promise<void> {
 function initAccount(): void {
   const sec = document.getElementById("account-sec");
   const body = document.getElementById("account-body");
+  const menu = document.getElementById("menu");
   if (!AUTH_ENABLED || !sec || !body) return;
+  const bodyEl: HTMLElement = body;
   sec.hidden = false;
+  let gsiAsked = false;
 
-  const render = (): void => {
+  // Googles Skript erst laden, wenn das Menü offen ist und niemand angemeldet ist.
+  function ensureButton(): void {
+    if (gsiAsked || currentSession() || !menu || menu.hidden) return;
+    const slot = bodyEl.querySelector<HTMLElement>(".gsi-slot");
+    if (!slot) return;
+    gsiAsked = true;
+    void renderSignInButton(slot, () => render()).then((ok) => { if (!ok) gsiAsked = false; });
+  }
+
+  function render(): void {
     const s = currentSession();
-    body.replaceChildren();
+    bodyEl.replaceChildren();
     if (!s) {
       const hint = document.createElement("p");
       hint.className = "account-line";
       hint.textContent = t("accountHint");
       const slot = document.createElement("div");
       slot.className = "gsi-slot";
-      body.append(hint, slot);
-      void renderSignInButton(slot, () => render());
-      return;
+      bodyEl.append(hint, slot);
+    } else {
+      const line = document.createElement("p");
+      line.className = "account-line";
+      line.textContent = `${t("signedInAs")} ${s.email ?? s.name ?? ""}`;
+      const out = document.createElement("button");
+      out.className = "menu-row";
+      out.textContent = t("signOut");
+      out.addEventListener("click", () => { signOut(); render(); });
+      const del = document.createElement("button");
+      del.className = "menu-row danger";
+      del.textContent = t("deleteData");
+      del.addEventListener("click", () => {
+        void (async () => {
+          const tok = currentSession()?.token;
+          if (tok) await deleteRemote(tok);
+          signOut();
+          render();
+        })();
+      });
+      bodyEl.append(line, out, del);
     }
-    const line = document.createElement("p");
-    line.className = "account-line";
-    line.textContent = `${t("signedInAs")} ${s.email ?? s.name ?? ""}`;
-    const out = document.createElement("button");
-    out.className = "menu-row";
-    out.textContent = t("signOut");
-    out.addEventListener("click", () => { signOut(); render(); });
-    const del = document.createElement("button");
-    del.className = "menu-row danger";
-    del.textContent = t("deleteData");
-    del.addEventListener("click", () => {
-      void (async () => {
-        const tok = currentSession()?.token;
-        if (tok) await deleteRemote(tok);
-        signOut();
-        render();
-      })();
-    });
-    body.append(line, out, del);
-  };
+    ensureButton();
+  }
 
+  if (menu) new MutationObserver(ensureButton).observe(menu, { attributes: true, attributeFilter: ["hidden"] });
   restoreSession();
   render();
 }
