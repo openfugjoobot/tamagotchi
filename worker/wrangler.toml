@@ -16,4 +16,4 @@ GOOGLE_CLIENT_ID = "779641556442-4oltvqom0m54n1fqh5fq4tpk3uchcl5p.apps.googleuse
 # und die ausgegebene ID hier eintragen.
 [[kv_namespaces]]
 binding = "SAVES"
-id = "TODO_KV_NAMESPACE_ID"
+id = "61ddc27cc892461b93f1529f2e9e2de5"
