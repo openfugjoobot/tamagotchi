@@ -17,9 +17,9 @@ body {
 /* ---- Ei-Gehäuse (nahezu rund wie das Original) ---- */
 #device {
   position: relative;
-  width: min(88vw, 340px);
-  aspect-ratio: 0.97;
-  border-radius: 50% 50% 50% 50% / 51% 51% 49% 49%;
+  width: min(84vw, 320px);
+  aspect-ratio: 0.88;
+  border-radius: 50% 50% 50% 50% / 52% 52% 48% 48%;
   background-color: var(--shell-bot);
   background-image:
     radial-gradient(120% 80% at 32% 14%, rgba(255,255,255,.5), rgba(255,255,255,0) 55%),
@@ -39,7 +39,7 @@ body {
 }
 
 /* ---- LCD-Block (Icons + Pixel + Icons) ---- */
-.screen-wrap { position: absolute; left: 50%; top: 48%; transform: translate(-50%, -50%); width: 52%; }
+.screen-wrap { position: absolute; left: 50%; top: 47%; transform: translate(-50%, -50%); width: 48%; }
 .star { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 128%; aspect-ratio: 1; height: auto; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
 .screen-stack {
   position: relative; width: 100%;
@@ -54,7 +54,7 @@ body {
 #lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
 
 /* ---- Buttons + Labels (klein, tief) ---- */
-#controls { position: absolute; left: 50%; top: 82%; transform: translateX(-50%); display: flex; gap: clamp(12px, 4vw, 18px); align-items: flex-start; }
+#controls { position: absolute; left: 50%; top: 74%; transform: translateX(-50%); display: flex; gap: clamp(8px, 3vw, 14px); align-items: flex-start; }
 .ctrl { width: clamp(16px, 5vw, 22px); display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .ctrl button {
   width: 100%; aspect-ratio: 1; border-radius: 50%; border: none; cursor: pointer;

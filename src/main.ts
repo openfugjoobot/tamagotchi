@@ -30,7 +30,8 @@ if (shell === "pink" || shell === "blue") {
 const TS_FREQ = 32768;
 const TS_PER_STEP = 5.648;
 const STEPS_PER_SECOND = Math.round(TS_FREQ / TS_PER_STEP); // ≈ 5802
-const MAX_STEPS_PER_FRAME = STEPS_PER_SECOND; // Klemme gegen Riesen-Sprünge
+const MAX_STEPS_PER_FRAME = STEPS_PER_SECOND; // max. ~1s Emulation pro Frame (sanftes Aufholen)
+let pendingSteps = 0;
 
 let emu: Emulator | null = null;
 let lastTs = 0;
@@ -42,6 +43,7 @@ async function boot(): Promise<void> {
     fetch("/emu/rom0.bin").then((r) => r.arrayBuffer()),
   ]);
   emu = await createEmulator({ wasm, rom: new Uint8Array(romBuf) });
+  if (params.has("debug")) (window as unknown as { __emu: Emulator }).__emu = emu;
 
   if (SPEED === 1) {
     const saved = loadEmu(localStorage);
@@ -92,9 +94,12 @@ function frame(ts: number): void {
   if (STATIC > 0) {
     steps = STATIC;
   } else {
-    const dt = Math.min(ts - lastTs, 100);
+    const dt = Math.max(0, ts - lastTs);
     lastTs = ts;
-    steps = Math.min(MAX_STEPS_PER_FRAME, Math.round((dt / 1000) * STEPS_PER_SECOND * SPEED));
+    // Echtzeit-Fortschritt inkl. Hintergrund: aufgelaufene Schritte nachziehen.
+    pendingSteps += (dt / 1000) * STEPS_PER_SECOND * SPEED;
+    steps = Math.min(MAX_STEPS_PER_FRAME, Math.floor(pendingSteps));
+    pendingSteps -= steps;
   }
   if (steps > 0) emu.step(steps);
 
