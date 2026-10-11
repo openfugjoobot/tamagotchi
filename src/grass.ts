@@ -13,8 +13,8 @@ export function buildGrass(container: HTMLElement): void {
   const count = Math.round(w / 3);
   for (let i = 0; i < count; i++) {
     const x = Math.random() * w;
-    const len = h * (0.28 + Math.random() * 0.72);
-    const thick = 0.7 + Math.random() * 2.1;
+    const len = h * (0.12 + Math.pow(Math.random(), 1.6) * 0.88);
+    const thick = 0.6 + Math.random() * 2.6;
     const lean = (Math.random() - 0.5) * 16;
     const hue = 100 + Math.random() * 45;
     const light = 30 + Math.random() * 24;
