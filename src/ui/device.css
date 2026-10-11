@@ -236,10 +236,10 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   0%, 100% { transform: rotate(-0.9deg); }
   50%      { transform: rotate(0.9deg); }
 }
-#device { z-index: 1; }
+.device { z-index: 1; }
 
 /* ================= Gerät ================= */
-#device {
+.device {
   position: relative; margin: 0 auto;
   width: min(78vw, 300px, 42dvh);
   aspect-ratio: 0.86;
@@ -250,7 +250,7 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
     linear-gradient(180deg, var(--shell-top) 0%, var(--shell-bot) 100%);
   box-shadow: inset 0 -20px 34px rgba(0,0,0,.28), inset 0 16px 28px rgba(255,255,255,.45), 0 26px 46px rgba(30,50,60,.4);
 }
-#device::after {
+.device::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 1;
   background-image: var(--shell-pattern);
   background-size: 96px 96px; opacity: .9;
@@ -399,7 +399,7 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 
 @media (min-width: 640px) {
   .icon-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; }
-  #device { width: 360px; }
+  .device { width: 360px; }
   .device-shadow { width: 300px; }
 }
 @media (prefers-reduced-motion: reduce) {
