@@ -7,6 +7,7 @@ import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu } from "./storage/persist";
 import { SHELLS, applyShell, savedShell } from "./shell";
 import { buildGrass } from "./grass";
+import { applyI18n, currentLang, setLang, LANGS, t, type Lang } from "./i18n";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -65,12 +66,14 @@ let soundOn = true;
 try { soundOn = localStorage.getItem(SOUND_KEY) !== "0"; } catch { /* ignore */ }
 function updateSoundLabel(): void {
   const el = document.getElementById("sound-state");
-  if (el) el.textContent = soundOn ? "on" : "off";
+  if (el) el.textContent = t(soundOn ? "on" : "off");
+  document.getElementById("btn-sound")?.setAttribute("aria-pressed", String(soundOn));
 }
 
 function updateNotifyLabel(): void {
   const el = document.getElementById("notify-state");
-  if (el) el.textContent = notifyEnabled ? "on" : "off";
+  if (el) el.textContent = t(notifyEnabled ? "on" : "off");
+  document.getElementById("btn-notify")?.setAttribute("aria-pressed", String(notifyEnabled));
 }
 
 async function notify(title: string, body: string): Promise<void> {
@@ -79,10 +82,11 @@ async function notify(title: string, body: string): Promise<void> {
   if (now - lastNotify < 60_000) return;
   lastNotify = now;
   const opts: NotificationOptions = { body, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: "tamagotchi" };
+  void opts;
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
-    if (reg) await reg.showNotification(title, opts);
-    else new Notification(title, opts);
+    if (reg) await reg.showNotification(title, { ...opts, body });
+    else new Notification(title, { ...opts, body });
   } catch { /* ignore */ }
 }
 
@@ -157,11 +161,13 @@ function initUI(): void {
     if (menu) menu.hidden = true;
     if (scrim) scrim.hidden = true;
     menuBtn?.setAttribute("aria-expanded", "false");
+    menuBtn?.focus();
   };
   const openMenu = () => {
     if (menu) menu.hidden = false;
     if (scrim) scrim.hidden = false;
     menuBtn?.setAttribute("aria-expanded", "true");
+    document.getElementById("menu-close")?.focus();
   };
   document.getElementById("menu-close")?.addEventListener("click", closeMenu);
   scrim?.addEventListener("click", closeMenu);
@@ -214,6 +220,47 @@ function initUI(): void {
 
   const y = document.getElementById("year");
   if (y) y.textContent = String(new Date().getFullYear());
+
+  // ---- i18n ----
+  applyI18n();
+  document.documentElement.lang = currentLang();
+  const langbtns = document.getElementById("langbtns");
+  if (langbtns) {
+    const mark = () => langbtns.querySelectorAll<HTMLElement>(".langbtn").forEach((el) => el.setAttribute("aria-pressed", String(el.dataset.lang === currentLang())));
+    for (const l of LANGS) {
+      const b = document.createElement("button");
+      b.className = "langbtn";
+      b.dataset.lang = l;
+      b.textContent = l.toUpperCase();
+      b.setAttribute("aria-label", "Language: " + l);
+      b.addEventListener("click", () => {
+        setLang(l as Lang);
+        applyI18n();
+        document.documentElement.lang = l;
+        updateSoundLabel();
+        updateNotifyLabel();
+        mark();
+      });
+      langbtns.appendChild(b);
+    }
+    mark();
+  }
+
+  // ---- Install-Hinweis (PWA) ----
+  const installBtn = document.getElementById("btn-install");
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    (window as unknown as { __installPrompt?: unknown }).__installPrompt = e;
+    if (installBtn) installBtn.hidden = false;
+  });
+  installBtn?.addEventListener("click", () => {
+    const p = (window as unknown as { __installPrompt?: { prompt(): void; userChoice: Promise<unknown> } }).__installPrompt;
+    if (!p) return;
+    p.prompt();
+    void p.userChoice.finally(() => { (window as unknown as { __installPrompt?: unknown }).__installPrompt = undefined; installBtn.hidden = true; });
+    closeMenu();
+  });
+  window.addEventListener("appinstalled", () => { if (installBtn) installBtn.hidden = true; });
 
   // Gras am Boden
   const grassEl = document.getElementById("grass");
@@ -376,7 +423,7 @@ function frame(ts: number): void {
   const b = emu.buzzer();
   piezo.update(b.freq, b.on);
   if (emu.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
-    void notify("Your Tamagotchi needs you", "It's calling — feed it, clean up or play.");
+    void notify(t("notifyTitle"), t("notifyBody"));
   }
 
   // periodisch speichern (alle ~5s)
@@ -396,7 +443,7 @@ setInterval(() => {
   targetUnits += dt * TS_FREQ;
   catchUp(MAX_STEPS_PER_FRAME);
   if (emu.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
-    void notify("Your Tamagotchi needs you", "It's calling — feed it, clean up or play.");
+    void notify(t("notifyTitle"), t("notifyBody"));
   }
 }, 5000);
 
