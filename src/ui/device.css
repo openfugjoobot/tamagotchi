@@ -11,78 +11,61 @@ body {
   background: #0a1a2e;
   background-image: radial-gradient(ellipse at 50% 34%, #173a5c 0%, #0a1a2e 58%, #061123 100%);
   display: grid; place-items: center;
-  padding: 52px 16px 30px;
+  padding: 24px 16px;
 }
 
-/* ---- Ei-Gehäuse ---- */
+/* ---- Ei-Gehäuse (nahezu rund wie das Original) ---- */
 #device {
   position: relative;
-  width: min(94vw, 372px);
-  aspect-ratio: 0.82;
-  border-radius: 50% 50% 50% 50% / 56% 56% 44% 44%;
-  display: flex; flex-direction: column; align-items: center;
-  padding: 9% 8% 8%;
+  width: min(88vw, 340px);
+  aspect-ratio: 0.97;
+  border-radius: 50% 50% 50% 50% / 51% 51% 49% 49%;
   background-color: var(--shell-bot);
   background-image:
     radial-gradient(120% 80% at 32% 14%, rgba(255,255,255,.5), rgba(255,255,255,0) 55%),
     linear-gradient(180deg, var(--shell-top) 0%, var(--shell-bot) 100%);
   box-shadow:
-    inset 0 -26px 44px rgba(0,0,0,.32),
-    inset 0 20px 34px rgba(255,255,255,.42),
-    0 30px 60px rgba(0,0,0,.65),
-    0 2px 0 rgba(255,255,255,.25) inset;
+    inset 0 -20px 34px rgba(0,0,0,.30),
+    inset 0 16px 28px rgba(255,255,255,.40),
+    0 26px 52px rgba(0,0,0,.65);
 }
 /* Pixel-Motive */
 #device::after {
   content: "";
-  position: absolute; inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='112' height='112'><g fill='%23ffffff' fill-opacity='0.95'><path d='M22 12l3 7 7 .7-5.3 4.8 1.5 7-6.2-3.9-6.2 3.9 1.5-7L12 19.7l7-.7z'/><path d='M84 66l2.4 5.6 5.6.6-4.2 3.8 1.2 5.6L84 78.5 79 81.6l1.2-5.6L76 72.2l5.6-.6z'/><rect x='60' y='14' width='6' height='6'/><rect x='18' y='72' width='6' height='6'/><rect x='92' y='30' width='5' height='5'/><path d='M56 44c-3.6-4.4-9.4 1-4.6 5.2L56 53l4.6-3.8c4.8-4.2-1-9.6-4.6-5.2z'/><path d='M30 40l4-7 4 7z'/><path d='M78 96l3 5 3-5z'/><path d='M40 90l2 6 6-2-2 6 6 2-6 2 2 6-6-2-2 6-2-6-6 2 2-6-6-2 6-2-2-6 6 2z' transform='scale(0.42) translate(96 118)'/></g></svg>");
-  background-size: 112px 112px;
+  position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g fill='%23ffffff' fill-opacity='0.95'><path d='M20 12l2.6 6 6 .6-4.5 4.1 1.3 6-5.4-3.3-5.4 3.3 1.3-6L11 18.6l6-.6z'/><path d='M74 40l2.2 5 5 .5-3.8 3.4 1.1 5-4.5-2.8-4.5 2.8 1.1-5-3.8-3.4 5-.5z'/><rect x='54' y='12' width='5' height='5'/><rect x='16' y='64' width='5' height='5'/><rect x='82' y='70' width='4' height='4'/><path d='M52 62c-3.2-4-8.6.9-4.2 4.7L52 70l4.2-3.3c4.4-3.8-1-8.7-4.2-4.7z'/><path d='M30 40l3.4-6 3.4 6z'/></g></svg>");
+  background-size: 96px 96px;
   opacity: .9;
-  mix-blend-mode: normal;
 }
 
-/* kleine Nase entfernt (Öse weg) */
-
-/* ---- Ball-Chain entfernt ---- */
-
-/* (Öse entfernt) */
-
-/* ---- LCD als eine Fläche: Icons oben + Pixel + Icons unten ---- */
-.screen-frame { position: relative; width: 84%; aspect-ratio: 1; display: grid; place-items: center; margin-top: 1%; z-index: 1; }
-.star { position: absolute; inset: -2%; width: 104%; height: 104%; filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
+/* ---- LCD-Block (Icons + Pixel + Icons) ---- */
+.screen-wrap { position: absolute; left: 50%; top: 48%; transform: translate(-50%, -50%); width: 52%; }
+.star { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 128%; aspect-ratio: 1; height: auto; filter: drop-shadow(0 2px 2px rgba(0,0,0,.35)); }
 .screen-stack {
-  position: relative; width: 82%;
+  position: relative; width: 100%;
   display: flex; flex-direction: column; align-items: center;
   background: var(--lcd-bg);
-  border: 2px solid #b9900f; border-radius: 4px;
-  box-shadow: inset 0 0 0 2px #f2dd7e, inset 0 3px 10px rgba(0,0,0,.3), inset 0 -2px 6px rgba(255,255,255,.5);
+  border: 2px solid #b9900f; border-radius: 3px;
+  box-shadow: inset 0 0 0 2px #f2dd7e, inset 0 2px 8px rgba(0,0,0,.3), inset 0 -2px 5px rgba(255,255,255,.5);
   overflow: hidden;
 }
 .icons { width: 100%; height: auto; display: block; image-rendering: pixelated; }
-.screen-well {
-  position: relative; width: 100%; aspect-ratio: 2 / 1;
-  background: var(--lcd-bg);
-  display: grid; place-items: center; overflow: hidden;
-}
+.screen-well { position: relative; width: 100%; aspect-ratio: 2 / 1; background: var(--lcd-bg); display: grid; place-items: center; overflow: hidden; }
 #lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
 
-/* ---- Buttons + Labels ---- */
-#controls { display: flex; gap: clamp(18px, 7vw, 34px); margin-top: 7%; justify-content: center; align-items: flex-start; width: 100%; z-index: 1; }
-.ctrl { width: clamp(36px, 10.5vw, 48px); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+/* ---- Buttons + Labels (klein, tief) ---- */
+#controls { position: absolute; left: 50%; top: 82%; transform: translateX(-50%); display: flex; gap: clamp(12px, 4vw, 18px); align-items: flex-start; }
+.ctrl { width: clamp(16px, 5vw, 22px); display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .ctrl button {
-  width: clamp(36px, 10.5vw, 48px); aspect-ratio: 1; border-radius: 50%;
-  border: none; cursor: pointer;
+  width: 100%; aspect-ratio: 1; border-radius: 50%; border: none; cursor: pointer;
   background: radial-gradient(circle at 34% 28%, #ffe98a 0%, #ffd21e 45%, #e6a800 100%);
-  box-shadow: inset 0 -4px 8px rgba(0,0,0,.32), inset 0 3px 5px rgba(255,255,255,.75), 0 5px 8px rgba(0,0,0,.45);
+  box-shadow: inset 0 -3px 6px rgba(0,0,0,.32), inset 0 2px 4px rgba(255,255,255,.75), 0 3px 6px rgba(0,0,0,.45);
   touch-action: manipulation;
 }
-.ctrl button:active { transform: translateY(2px); filter: brightness(.94); }
+.ctrl button:active { transform: translateY(1px); filter: brightness(.94); }
 .ctrl span {
-  font-size: clamp(9px, 2.6vw, 12px); font-weight: 700; letter-spacing: 1.2px;
+  font-size: clamp(6px, 1.9vw, 8px); font-weight: 700; letter-spacing: .6px;
   color: #d4f0ff; text-shadow: 0 1px 2px rgba(0,0,0,.55); white-space: nowrap;
 }
 
-@media (max-width: 480px) { #device { width: 90vw; } }
+@media (min-width: 480px) { #device { width: 340px; } }
