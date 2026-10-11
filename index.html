@@ -116,13 +116,24 @@
     </div>
   </footer>
 
-  <div id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="card">
       <h2 id="modal-title" data-i18n="modalTitle">Restart?</h2>
       <p class="hint" data-i18n="modalBody">Your current progress will be discarded and a new egg begins.</p>
       <div class="row">
         <button id="btn-cancel" data-i18n="cancel">Cancel</button>
         <button id="btn-confirm-reset" data-i18n="restartBtn">Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="account-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
+    <div class="card">
+      <h2 id="account-modal-title" data-i18n="deleteAccountTitle">Delete account?</h2>
+      <p class="hint" data-i18n="deleteAccountBody">Your cloud save and the save in this browser will be deleted.</p>
+      <div class="row">
+        <button id="account-cancel" data-i18n="cancel">Cancel</button>
+        <button id="account-confirm" data-i18n="deleteAccountBtn">Delete</button>
       </div>
     </div>
   </div>

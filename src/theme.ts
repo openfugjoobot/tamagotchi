@@ -16,7 +16,7 @@ export const THEMES: Theme[] = [
   { id: "dusk", c: "#e08a5a" },
   { id: "night", c: "#14233a" },
   { id: "midnight", c: "#05060a" },
-  { id: AUTO, c: "linear-gradient(135deg, #ffc2d6 0%, #bcd7ff 26%, #e08a5a 58%, #14233a 82%, #05060a 100%)" },
+  { id: AUTO, c: "#eef4fb" },
 ];
 
 export const THEME_IDS: string[] = THEMES.map((t) => t.id);

@@ -7,7 +7,7 @@ import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu, readSaveRecord } from "./storage/persist";
 import { AUTH_ENABLED } from "./auth/config";
-import { currentSession, restoreSession, renderSignInButton, signOut } from "./auth/google";
+import { currentSession, restoreSession, renderSignInButton, signOut, type Session } from "./auth/google";
 import { decideSync, deleteRemote, pullSave, pushSave } from "./sync/cloud";
 import { SHELLS, applyShell, savedShell, starPolygon } from "./shell";
 import { buildGrass } from "./grass";
@@ -243,7 +243,14 @@ function initUI(): void {
   document.getElementById("btn-reset")?.addEventListener("click", () => { closeMenu(); if (modal) modal.hidden = false; });
   document.getElementById("btn-cancel")?.addEventListener("click", () => { if (modal) modal.hidden = true; document.getElementById("btn-menu")?.focus(); });
   modal?.addEventListener("click", (e) => { if (e.target === modal) { modal.hidden = true; document.getElementById("btn-menu")?.focus(); } });
-  window.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMenu(); if (modal) modal.hidden = true; } });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      closeMenu();
+      if (modal) modal.hidden = true;
+      const am = document.getElementById("account-modal");
+      if (am) am.hidden = true;
+    }
+  });
 
   // Fokus im Dialog halten (Tab zyklisch) – Menü und Modal.
   const focusables = (root: HTMLElement): HTMLElement[] =>
@@ -449,6 +456,29 @@ function initAccount(): void {
     void renderSignInButton(slot, () => render()).then((ok) => { if (!ok) gsiAsked = false; });
   }
 
+  /** Avatar (Google-Bild, sonst Anfangsbuchstabe) – fuer Kopfzeile und Dialog. */
+  function avatarEl(s: Session): HTMLElement {
+    const initial = (s.email ?? s.name ?? "?").trim().charAt(0).toUpperCase() || "?";
+    if (s.picture) {
+      const img = document.createElement("img");
+      img.className = "account-face-img";
+      img.alt = "";
+      img.referrerPolicy = "no-referrer";
+      img.src = s.picture;
+      img.addEventListener("error", () => {
+        const sp = document.createElement("span");
+        sp.className = "account-letter";
+        sp.textContent = initial;
+        img.replaceWith(sp);
+      });
+      return img;
+    }
+    const sp = document.createElement("span");
+    sp.className = "account-letter";
+    sp.textContent = initial;
+    return sp;
+  }
+
   // Avatar in der Kopfzeile: Google-Bild, sonst Anfangsbuchstabe; abgemeldet ein Symbol.
   function renderFace(): void {
     const s = currentSession();
@@ -459,18 +489,7 @@ function initAccount(): void {
         '<svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="8.7" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.6 19.2a7 7 0 0 1 12.8 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
       return;
     }
-    const initial = (s.email ?? s.name ?? "?").trim().charAt(0).toUpperCase() || "?";
-    if (s.picture) {
-      const img = document.createElement("img");
-      img.className = "account-face-img";
-      img.alt = "";
-      img.referrerPolicy = "no-referrer";
-      img.src = s.picture;
-      img.addEventListener("error", () => { img.remove(); faceEl.textContent = initial; });
-      faceEl.append(img);
-    } else {
-      faceEl.textContent = initial;
-    }
+    faceEl.append(avatarEl(s));
   }
 
   function render(): void {
@@ -484,12 +503,21 @@ function initAccount(): void {
       slot.className = "gsi-slot";
       bodyEl.append(hint, slot);
     } else {
+      const idRow = document.createElement("div");
+      idRow.className = "account-id";
+      const av = document.createElement("span");
+      av.className = "account-avatar";
+      av.append(avatarEl(s));
+      const text = document.createElement("div");
+      text.className = "account-id-text";
       const mail = document.createElement("p");
       mail.className = "account-line account-mail";
       mail.textContent = s.email ?? s.name ?? "";
       const sync = document.createElement("p");
       sync.className = "account-line";
       sync.textContent = t("accountSynced");
+      text.append(mail, sync);
+      idRow.append(av, text);
       const out = document.createElement("button");
       out.className = "menu-row";
       out.textContent = t("signOut");
@@ -505,7 +533,14 @@ function initAccount(): void {
           render();
         })();
       });
-      bodyEl.append(mail, sync, out, del);
+      const delAcc = document.createElement("button");
+      delAcc.className = "menu-row danger";
+      delAcc.textContent = t("deleteAccount");
+      delAcc.addEventListener("click", () => {
+        close();
+        if (accountModal) accountModal.hidden = false;
+      });
+      bodyEl.append(idRow, out, del, delAcc);
     }
     renderFace();
     ensureButton();
@@ -515,6 +550,22 @@ function initAccount(): void {
   const scrimEl = document.getElementById("scrim");
   const menuPanel = document.getElementById("menu");
   const menuToggle = document.getElementById("btn-menu");
+  const accountModal = document.getElementById("account-modal");
+
+  document.getElementById("account-cancel")?.addEventListener("click", () => {
+    if (accountModal) accountModal.hidden = true;
+    btnEl.focus();
+  });
+  accountModal?.addEventListener("click", (e) => { if (e.target === accountModal) accountModal.hidden = true; });
+  document.getElementById("account-confirm")?.addEventListener("click", () => {
+    void (async () => {
+      const tok = currentSession()?.token;
+      if (tok) await deleteRemote(tok);
+      try { localStorage.removeItem(EMU_KEY); } catch { /* ignore */ }
+      signOut();
+      location.reload();
+    })();
+  });
 
   const close = (): void => {
     popEl.hidden = true;

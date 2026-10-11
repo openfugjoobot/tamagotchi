@@ -436,15 +436,15 @@ code { background: color-mix(in srgb, var(--ink) 10%, transparent); padding: 1px
 .site-footer a:hover { color: var(--ink); }
 
 /* ================= Modal ================= */
-#modal { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 20px; background: rgba(10,20,35,.45); backdrop-filter: blur(6px); }
-#modal[hidden] { display: none; }
-#modal .card { width: min(92vw, 380px); color: var(--ink); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }
-#modal h2 { margin: 0 0 8px; font-size: 18px; }
-#modal .hint { color: var(--ink-dim); font-size: 13.5px; line-height: 1.6; margin: 0; }
+.modal { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 20px; background: rgba(10,20,35,.45); backdrop-filter: blur(6px); }
+.modal[hidden] { display: none; }
+.modal .card { width: min(92vw, 380px); color: var(--ink); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 20px; padding: 22px; box-shadow: var(--shadow); }
+.modal h2 { margin: 0 0 8px; font-size: 18px; }
+.modal .hint { color: var(--ink-dim); font-size: 13.5px; line-height: 1.6; margin: 0; }
 .row { display: flex; gap: 10px; margin-top: 18px; }
 .row button { flex: 1; min-height: 44px; padding: 0 12px; border-radius: 12px; cursor: pointer; font-weight: 700; border: 1px solid var(--border); background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
-#btn-confirm-reset { background: rgba(220,80,80,.12); border-color: rgba(220,80,80,.4); color: #cf3f3f; }
-body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-reset, body[data-bg="dusk"] #btn-confirm-reset { color:#ff8a8a; background: rgba(255,80,80,.16); }
+#btn-confirm-reset, #account-confirm { background: rgba(220,80,80,.12); border-color: rgba(220,80,80,.4); color: #cf3f3f; }
+body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-reset, body[data-bg="dusk"] #btn-confirm-reset, body[data-bg="night"] #account-confirm, body[data-bg="midnight"] #account-confirm, body[data-bg="dusk"] #account-confirm { color:#ff8a8a; background: rgba(255,80,80,.16); }
 .row button:active { transform: translateY(1px); }
 
 /* ================= Lade-Screen ================= */
@@ -488,6 +488,17 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 }
 .account-pop[hidden] { display: none; }
 .account-body { display: grid; gap: 8px; }
+.account-id { display: flex; align-items: center; gap: 10px; }
+.account-avatar {
+  width: 42px; height: 42px; flex: none; border-radius: 50%; overflow: hidden;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 70%, transparent); color: #4a3400;
+}
+.account-avatar .account-face-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.account-id-text { display: grid; gap: 2px; min-width: 0; }
+.account-letter { font-weight: 800; text-transform: uppercase; }
+.account-avatar .account-letter { font-size: 18px; }
+.account-btn .account-letter { font-size: 16px; }
 .account-line { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink); opacity: .82; }
 .account-mail { color: var(--ink); opacity: 1; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
 .gsi-slot { min-height: 32px; display: flex; align-items: center; justify-content: center; }
