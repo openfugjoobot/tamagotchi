@@ -18,6 +18,8 @@ const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
 // Testmodus: feste Schrittzahl, ein Frame, dann Stopp (kein rAF-Loop).
 const STATIC = Number(params.get("static") ?? "0") || 0;
+// Debug: alle 8 Icons erzwingen (Layout-Check).
+const FORCE_ICONS = params.get("icons") === "all";
 const shell = params.get("shell");
 if (shell === "pink" || shell === "blue") {
   document.getElementById("device")!.className = `shell-${shell}`;
@@ -101,7 +103,7 @@ function frame(ts: number): void {
   canvas.height = LCD_HEIGHT * scale;
   drawLcd(ctx, emu.lcd(), scale);
 
-  const icons = emu.icons();
+  const icons = FORCE_ICONS ? new Uint8Array([1, 1, 1, 1, 1, 1, 1, 1]) : emu.icons();
   for (const [el, c, row] of [[iconsTop, ctxTop, 0], [iconsBottom, ctxBottom, 1]] as const) {
     el.width = LCD_WIDTH * scale;
     el.height = 7 * scale;
