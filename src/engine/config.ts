@@ -10,7 +10,7 @@ const HOUR = 60 * MIN;
 
 // Näherungswerte nach thaao.net/tama/p1 (P1, 1996/97). Abweichungen in DECISIONS.md.
 export const config = {
-  lcd: { width: 32, height: 16 },
+  lcd: { width: 32, height: 32 },
 
   egg: { hatchMs: 5 * MIN },
 

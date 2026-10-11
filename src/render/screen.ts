@@ -3,7 +3,9 @@ import type { Framebuffer } from "./canvas";
 import { SPRITES, ICONS } from "./sprites";
 import { animationOffset } from "./animations";
 
-const MENU_ICONS: IconId[] = ["feed", "light", "play", "medicine", "duck", "meter", "discipline"];
+const TOP_ICONS: IconId[] = ["feed", "light", "play", "medicine"];
+const BOTTOM_ICONS: IconId[] = ["duck", "meter", "discipline"];
+const MENU_ICONS: IconId[] = [...TOP_ICONS, ...BOTTOM_ICONS];
 
 function drawBitmap(fb: Framebuffer, rows: string[], ox: number, oy: number) {
   for (let y = 0; y < rows.length; y++) {
@@ -13,33 +15,42 @@ function drawBitmap(fb: Framebuffer, rows: string[], ox: number, oy: number) {
   }
 }
 
+function iconPos(ic: IconId): { x: number; y: number } {
+  const t = TOP_ICONS.indexOf(ic);
+  if (t >= 0) return { x: 2 + t * 7, y: 0 };
+  const b = BOTTOM_ICONS.indexOf(ic);
+  return { x: 6 + b * 7, y: 25 };
+}
+
 export function renderScreen(fb: Framebuffer, state: GameState, nowMs: number): void {
   fb.clear();
 
-  // Pet mittig (10×10). Bei offenem Menü nach unten, damit die Icons frei bleiben.
-  const key = state.stage === "EGG" ? "egg" : (state.character ?? "marutchi");
-  const rows = SPRITES[key] ?? SPRITES.marutchi;
-  const { dx, dy } = animationOffset(state, nowMs);
-  const petY = state.menu.mode !== "idle" ? 6 : 3;
-  drawBitmap(fb, rows, 11 + dx, petY + dy);
-
-  // Menü-Icons nur, wenn ein Menü offen ist (wie beim Original).
-  if (state.menu.mode !== "idle") {
-    MENU_ICONS.forEach((ic, i) => drawBitmap(fb, ICONS[ic], 2 + i * 4, 0));
+  // Menü: Icons oben (4) und unten (3), Auswahl unterstrichen.
+  const menuOpen = state.menu.mode !== "idle";
+  if (menuOpen) {
+    MENU_ICONS.forEach((ic) => {
+      const p = iconPos(ic);
+      drawBitmap(fb, ICONS[ic], p.x, p.y);
+    });
     const sel = state.menu.selection;
     if (sel) {
-      const i = MENU_ICONS.indexOf(sel);
-      if (i >= 0) {
-        const x0 = 2 + i * 4;
-        for (let x = x0; x < x0 + 4; x++) fb.set(x, 6, true);
-      }
+      const p = iconPos(sel);
+      const uy = TOP_ICONS.includes(sel) ? 7 : 32;
+      if (uy < 32) for (let x = p.x; x < p.x + 6; x++) fb.set(x, uy, true);
     }
   }
 
-  // Status-Indikatoren.
+  // Pet mittig (16×14).
+  const key = state.stage === "EGG" ? "egg" : (state.character ?? "marutchi");
+  const rows = SPRITES[key] ?? SPRITES.marutchi;
+  const { dx, dy } = animationOffset(state, nowMs);
+  const petY = menuOpen ? 8 : 9;
+  drawBitmap(fb, rows, 8 + dx, petY + dy);
+
+  // Status: Häufchen links, Krankheit/Aufmerksamkeit rechts.
   if (state.poops > 0 && state.poops <= 4) {
-    for (let i = 0; i < state.poops; i++) drawBitmap(fb, SPRITES.poop, 0 + i * 3, 12);
+    for (let i = 0; i < state.poops; i++) drawBitmap(fb, SPRITES.poop, 0, 8 + i * 4);
   }
-  if (state.flags.sick) drawBitmap(fb, SPRITES.skull, 26, 11);
-  if (state.flags.attention) drawBitmap(fb, ICONS.attention, 26, 5);
+  if (state.flags.sick) drawBitmap(fb, SPRITES.skull, 27, 16);
+  if (state.flags.attention) drawBitmap(fb, ICONS.attention, 26, 8);
 }
