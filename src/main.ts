@@ -1,4 +1,5 @@
 import { createEmulator, LCD_WIDTH, LCD_HEIGHT } from "./emu/emulator";
+import { STEPS_PER_SECOND, unitsForMs, Pacer } from "./emu/clock";
 import type { Emulator } from "./emu/emulator";
 import { drawLcd } from "./render/lcd";
 import { drawIconRow, loadIcons, type IconImages } from "./render/icons";
@@ -286,31 +287,17 @@ function initUI(): void {
 }
 initUI();
 
-// Kalibriert: ~5,648 TamaLIB-Zeitstempel-Einheiten pro CPU-Schritt.
-// Zeitstempel sind in 1/32768 s (E0C6S46 @ 32768 Hz) → Echtzeit = 32768 Einheiten/s.
-const TS_FREQ = 32768;
-const TS_PER_STEP = 5.648;
-const STEPS_PER_SECOND = Math.round(TS_FREQ / TS_PER_STEP); // nur Startschätzung
-const UNITS_PER_MS = TS_FREQ / 1000; // 32.768
+// Zeitmodell siehe src/emu/clock.ts: alles relativ, kein Zeitlimit mehr.
 const MAX_STEPS_PER_FRAME = 120 * STEPS_PER_SECOND;
-const MAX_FRAME_CATCHUP_S = 120;
-const MAX_CATCHUP_S = 2 * 3600; // höchstens 2 h nachholen
-// Ziel-Emulatorzeit (in TamaLIB-Zeitstempel-Einheiten). Wir steppen, bis der
-// Emulator diese Zeit erreicht hat – so bleibt die Uhr exakt in Echtzeit,
-// unabhängig davon, wie viele Schritte eine Zeiteinheit braucht.
-let targetUnits = 0;
+const MAX_FRAME_CATCHUP_MS = 120 * 1000; // pro Frame höchstens 120 s reales Delta annehmen
+const CATCHUP_CHUNK_STEPS = 4 * 1000 * 1000; // Nachhol-Modus: alle ~4 Mio. Schritte kurz freigeben
 
-function catchUp(maxSteps: number): void {
+const pacer = new Pacer();
+
+function pump(maxSteps: number): void {
   if (!emu) return;
-  let budget = maxSteps;
-  let guard = 0;
-  while (budget > 0 && guard++ < 2000) {
-    const remaining = targetUnits - emu.now();
-    if (remaining <= 0) break;
-    const steps = remaining < 2000 ? 1 : Math.min(budget, Math.round(remaining / TS_PER_STEP), 200000);
-    emu.step(steps);
-    budget -= steps;
-  }
+  const steps = pacer.take(maxSteps);
+  if (steps > 0) emu.step(steps);
 }
 
 let emu: Emulator | null = null;
@@ -318,6 +305,37 @@ let iconImgs: IconImages = [];
 let lastTs = 0;
 let saveTick = 0;
 let booted = false;
+
+const loadtxtEl = document.querySelector<HTMLElement>("#loading .loadtxt");
+const loadbarEl = document.getElementById("loadbar");
+const loadbarFill = document.getElementById("loadbar-fill");
+
+function showCatchup(frac: number): void {
+  const pct = Math.round(Math.min(1, Math.max(0, frac)) * 100);
+  if (loadtxtEl) loadtxtEl.textContent = `${t("catchingUp")} ${pct}%`;
+  if (loadbarEl) loadbarEl.hidden = false;
+  if (loadbarFill) loadbarFill.style.width = pct + "%";
+}
+
+const nextTick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+// Holt beliebig viel Emulator-Zeit nach – in Chunks mit Fortschritt, statt den
+// Tab minutenlang einzufrieren. Ohne Limit: auch Tage/Wochen Abwesenheit.
+async function catchUpAll(units: number): Promise<void> {
+  if (!emu || units <= 0) return;
+  pacer.add(units);
+  const total = units;
+  let lastPaint = 0;
+  while (pacer.owedUnits > 0) {
+    pump(CATCHUP_CHUNK_STEPS);
+    const now = performance.now();
+    if (now - lastPaint > 100) { lastPaint = now; showCatchup(1 - pacer.owedUnits / total); }
+    await nextTick();
+  }
+  showCatchup(1);
+  if (loadtxtEl) loadtxtEl.textContent = t("loading");
+  if (loadbarEl) loadbarEl.hidden = true;
+}
 
 function saveNow(): void {
   if (SPEED !== 1 || !emu) return;
@@ -345,22 +363,26 @@ async function boot(): Promise<void> {
       try { emu.loadState(saved.bytes); } catch { /* inkompatibler Save */ }
     }
   }
-  targetUnits = emu.now();
+  // Die komplette Abwesenheit nachholen – kein Zeitlimit. In Chunks, damit der
+  // Tab nicht einfriert; der Fortschritt läuft im Lade-Overlay.
   if (saved?.at) {
-    const elapsedSec = Math.min(MAX_CATCHUP_S, Math.max(0, (Date.now() - saved.at) / 1000));
-    targetUnits += elapsedSec * TS_FREQ;
-  }
-  // Aufholen sofort erledigen (Lade-Screen bleibt bis dahin), Rest im Loop.
-  {
-    const t0 = performance.now();
-    while (emu.now() < targetUnits && performance.now() - t0 < 1500) catchUp(300000);
+    await catchUpAll(unitsForMs(Math.max(0, Date.now() - saved.at)));
   }
 
   bindButtons();
   lastTs = performance.now();
   // Robust speichern: beim Verlassen/Verstecken der Seite sofort sichern.
   window.addEventListener("pagehide", saveNow);
-  document.addEventListener("visibilitychange", () => { if (document.hidden) saveNow(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { saveNow(); return; }
+    // Zurück im Vordergrund: verpasste Zeit nachholen (Mobile drosselt Timer im
+    // Hintergrund). Kurze Lücken frisst der Frame-Loop; lange laufen mit Fortschritt.
+    const dt = Math.min(performance.now() - lastTs, 30 * 24 * 3600 * 1000);
+    lastTs = performance.now();
+    if (dt <= 0) return;
+    if (dt > 30 * 1000) void catchUpAll(unitsForMs(dt * SPEED));
+    else pacer.add(unitsForMs(dt * SPEED));
+  });
   requestAnimationFrame(frame);
 }
 
@@ -402,12 +424,10 @@ function frame(ts: number): void {
   if (STATIC > 0) {
     emu.step(STATIC);
   } else {
-    const dt = Math.max(0, ts - lastTs);
+    const dt = Math.min(Math.max(0, ts - lastTs), MAX_FRAME_CATCHUP_MS);
     lastTs = ts;
-    targetUnits += dt * UNITS_PER_MS * SPEED;
-    const maxUnits = MAX_FRAME_CATCHUP_S * 1000 * UNITS_PER_MS;
-    if (targetUnits - emu.now() > maxUnits) targetUnits = emu.now() + maxUnits;
-    catchUp(MAX_STEPS_PER_FRAME);
+    pacer.add(unitsForMs(dt * SPEED));
+    pump(MAX_STEPS_PER_FRAME);
   }
 
   const scale = Math.max(1, Math.floor(canvas.clientWidth / LCD_WIDTH));
@@ -441,7 +461,7 @@ function frame(ts: number): void {
   if (SPEED === 1 && STATIC === 0 && ++saveTick % 300 === 0) {
     void saveEmu(localStorage, emu.saveState()).catch(() => { /* Quota */ });
   }
-  if (!booted && targetUnits - emu.now() < 1) { booted = true; loadingEl?.classList.add("hidden"); }
+  if (!booted && pacer.owedUnits <= 0) { booted = true; loadingEl?.classList.add("hidden"); }
   if (STATIC === 0) requestAnimationFrame(frame);
 }
 
@@ -451,8 +471,8 @@ setInterval(() => {
   const now = performance.now();
   const dt = Math.min((now - lastTs) / 1000, 3600);
   lastTs = now;
-  targetUnits += dt * TS_FREQ;
-  catchUp(MAX_STEPS_PER_FRAME);
+  pacer.add(unitsForMs(dt * 1000));
+  pump(MAX_STEPS_PER_FRAME);
   if (emu.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
     void notify(t("notifyTitle"), t("notifyBody"));
   }

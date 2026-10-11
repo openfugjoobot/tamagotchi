@@ -423,6 +423,8 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 #loading { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #0a1a2e; color: #cdeaff; font-weight: 700; letter-spacing: 2px; font-size: 13px; transition: opacity .25s ease; }
 #loading.hidden { opacity: 0; pointer-events: none; }
 #loading .spin { width: 34px; height: 34px; border-radius: 50%; border: 4px solid rgba(205,234,255,.25); border-top-color: #ffd21e; animation: spin .9s linear infinite; }
+#loadbar { width: 170px; height: 6px; border-radius: 3px; background: rgba(205,234,255,.2); overflow: hidden; }
+#loadbar i { display: block; height: 100%; width: 0; background: #ffd21e; transition: width .12s linear; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (min-width: 640px) {
