@@ -325,7 +325,16 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 
 /* Shell-Swatches im Menü */
 .shell-stage { display: flex; justify-content: center; align-items: flex-start; height: 103px; overflow: hidden; margin: 0; }
-/* Auf kurzen Displays kleinere Vorschau, damit das Menue ohne Scrollen passt. */
+.shell-stage .mini-wrap { transform: scale(0.28); transform-origin: top center; display: flex; flex-direction: column; align-items: center; flex: none; pointer-events: none; }
+.shell-stage .mini-ring {
+  width: 26px; height: 26px; border: 4px solid var(--shell-top); border-radius: 50%; margin-bottom: -8px;
+  box-shadow: inset 0 0 4px rgba(0,0,0,.28), inset 0 2px 2px rgba(255,255,255,.8), 0 1px 2px rgba(0,0,0,.3);
+}
+.shell-stage .mini-device { width: 300px; flex: none; margin-top: 0; pointer-events: none; animation: none; box-shadow: inset 0 -16px 28px rgba(0,0,0,.26), inset 0 13px 22px rgba(255,255,255,.42); }
+.shell-stage .mini-device .device-shadow { display: none; }
+
+/* Auf kurzen Displays kleinere Vorschau, damit das Menue ohne Scrollen passt.
+   Muss NACH den Basisregeln stehen, sonst gewinnt die groessere Fassung. */
 @media (max-height: 700px) {
   .shell-stage { height: 81px; }
   .shell-stage .mini-wrap { transform: scale(0.22); }
@@ -334,13 +343,6 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   .shell-stage { height: 51px; }
   .shell-stage .mini-wrap { transform: scale(0.14); }
 }
-.shell-stage .mini-wrap { transform: scale(0.28); transform-origin: top center; display: flex; flex-direction: column; align-items: center; flex: none; pointer-events: none; }
-.shell-stage .mini-ring {
-  width: 26px; height: 26px; border: 4px solid var(--shell-top); border-radius: 50%; margin-bottom: -8px;
-  box-shadow: inset 0 0 4px rgba(0,0,0,.28), inset 0 2px 2px rgba(255,255,255,.8), 0 1px 2px rgba(0,0,0,.3);
-}
-.shell-stage .mini-device { width: 300px; flex: none; margin-top: 0; pointer-events: none; animation: none; box-shadow: inset 0 -16px 28px rgba(0,0,0,.26), inset 0 13px 22px rgba(255,255,255,.42); }
-.shell-stage .mini-device .device-shadow { display: none; }
 .shellbtns { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .shell-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .shell-item span { font-size: 8.5px; color: var(--ink-dim); letter-spacing: .01em; }
