@@ -454,20 +454,23 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 /* ---- Konto: Avatar in der Kopfzeile + Popover ---- */
 .header-actions { position: relative; }
 .account-btn {
-  width: 40px; height: 40px; border-radius: 50%; padding: 0; cursor: pointer;
+  width: 44px; height: 44px; border-radius: 13px; padding: 0; cursor: pointer;
   border: 1px solid var(--border-strong); background: transparent; color: var(--ink-dim);
-  display: grid; place-items: center; overflow: hidden; transition: background .15s ease, color .15s ease;
+  display: grid; place-items: center; transition: background .15s ease, color .15s ease;
 }
 .account-btn:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
 .account-btn[hidden] { display: none; }
-.account-btn.signed-in {
-  border-color: transparent; color: #4a3400;
-  background: color-mix(in srgb, var(--accent) 60%, transparent);
-  font-weight: 800; font-size: 15px; text-transform: uppercase;
+.account-btn.signed-in { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--ink); }
+.account-face {
+  width: 30px; height: 30px; border-radius: 50%; overflow: hidden; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
 }
-.account-face { width: 100%; height: 100%; display: grid; place-items: center; }
-.account-face svg { width: 21px; height: 21px; }
-.account-face-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.account-btn.signed-in .account-face {
+  background: color-mix(in srgb, var(--accent) 70%, transparent); color: #4a3400;
+  font-weight: 800; font-size: 14px; text-transform: uppercase;
+}
+.account-face svg { width: 19px; height: 19px; }
+.account-face-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .account-pop {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
   width: min(86vw, 280px); padding: 12px; display: grid; gap: 8px;
