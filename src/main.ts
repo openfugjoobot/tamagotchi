@@ -8,7 +8,7 @@ import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu, readSaveRecord } from "./storage/persist";
 import { AUTH_ENABLED } from "./auth/config";
 import { currentSession, restoreSession, renderSignInButton, signOut, type Session } from "./auth/google";
-import { decideSync, deleteRemote, pullSave, pushSave } from "./sync/cloud";
+import { decideSync, deleteRemote, pullSave, pushSave, type CloudSave } from "./sync/cloud";
 import { hasConflict } from "./sync/cloud";
 import { SHELLS, applyShell, savedShell, starPolygon } from "./shell";
 import { buildGrass } from "./grass";
@@ -453,6 +453,43 @@ function askWhichSave(localAt: number, cloudAt: string): Promise<"push" | "pull"
   });
 }
 
+/** Cloud-Stand lokal ablegen; mitten in der Sitzung danach neu laden. */
+function applyCloudSave(cloud: CloudSave, reload: boolean): void {
+  const at = Date.parse(cloud.updatedAt);
+  try {
+    localStorage.setItem(EMU_KEY, JSON.stringify({ t: Number.isFinite(at) ? at : Date.now(), d: cloud.snapshot }));
+  } catch { /* Quota */ }
+  if (reload) location.reload();
+}
+
+function asCloud(rec: { d: string; t: number }): CloudSave {
+  return { snapshot: rec.d, updatedAt: new Date(rec.t).toISOString(), saveVer: 1 };
+}
+
+/**
+ * Direkt nach dem Anmelden abgleichen – ohne Neuladen: bei Konflikt fragen,
+ * sonst den neueren Stand gewinnen lassen.
+ */
+async function syncAfterSignIn(): Promise<void> {
+  const s = currentSession();
+  if (!s) return;
+  const local = readSaveRecord(localStorage);
+  const cloud = await withTimeout(pullSave(s.token), 4000);
+  if (!cloud) {
+    if (local) await pushSave(s.token, asCloud(local));
+    return;
+  }
+  if (local && hasConflict(local.t, cloud.updatedAt)) {
+    const choice = await askWhichSave(local.t, cloud.updatedAt);
+    if (choice === "pull") { applyCloudSave(cloud, true); return; }
+    await pushSave(s.token, asCloud(local));
+    return;
+  }
+  const action = decideSync(local?.t ?? null, cloud.updatedAt);
+  if (action === "pull") { applyCloudSave(cloud, true); return; }
+  if (action === "push" && local) await pushSave(s.token, asCloud(local));
+}
+
 /** Vor dem Laden des Spielstands: Cloud und lokal abgleichen (neuerer gewinnt). */
 async function syncBeforeBoot(): Promise<void> {
   const s = currentSession();
@@ -465,12 +502,9 @@ async function syncBeforeBoot(): Promise<void> {
     action = await askWhichSave(local.t, cloud.updatedAt);
   }
   if (action === "pull" && cloud) {
-    const at = Date.parse(cloud.updatedAt);
-    try {
-      localStorage.setItem(EMU_KEY, JSON.stringify({ t: Number.isFinite(at) ? at : Date.now(), d: cloud.snapshot }));
-    } catch { /* Quota */ }
+    applyCloudSave(cloud, false);
   } else if (action === "push" && local) {
-    void pushSave(s.token, { snapshot: local.d, updatedAt: new Date(local.t).toISOString(), saveVer: 1 });
+    void pushSave(s.token, asCloud(local));
   }
 }
 
@@ -493,7 +527,7 @@ function initAccount(): void {
     const slot = bodyEl.querySelector<HTMLElement>(".gsi-slot");
     if (!slot) return;
     gsiAsked = true;
-    void renderSignInButton(slot, () => render()).then((ok) => { if (!ok) gsiAsked = false; });
+    void renderSignInButton(slot, () => { render(); void syncAfterSignIn(); }).then((ok) => { if (!ok) gsiAsked = false; });
   }
 
   /** Avatar (Google-Bild, sonst Anfangsbuchstabe) – fuer Kopfzeile und Dialog. */
@@ -645,9 +679,10 @@ async function boot(): Promise<void> {
   emu = await createEmulator({ wasm, rom: new Uint8Array(romBuf) });
   iconImgs = await loadIcons();
   if (params.has("debug")) {
-    const w = window as unknown as { __emu: Emulator; __notify: (t: string, b: string) => Promise<void> };
+    const w = window as unknown as { __emu: Emulator; __notify: (t: string, b: string) => Promise<void>; __sync: () => Promise<void> };
     w.__emu = emu;
     w.__notify = notify;
+    w.__sync = syncAfterSignIn;
   }
 
   if (AUTH_ENABLED) await syncBeforeBoot();
