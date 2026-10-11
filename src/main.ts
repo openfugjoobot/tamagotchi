@@ -13,6 +13,15 @@ const iconsTop = document.getElementById("icons-top") as HTMLCanvasElement;
 const iconsBottom = document.getElementById("icons-bottom") as HTMLCanvasElement;
 const ctxTop = iconsTop.getContext("2d")!;
 const ctxBottom = iconsBottom.getContext("2d")!;
+
+// Mini-Vorschau im Menü
+let miniDevice: HTMLElement | null = null;
+let miniTop: HTMLCanvasElement | null = null;
+let miniLcd: HTMLCanvasElement | null = null;
+let miniBottom: HTMLCanvasElement | null = null;
+let miniTopCtx: CanvasRenderingContext2D | null = null;
+let miniLcdCtx: CanvasRenderingContext2D | null = null;
+let miniBottomCtx: CanvasRenderingContext2D | null = null;
 const piezo = createPiezo(() => new AudioContext());
 const loadingEl = document.getElementById("loading");
 
@@ -83,15 +92,25 @@ function initUI(): void {
 
   const shellbtns = document.getElementById("shellbtns");
   const deviceEl = document.querySelector(".device-wrap") as HTMLElement | null;
-  const shellPreview = document.getElementById("shell-preview");
+  const shellStage = document.getElementById("shell-stage");
+  const deviceSrc = document.getElementById("device");
+  if (shellStage && deviceSrc) {
+    const clone = deviceSrc.cloneNode(true) as HTMLElement;
+    clone.removeAttribute("id");
+    clone.querySelectorAll("[id]").forEach((e) => e.removeAttribute("id"));
+    clone.classList.add("mini-device");
+    shellStage.appendChild(clone);
+    miniDevice = clone;
+    const cvs = clone.querySelectorAll("canvas");
+    miniTop = cvs[0] ?? null; miniLcd = cvs[1] ?? null; miniBottom = cvs[2] ?? null;
+    miniTopCtx = miniTop ? miniTop.getContext("2d") : null;
+    miniLcdCtx = miniLcd ? miniLcd.getContext("2d") : null;
+    miniBottomCtx = miniBottom ? miniBottom.getContext("2d") : null;
+  }
   if (shellbtns && deviceEl) {
     const setShell = (id: string) => {
       applyShell(deviceEl, id, localStorage);
-      if (shellPreview) {
-        shellPreview.dataset.shell = id;
-        shellPreview.classList.add("pop");
-        window.setTimeout(() => shellPreview.classList.remove("pop"), 150);
-      }
+      if (miniDevice) miniDevice.dataset.shell = id;
       document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === id));
     };
     for (const s of SHELLS) {
@@ -282,6 +301,15 @@ function frame(ts: number): void {
     el.width = LCD_WIDTH * scale;
     el.height = 8 * scale;
     drawIconRow(c, icons, row, scale, iconImgs);
+  }
+
+  // Mini-Vorschau spiegeln
+  if (miniLcd && miniLcdCtx) {
+    const ms = 4;
+    miniLcd.width = LCD_WIDTH * ms; miniLcd.height = LCD_HEIGHT * ms;
+    drawLcd(miniLcdCtx, emu.lcd(), ms);
+    if (miniTop && miniTopCtx) { miniTop.width = LCD_WIDTH * ms; miniTop.height = 8 * ms; drawIconRow(miniTopCtx, icons, 0, ms, iconImgs); }
+    if (miniBottom && miniBottomCtx) { miniBottom.width = LCD_WIDTH * ms; miniBottom.height = 8 * ms; drawIconRow(miniBottomCtx, icons, 1, ms, iconImgs); }
   }
 
   const b = emu.buzzer();
