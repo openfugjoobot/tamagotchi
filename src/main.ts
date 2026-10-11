@@ -21,6 +21,7 @@ const ctxBottom = iconsBottom.getContext("2d")!;
 
 // Mini-Vorschau im Menü
 let miniDevice: HTMLElement | null = null;
+let miniWrapEl: HTMLElement | null = null;
 let miniTop: HTMLCanvasElement | null = null;
 let miniLcd: HTMLCanvasElement | null = null;
 let miniBottom: HTMLCanvasElement | null = null;
@@ -119,8 +120,15 @@ function initUI(): void {
     clone.removeAttribute("id");
     clone.querySelectorAll("[id]").forEach((e) => e.removeAttribute("id"));
     clone.classList.add("mini-device");
-    shellStage.appendChild(clone);
+    // Öse (Ring) über der Vorschau – ohne Kette.
+    const wrap = document.createElement("div");
+    wrap.className = "mini-wrap";
+    const ring = document.createElement("span");
+    ring.className = "mini-ring";
+    wrap.append(ring, clone);
+    shellStage.appendChild(wrap);
     miniDevice = clone;
+    miniWrapEl = wrap;
     const cvs = clone.querySelectorAll("canvas");
     miniTop = cvs[0] ?? null; miniLcd = cvs[1] ?? null; miniBottom = cvs[2] ?? null;
     miniTopCtx = miniTop ? miniTop.getContext("2d") : null;
@@ -131,6 +139,7 @@ function initUI(): void {
     const setShell = (id: string) => {
       applyShell(deviceEl, id, localStorage);
       if (miniDevice) miniDevice.dataset.shell = id;
+      if (miniWrapEl) miniWrapEl.dataset.shell = id;
       document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === id));
     };
     for (const s of SHELLS) {
