@@ -279,7 +279,7 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 }
 
 /* Shell-Swatches im Menü */
-.shell-stage { display: flex; justify-content: center; height: 132px; overflow: hidden; margin: 6px 0 10px; }
+.shell-stage { display: flex; justify-content: center; align-items: flex-start; height: 154px; overflow: hidden; margin: 6px 0 10px; }
 .shell-stage .mini-device { width: 300px; flex: none; transform: scale(0.42); transform-origin: top center; pointer-events: none; }
 .shell-stage .mini-device .device-shadow { display: none; }
 .shellbtns { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
