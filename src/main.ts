@@ -141,7 +141,7 @@ function initUI(): void {
       if (t.id === AUTO) {
         const mark = document.createElement("span");
         mark.className = "bgbtn-a";
-        mark.textContent = "A";
+        mark.textContent = "Auto";
         mark.setAttribute("aria-hidden", "true");
         b.append(mark);
       }
