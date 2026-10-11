@@ -58,3 +58,4 @@ u8_t *emu_lcd(void) { return lcd_buf; }
 u8_t *emu_icons(void) { return icon_buf; }
 u32_t emu_freq(void) { return buzzer_freq; }
 u32_t emu_en(void) { return buzzer_en; }
+u32_t emu_now(void) { return now_us; }

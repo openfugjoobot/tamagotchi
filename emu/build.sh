@@ -20,6 +20,7 @@ EXPORTS=(
   -Wl,--export=emu_icons
   -Wl,--export=emu_freq
   -Wl,--export=emu_en
+  -Wl,--export=emu_now
   -Wl,--export-memory
 )
 

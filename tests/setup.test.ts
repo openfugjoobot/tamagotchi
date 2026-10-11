@@ -7,7 +7,7 @@ describe("Projekt-Setup", () => {
   });
 
   it("Path-Alias @ zeigt auf src/", async () => {
-    const mod = await import("@/engine/config");
-    expect(mod.config).toBeDefined();
+    const mod = await import("@/emu/input");
+    expect(mod.BUTTON_MAP).toBeDefined();
   });
 });

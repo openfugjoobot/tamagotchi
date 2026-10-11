@@ -34,7 +34,8 @@ export interface EmulatorOptions {
 }
 
 export async function createEmulator(opts: EmulatorOptions): Promise<Emulator> {
-  const { instance } = await WebAssembly.instantiate(opts.wasm, {});
+  const module = await WebAssembly.compile(opts.wasm as BufferSource);
+  const instance = await WebAssembly.instantiate(module, {});
   const ex = instance.exports as unknown as RawExports;
 
   for (let i = 0; i < opts.rom.length; i++) ex.emu_rom_byte(i, opts.rom[i]);

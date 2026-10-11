@@ -1,1 +1,0 @@
-export { ICONS } from "./sprites";

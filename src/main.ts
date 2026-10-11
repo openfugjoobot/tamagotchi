@@ -1,129 +1,82 @@
-import { createClock } from "./engine/clock";
-import { advance } from "./engine/simulation";
-import { maybeEvolve, checkHidden } from "./engine/lifecycle";
-import { applyAction } from "./engine/actions";
-import { createRng } from "./engine/rng";
-import { createInitialState } from "./engine/state";
-import { createFramebuffer, blitToCanvas } from "./render/canvas";
-import { renderScreen } from "./render/screen";
-import { pressButton, handleKey } from "./input/menus";
-import { resolveRound, sessionWon, PLAY_ROUNDS } from "./engine/minigame";
-import { createSound } from "./audio/sound";
-import { loadState, createAutosave, clearSave } from "./storage/persist";
-import type { GameState } from "./engine/types";
+import { createEmulator, LCD_WIDTH, LCD_HEIGHT } from "./emu/emulator";
+import type { Emulator } from "./emu/emulator";
+import { drawLcd } from "./render/lcd";
+import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
+import { createPiezo } from "./emu/audio";
+import { saveEmu, loadEmu } from "./storage/persist";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
-const sound = createSound(() => new AudioContext());
-const autosave = createAutosave(localStorage, 2000);
-const rng = createRng((Math.random() * 2 ** 32) >>> 0);
+const piezo = createPiezo(() => new AudioContext());
 
-// Test-Speed: ?speed=600 lässt die Spielzeit 600× schneller laufen.
-// Bei Speed > 1 wird nicht persistiert (frischer Lauf pro Reload).
 const params = new URLSearchParams(location.search);
-const rawSpeed = params.get("speed");
-const SPEED = Math.max(1, Number(rawSpeed ?? "1") || 1);
+const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
 const shell = params.get("shell");
 if (shell === "pink" || shell === "blue") {
   document.getElementById("device")!.className = `shell-${shell}`;
 }
-const persist = SPEED === 1;
-const startReal = Date.now();
-const clock = persist
-  ? createClock()
-  : { now: () => startReal + (Date.now() - startReal) * SPEED };
 
-let state: GameState = persist
-  ? loadState(localStorage, clock.now(), (Math.random() * 2 ** 32) >>> 0)
-  : createInitialState(clock.now(), (Math.random() * 2 ** 32) >>> 0);
+// Kalibriert: ~5,648 µs emulierte Zeit pro CPU-Schritt → ~177.000 Schritte/s Echtzeit.
+const STEPS_PER_SECOND = 177_000;
+const MAX_STEPS_PER_FRAME = STEPS_PER_SECOND; // Klemme gegen Riesen-Sprünge
 
-if (SPEED > 1) {
-  const badge = document.createElement("div");
-  badge.textContent = `×${SPEED}`;
-  badge.style.cssText =
-    "position:fixed;top:8px;right:10px;font:700 14px system-ui;color:#c4ff3d;background:#0c0c0c;padding:2px 8px;border-radius:6px;z-index:9";
-  document.body.appendChild(badge);
-}
+let emu: Emulator | null = null;
+let lastTs = 0;
+let saveTick = 0;
 
-function tick(): GameState {
-  const now = clock.now();
-  state = advance(state, now);
-  state = maybeEvolve(state, now);
-  state = checkHidden(state);
-  return state;
-}
+async function boot(): Promise<void> {
+  const [wasm, romBuf] = await Promise.all([
+    fetch("/emu/tamalib.wasm").then((r) => r.arrayBuffer()),
+    fetch("/emu/rom0.bin").then((r) => r.arrayBuffer()),
+  ]);
+  emu = await createEmulator({ wasm, rom: new Uint8Array(romBuf) });
 
-function onButton(b: "A" | "B" | "C") {
-  const now = clock.now();
-  if (!state.alive) return;
-  const { state: next, action } = pressButton(state, b, now);
-  state = next;
-  if (action) state = applyAction(state, action, now);
-  // Play-Minigame: 5 Runden, Gegner per RNG; Sieg ≥3 Runden ⇒ +1 Happy.
-  if (state.menu.mode === "play" && (b === "A" || b === "B")) {
-    const [rStr, wStr] = (state.menu.sub ?? "0:0").split(":");
-    let round = Number(rStr), wins = Number(wStr);
-    const player = b === "A" ? "left" : "right";
-    const { win } = resolveRound(player, rng);
-    round += 1;
-    if (win) wins += 1;
-    if (round >= PLAY_ROUNDS) {
-      state = applyAction(state, { type: "play", result: sessionWon(wins) ? "win" : "lose" }, now);
-      state.menu.mode = "idle";
-      state.menu.sub = null;
-    } else {
-      state.menu.sub = `${round}:${wins}`;
-    }
+  if (SPEED === 1) {
+    const saved = loadEmu(localStorage);
+    if (saved) { try { emu.loadState(saved); } catch { /* inkompatibler Save */ } }
   }
-  sound.play("click", state.soundOn);
-  if (persist) autosave.schedule(() => state);
-}
 
-const held = new Set<string>();
-function onCombo() {
-  if (held.has("a") && held.has("c")) {
-    if (!state.alive) {
-      state = createInitialState(clock.now(), (Math.random() * 2 ** 32) >>> 0);
-      clearSave(localStorage);
-    } else {
-      state = { ...state, soundOn: sound.toggle() };
-    }
-  }
-}
-
-function bindButtons() {
-  (["a", "b", "c"] as const).forEach((id) => {
-    const el = document.getElementById(`btn-${id}`)!;
-    el.addEventListener("pointerdown", () => {
-      held.add(id);
-      onButton(id.toUpperCase() as "A" | "B" | "C");
-      onCombo();
-    });
-    el.addEventListener("pointerup", () => held.delete(id));
-  });
-  window.addEventListener("keydown", (e) => {
-    const b = handleKey(e.key);
-    held.add(e.key.toLowerCase());
-    if (b) onButton(b);
-    onCombo();
-  });
-  window.addEventListener("keyup", (e) => held.delete(e.key.toLowerCase()));
-}
-
-function frame() {
-  const now = clock.now();
-  // Uhr-Set-Mode pausiert die Simulation.
-  if (state.menu.mode !== "clockSet") tick();
-  const fb = createFramebuffer();
-  renderScreen(fb, state, now);
-  const scale = Math.max(1, Math.floor(canvas.clientWidth / fb.width));
-  canvas.width = fb.width * scale;
-  canvas.height = fb.height * scale;
-  blitToCanvas(ctx, fb, scale);
+  bindButtons();
+  lastTs = performance.now();
   requestAnimationFrame(frame);
 }
 
-bindButtons();
-frame();
+function press(btn: LogicalButton, down: boolean): void {
+  emu?.setButton(BUTTON_MAP[btn], down);
+}
 
-export { onButton, tick };
+function bindButtons(): void {
+  (["a", "b", "c"] as const).forEach((id) => {
+    const el = document.getElementById(`btn-${id}`)!;
+    const b = id.toUpperCase() as LogicalButton;
+    el.addEventListener("pointerdown", () => press(b, true));
+    el.addEventListener("pointerup", () => press(b, false));
+    el.addEventListener("pointerleave", () => press(b, false));
+    el.addEventListener("contextmenu", (e) => e.preventDefault());
+  });
+  window.addEventListener("keydown", (e) => { const b = handleKey(e.key); if (b) press(b, true); });
+  window.addEventListener("keyup", (e) => { const b = handleKey(e.key); if (b) press(b, false); });
+}
+
+function frame(ts: number): void {
+  if (!emu) return;
+  const dt = Math.min(ts - lastTs, 100);
+  lastTs = ts;
+  const steps = Math.min(MAX_STEPS_PER_FRAME, Math.round((dt / 1000) * STEPS_PER_SECOND * SPEED));
+  if (steps > 0) emu.step(steps);
+
+  const scale = Math.max(1, Math.floor(canvas.clientWidth / LCD_WIDTH));
+  canvas.width = LCD_WIDTH * scale;
+  canvas.height = LCD_HEIGHT * scale;
+  drawLcd(ctx, emu.lcd(), scale);
+
+  const b = emu.buzzer();
+  piezo.update(b.freq, b.on);
+
+  if (SPEED === 1 && ++saveTick % 180 === 0) {
+    try { saveEmu(localStorage, emu.saveState()); } catch { /* Quota */ }
+  }
+  requestAnimationFrame(frame);
+}
+
+boot();
