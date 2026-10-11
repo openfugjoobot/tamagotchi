@@ -223,8 +223,20 @@ function initUI(): void {
   const carousel = document.getElementById("shell-carousel");
   if (deviceEl2 && carousel) {
     const N = SHELLS.length;
-    const itemH = 120; // muss zur Hoehe von .shell-card passen
-    const setH = N * itemH;
+    const cards: HTMLButtonElement[] = [];
+    const itemW = (): number => (cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : 106);
+    const setW = (): number => N * itemW();
+    const centerOf = (card: HTMLElement): number => card.offsetLeft - (carousel.clientWidth - card.offsetWidth) / 2;
+    const centeredIndex = (): number => {
+      const mid = carousel.scrollLeft + carousel.clientWidth / 2;
+      let best = 0;
+      let bestD = Number.POSITIVE_INFINITY;
+      cards.forEach((c, i) => {
+        const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid);
+        if (d < bestD) { bestD = d; best = i; }
+      });
+      return best;
+    };
 
     const makeCard = (shell: Shell): HTMLButtonElement => {
       const card = document.createElement("button");
@@ -275,10 +287,8 @@ function initUI(): void {
       if (animate) withFade(commit); else commit();
     };
 
-    const cards: HTMLButtonElement[] = [];
     for (let set = 0; set < 3; set++) for (const s of SHELLS) cards.push(makeCard(s));
     carousel.replaceChildren(...cards);
-    carousel.style.height = itemH + "px";
 
     const initial = shellParam && SHELLS.some((s) => s.id === shellParam) ? shellParam : savedShell(localStorage);
     const idx = Math.max(0, SHELLS.findIndex((s) => s.id === initial));
@@ -286,10 +296,11 @@ function initUI(): void {
     // laesst sich nicht scrollen. Startposition daher beim ersten Oeffnen setzen.
     const menuEl = document.getElementById("menu");
     let posSet = false;
+    const startIndex = N + idx;
     const placeOnce = (): void => {
       if (posSet || !menuEl || menuEl.hidden) return;
       posSet = true;
-      carousel.scrollTop = setH + idx * itemH;
+      if (cards[startIndex]) carousel.scrollLeft = centerOf(cards[startIndex]);
     };
     if (menuEl) new MutationObserver(placeOnce).observe(menuEl, { attributes: true, attributeFilter: ["hidden"] });
     placeOnce();
@@ -298,18 +309,18 @@ function initUI(): void {
     let selectTimer = 0;
     carousel.addEventListener("scroll", () => {
       // Aus den aeusseren Saetzen unbemerkt in die Mitte springen -> endlos.
-      if (carousel.scrollTop < setH * 0.5) carousel.scrollTop += setH;
-      else if (carousel.scrollTop > setH * 1.5) carousel.scrollTop -= setH;
+      const w = setW();
+      if (carousel.scrollLeft < w * 0.5) carousel.scrollLeft += w;
+      else if (carousel.scrollLeft > w * 1.5) carousel.scrollLeft -= w;
       window.clearTimeout(selectTimer);
       selectTimer = window.setTimeout(() => {
-        const i = Math.round(carousel.scrollTop / itemH);
-        const shell = SHELLS[((i % N) + N) % N];
+        const shell = SHELLS[centeredIndex() % N];
         if (shell.id !== current) pickShell(shell.id, true); else markCards();
       }, 140);
     });
     for (const card of cards) {
       card.addEventListener("click", () => {
-        carousel.scrollTo({ top: card.offsetTop - (carousel.clientHeight - itemH) / 2, behavior: "smooth" });
+        carousel.scrollTo({ left: centerOf(card), behavior: "smooth" });
       });
     }
   }
