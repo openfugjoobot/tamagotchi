@@ -29,8 +29,8 @@ if (shell === "pink" || shell === "blue") {
 const TS_FREQ = 32768;
 const TS_PER_STEP = 5.648;
 const STEPS_PER_SECOND = Math.round(TS_FREQ / TS_PER_STEP); // ≈ 5802
-const MAX_STEPS_PER_FRAME = STEPS_PER_SECOND; // max. ~1s Emulation pro Frame (sanftes Aufholen)
-const MAX_CATCHUP_S = 12 * 3600; // höchstens 12 h nachholen
+const MAX_STEPS_PER_FRAME = 120 * STEPS_PER_SECOND; // Aufholen: bis 120 s Emulation pro Frame
+const MAX_CATCHUP_S = 2 * 3600; // höchstens 2 h nachholen
 let pendingSteps = 0;
 
 let emu: Emulator | null = null;
@@ -63,6 +63,15 @@ async function boot(): Promise<void> {
         const elapsedSec = Math.min(MAX_CATCHUP_S, Math.max(0, (Date.now() - saved.at) / 1000));
         pendingSteps += elapsedSec * STEPS_PER_SECOND;
       }
+    }
+  }
+  // Aufholen sofort erledigen (Lade-Screen bleibt bis dahin), Rest im Loop.
+  {
+    const t0 = performance.now();
+    while (pendingSteps > 0 && performance.now() - t0 < 1500) {
+      const chunk = Math.min(pendingSteps, 300000);
+      emu.step(chunk);
+      pendingSteps -= chunk;
     }
   }
 
