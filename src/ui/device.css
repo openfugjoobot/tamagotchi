@@ -312,6 +312,7 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   display: grid; place-items: center; box-shadow: 0 2px 0 rgba(0,0,0,.18);
 }
 .steps b { color: var(--ink); font-weight: 800; }
+.game-note { margin: 18px 0 0; }
 code { background: color-mix(in srgb, var(--ink) 10%, transparent); padding: 1px 6px; border-radius: 6px; font-size: .9em; }
 
 /* ================= Footer ================= */
