@@ -42,3 +42,17 @@ die echten P1-Icon-Grafiken aus dem Open-Source-Projekt
 `GMMan/flipperzero-tamagotch-p1` (`icons/icon_0..7.png`) verwendet; der weiße
 Hintergrund wird zur Laufzeit per Luminanz weggekeyt. Lizenz dort nicht eindeutig
 ausgewiesen — für privaten Gebrauch unkritisch. Aktive Icons voll, inaktive dezent.
+
+## Storage & Updates (2026-10-11)
+
+- **localStorage-Keys zentral** in `src/storage/keys.ts`. Vorher waren
+  `LANG_KEY`/`SOUND_KEY`/`SHELL_KEY`/`BG_KEY` alle das Literal `"***"` und
+  überschrieben sich gegenseitig; seither überlebt jede Einstellung einen Reload.
+- **Kein Auto-Reload bei SW-Updates**: der `controllerchange`-Reload erzeugte
+  beim SW-Wechsel einen zweiten Lade-Spinner. Der SW ist network-first, Inhalte
+  sind also ohnehin frisch.
+- **Offline ab dem ersten Besuch**: `dist/precache.json` (Build-Artefakt,
+  `scripts/gen-precache.mjs`) listet alle Assets; der SW cached sie im `install`.
+- **Theme ohne Flash**: `public/theme-init.js` (klassisches Script direkt nach
+  `<body>`) setzt `body[data-bg]` vor dem ersten Paint; die Guide-Seite folgt so
+  demselben Theme wie die Startseite.
