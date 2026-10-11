@@ -63,7 +63,8 @@ body[data-bg="paper"] .chip { background: rgba(0,0,0,.04); border-color: rgba(0,
 .navbtn.danger { border-color: rgba(255,120,120,.35); color: #ffd7d7; }
 
 /* ---- Hero ---- */
-.hero { position: relative; text-align: center; padding: 26px var(--pad) 8px; }
+.hero { position: relative; text-align: center; padding: 30px var(--pad) 8px; }
+.device-shadow { width: min(64vw, 250px); height: 26px; margin: 18px auto 0; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(0,0,0,.55), rgba(0,0,0,0) 70%); filter: blur(5px); }
 .hero::before {
   content: ""; position: absolute; left: 50%; top: 34%; transform: translate(-50%,-50%);
   width: min(90vw, 460px); height: min(90vw, 460px); border-radius: 50%;
@@ -71,7 +72,7 @@ body[data-bg="paper"] .chip { background: rgba(0,0,0,.04); border-color: rgba(0,
   pointer-events: none; z-index: -1;
 }
 .eyebrow { margin: 0; font-size: 11.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-dim); }
-.hero h1 { margin: 10px 0 8px; font-size: clamp(28px, 9vw, 46px); line-height: 1.05; letter-spacing: -.02em; }
+.hero h1 { margin: 8px 0 8px; font-size: clamp(30px, 9vw, 48px); line-height: 1.02; letter-spacing: -.03em; }
 .sub { margin: 0 auto; max-width: 40ch; color: var(--ink-dim); font-size: 15px; line-height: 1.55; }
 .chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 16px 0 22px; }
 .chip { font-size: 12px; padding: 6px 11px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--ink-dim); }
@@ -120,15 +121,14 @@ body[data-bg="paper"] .chip { background: rgba(0,0,0,.04); border-color: rgba(0,
 .ctrl span { font-size: clamp(6px, 1.9vw, 8px); font-weight: 700; letter-spacing: .6px; color: #d4f0ff; text-shadow: 0 1px 2px rgba(0,0,0,.55); white-space: nowrap; }
 
 /* ---- Anleitung ---- */
-.guide { padding: clamp(36px, 8vw, 64px) var(--pad) 8px; max-width: var(--maxw); margin-inline: auto; }
-.guide h2 { font-size: clamp(20px, 5vw, 28px); margin: 0 0 10px; letter-spacing: -.01em; }
+.guide { padding: clamp(44px, 9vw, 72px) var(--pad) 8px; max-width: var(--maxw); margin-inline: auto; }
+.guide h2 { font-size: clamp(20px, 5vw, 28px); margin: 0 0 16px; letter-spacing: -.01em; }
 .section-lead { color: var(--ink-dim); margin: 0 0 22px; line-height: 1.6; font-size: 15px; }
-.icon-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 40px; }
-.icon-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
-.icon-card img { width: 38px; height: 38px; image-rendering: pixelated; background: var(--lcd-bg); border-radius: 9px; padding: 6px; }
-.icon-card h3 { margin: 10px 0 4px; font-size: 15px; }
-.icon-card p { margin: 0; font-size: 13px; color: var(--ink-dim); line-height: 1.5; }
-.steps { color: var(--ink-dim); line-height: 1.7; font-size: 15px; padding-left: 20px; margin: 0; }
+.icon-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 48px; }
+.icon-card { display: flex; align-items: center; gap: 11px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 11px 13px; }
+.icon-card img { width: 46px; height: 46px; flex: none; image-rendering: pixelated; background: var(--lcd-bg); border-radius: 10px; padding: 7px; }
+.icon-card h3 { margin: 0; font-size: 14.5px; font-weight: 700; }
+.steps { color: var(--ink-dim); line-height: 1.7; font-size: 15px; padding-left: 20px; margin: 0; max-width: 620px; }
 .steps li { margin-bottom: 6px; }
 .steps b { color: var(--ink); }
 code { background: rgba(205,234,255,.12); padding: 1px 6px; border-radius: 6px; font-size: .9em; }
@@ -156,8 +156,9 @@ code { background: rgba(205,234,255,.12); padding: 1px 6px; border-radius: 6px; 
 /* ---- größere Screens ---- */
 @media (min-width: 640px) {
   .icon-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; }
-  .hero { padding-top: 44px; }
-  #device { width: 320px; }
+  .hero { padding-top: 52px; }
+  #device { width: 360px; }
+  .device-shadow { width: 300px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
