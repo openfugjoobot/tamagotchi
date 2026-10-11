@@ -16,7 +16,7 @@ export const THEMES: Theme[] = [
   { id: "dusk", c: "#e08a5a" },
   { id: "night", c: "#14233a" },
   { id: "midnight", c: "#05060a" },
-  { id: AUTO, c: "#eef4fb" },
+  { id: AUTO, c: "linear-gradient(135deg, #ffc2d6 0%, #bcd7ff 30%, #e08a5a 62%, #14233a 100%)" },
 ];
 
 export const THEME_IDS: string[] = THEMES.map((t) => t.id);
@@ -30,13 +30,13 @@ export function phaseForHour(hour: number): string {
   return "midnight"; // Nacht
 }
 
-/** Gespeicherte Auswahl (validiert) oder "day". */
+/** Gespeicherte Auswahl (validiert) – ohne Auswahl ist "auto" der Default. */
 export function savedBg(storage: Storage): string {
   try {
     const v = storage.getItem(BG_KEY);
-    return v && THEME_IDS.includes(v) ? v : "day";
+    return v && THEME_IDS.includes(v) ? v : AUTO;
   } catch {
-    return "day";
+    return AUTO;
   }
 }
 

@@ -138,6 +138,13 @@ function initUI(): void {
       b.style.background = t.c;
       b.setAttribute("aria-label", "Background: " + t.id);
       b.addEventListener("click", () => applyBg(t.id));
+      if (t.id === AUTO) {
+        const mark = document.createElement("span");
+        mark.className = "bgbtn-a";
+        mark.textContent = "A";
+        mark.setAttribute("aria-hidden", "true");
+        b.append(mark);
+      }
       const label = document.createElement("span");
       label.textContent = t.id.charAt(0).toUpperCase() + t.id.slice(1);
       item.append(b, label);

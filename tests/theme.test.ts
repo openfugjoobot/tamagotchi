@@ -21,11 +21,11 @@ describe("theme", () => {
     expect(THEME_IDS).not.toContain("forest");
   });
 
-  it("savedBg liefert Gespeichertes oder 'day'", () => {
-    expect(savedBg(memStorage())).toBe("day");
+  it("savedBg liefert Gespeichertes, sonst 'auto'", () => {
+    expect(savedBg(memStorage())).toBe(AUTO);
     expect(savedBg(memStorage({ [BG_KEY]: "midnight" }))).toBe("midnight");
     expect(savedBg(memStorage({ [BG_KEY]: AUTO }))).toBe(AUTO);
-    expect(savedBg(memStorage({ [BG_KEY]: "bogus" }))).toBe("day");
+    expect(savedBg(memStorage({ [BG_KEY]: "bogus" }))).toBe(AUTO);
   });
 
   it("löst 'auto' nach Tageszeit auf", () => {
