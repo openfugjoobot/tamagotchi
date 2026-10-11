@@ -1,4 +1,3 @@
+# Nicht indexieren: die Seite soll nicht über Suchmaschinen auffindbar sein.
 User-agent: *
-Allow: /
-
-Sitemap: https://tamagotchi.fugjoo.com/sitemap.xml
+Disallow: /

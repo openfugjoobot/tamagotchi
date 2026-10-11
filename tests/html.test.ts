@@ -24,9 +24,12 @@ describe("html pages", () => {
     expect(existsSync("public/icons/og.png")).toBe(true);
   });
 
-  it("haben robots.txt und sitemap.xml", () => {
-    expect(readFileSync("public/robots.txt", "utf8")).toContain("Sitemap:");
-    expect(readFileSync("public/sitemap.xml", "utf8")).toContain("</urlset>");
+  it("sind für Suchmaschinen gesperrt (robots + noindex, keine Sitemap)", () => {
+    const robots = readFileSync("public/robots.txt", "utf8");
+    expect(robots).toContain("Disallow: /");
+    expect(robots).not.toContain("Sitemap:");
+    expect(existsSync("public/sitemap.xml")).toBe(false);
+    for (const page of [index, guide]) expect(page).toContain('name="robots" content="noindex');
   });
 
   it("verweisen nur auf vorhandene Icon-Dateien", () => {
