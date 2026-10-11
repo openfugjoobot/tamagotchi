@@ -10,7 +10,7 @@ import { AUTH_ENABLED } from "./auth/config";
 import { currentSession, restoreSession, renderSignInButton, signOut, type Session } from "./auth/google";
 import { decideSync, deleteRemote, pullSave, pushSave, type CloudSave } from "./sync/cloud";
 import { needsPrompt } from "./sync/cloud";
-import { SHELLS, applyShell, savedShell, starPolygon } from "./shell";
+import { SHELLS, applyShell, savedShell, starPolygon, type Shell } from "./shell";
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, iconNames, t } from "./i18n";
 import { THEMES, BG_KEY, AUTO, savedBg, resolveTheme } from "./theme";
@@ -216,6 +216,100 @@ function initUI(): void {
     }
     const initial = shellParam && SHELLS.some((s) => s.id === shellParam) ? shellParam : savedShell(localStorage);
     setShell(initial, false);
+  }
+
+  // ---- Shell-Karussell (vertikal, endlos) ----
+  const deviceEl2 = document.querySelector(".device-wrap") as HTMLElement | null;
+  const carousel = document.getElementById("shell-carousel");
+  if (deviceEl2 && carousel) {
+    const N = SHELLS.length;
+    const itemH = 120; // muss zur Hoehe von .shell-card passen
+    const setH = N * itemH;
+
+    const makeCard = (shell: Shell): HTMLButtonElement => {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "shell-card";
+      card.dataset.shell = shell.id;
+      card.setAttribute("role", "option");
+      card.setAttribute("aria-selected", "false");
+      card.setAttribute("aria-label", "Shell: " + shell.id);
+      const wrap = document.createElement("span");
+      wrap.className = "mini-wrap";
+      const ring = document.createElement("span");
+      ring.className = "mini-ring";
+      const dev = document.createElement("span");
+      dev.className = "device";
+      dev.dataset.shell = shell.id;
+      dev.innerHTML =
+        `<svg class="mini-star" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">` +
+        `<defs><linearGradient id="sun-${shell.id}" x1="0" y1="0" x2="0" y2="1">` +
+        `<stop offset="0" class="sun-1" /><stop offset="0.5" class="sun-2" /><stop offset="1" class="sun-3" />` +
+        `</linearGradient></defs>` +
+        `<polygon points="${starPolygon(shell.star)}" fill="url(#sun-${shell.id})" /></svg>` +
+        `<span class="mini-screen mini-lcd"></span>`;
+      wrap.append(ring, dev);
+      const name = document.createElement("span");
+      name.className = "shell-name";
+      name.textContent = shell.id.charAt(0).toUpperCase() + shell.id.slice(1);
+      card.append(wrap, name);
+      return card;
+    };
+
+    let current = "";
+    const markCards = (): void => {
+      carousel.querySelectorAll<HTMLElement>(".shell-card").forEach((el) => {
+        el.setAttribute("aria-selected", String(el.dataset.shell === current));
+      });
+    };
+    const pickShell = (id: string, animate = true): void => {
+      current = id;
+      const commit = (): void => {
+        applyShell(deviceEl2, id, localStorage);
+        const shape = SHELLS.find((s) => s.id === id)?.star;
+        if (shape) deviceEl2.querySelector("svg.star polygon")?.setAttribute("points", starPolygon(shape));
+        markCards();
+      };
+      if (animate) withFade(commit); else commit();
+    };
+
+    const cards: HTMLButtonElement[] = [];
+    for (let set = 0; set < 3; set++) for (const s of SHELLS) cards.push(makeCard(s));
+    carousel.replaceChildren(...cards);
+    carousel.style.height = itemH + "px";
+
+    const initial = shellParam && SHELLS.some((s) => s.id === shellParam) ? shellParam : savedShell(localStorage);
+    const idx = Math.max(0, SHELLS.findIndex((s) => s.id === initial));
+    // Das Menue ist beim Aufbau versteckt (display:none) – ein verstecktes Element
+    // laesst sich nicht scrollen. Startposition daher beim ersten Oeffnen setzen.
+    const menuEl = document.getElementById("menu");
+    let posSet = false;
+    const placeOnce = (): void => {
+      if (posSet || !menuEl || menuEl.hidden) return;
+      posSet = true;
+      carousel.scrollTop = setH + idx * itemH;
+    };
+    if (menuEl) new MutationObserver(placeOnce).observe(menuEl, { attributes: true, attributeFilter: ["hidden"] });
+    placeOnce();
+    pickShell(initial, false);
+
+    let selectTimer = 0;
+    carousel.addEventListener("scroll", () => {
+      // Aus den aeusseren Saetzen unbemerkt in die Mitte springen -> endlos.
+      if (carousel.scrollTop < setH * 0.5) carousel.scrollTop += setH;
+      else if (carousel.scrollTop > setH * 1.5) carousel.scrollTop -= setH;
+      window.clearTimeout(selectTimer);
+      selectTimer = window.setTimeout(() => {
+        const i = Math.round(carousel.scrollTop / itemH);
+        const shell = SHELLS[((i % N) + N) % N];
+        if (shell.id !== current) pickShell(shell.id, true); else markCards();
+      }, 140);
+    });
+    for (const card of cards) {
+      card.addEventListener("click", () => {
+        carousel.scrollTo({ top: card.offsetTop - (carousel.clientHeight - itemH) / 2, behavior: "smooth" });
+      });
+    }
   }
 
   const menu = document.getElementById("menu");
