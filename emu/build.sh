@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."   # Projektwurzel
 
-ZIG="${ZIG:-/tmp/zig-linux-aarch64-0.13.0/zig}"
+ZIG="${ZIG:-zig}"
 if [ ! -x "$ZIG" ]; then
   echo "Zig nicht gefunden: $ZIG (setze ZIG=...)" >&2
   exit 1

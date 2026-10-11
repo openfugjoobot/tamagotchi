@@ -137,15 +137,5 @@
   <div id="scrim" hidden></div>
 
   <script type="module" src="/src/main.ts"></script>
-  <script>
-    if ("serviceWorker" in navigator) {
-      const hadController = !!navigator.serviceWorker.controller;
-      navigator.serviceWorker.register("/sw.js?v=3", { updateViaCache: "none" }).then((r) => r.update()).catch(() => {});
-      let refreshing = false;
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (hadController && !refreshing) { refreshing = true; location.reload(); }
-      });
-    }
-  </script>
 </body>
 </html>

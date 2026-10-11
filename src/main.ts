@@ -28,6 +28,16 @@ const piezo = createPiezo(() => new AudioContext());
 const loadingEl = document.getElementById("loading");
 const menuEl = document.getElementById("menu");
 
+// Service Worker registrieren (ausgelagert, damit kein Inline-Script nötig ist → strikte CSP).
+if ("serviceWorker" in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("/sw.js?v=3", { updateViaCache: "none" }).then((r) => r.update()).catch(() => { /* ignore */ });
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController && !refreshing) { refreshing = true; location.reload(); }
+  });
+}
+
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
 // Testmodus: feste Schrittzahl, ein Frame, dann Stopp (kein rAF-Loop).
