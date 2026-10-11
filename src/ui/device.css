@@ -204,9 +204,34 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   pointer-events: none; z-index: -1;
 }
 .device-shadow {
+  position: relative; z-index: 2;
   width: min(66vw, 260px); height: 28px; margin: 12px auto 0; border-radius: 50%;
   background: radial-gradient(ellipse at center, rgba(20,40,50,.4), rgba(0,0,0,0) 70%); filter: blur(6px);
   animation: shadow-move 7.5s ease-in-out infinite;
+}
+
+/* ---- Gras am Boden (schwankt leicht) ---- */
+.grass { position: absolute; left: 50%; transform: translateX(-50%); bottom: 0; width: 100vw; height: 82px; overflow: hidden; pointer-events: none; z-index: 1; }
+.grass-layer {
+  position: absolute; bottom: 0; left: -6%; width: 112%; height: 100%;
+  background-repeat: repeat-x; background-position: bottom left;
+  transform-origin: bottom center;
+}
+.grass-layer.back {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='82'><g fill='%234f9a5a'><path d='M8 82C11 56 4 44 0 36c10 9 17 24 19 46z'/><path d='M28 82C30 52 24 40 19 31c11 11 17 27 19 51z'/><path d='M50 82C52 58 47 46 43 39c8 8 13 20 15 43z'/><path d='M70 82C73 50 66 38 61 29c12 11 18 29 20 53z'/><path d='M92 82C94 60 89 48 85 41c8 8 12 20 14 41z'/><path d='M110 82C112 56 107 44 103 37c8 8 13 22 15 45z'/></g></svg>");
+  background-size: 120px 82px;
+  opacity: .5;
+  animation: grass-sway 9.5s ease-in-out infinite;
+}
+.grass-layer.front {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='82'><g fill='%236fbf7a'><path d='M14 82C17 62 11 52 7 45c9 8 15 21 16 37z'/><path d='M36 82C38 58 33 48 29 41c8 8 13 20 14 41z'/><path d='M58 82C61 60 55 50 51 43c9 8 14 21 16 39z'/><path d='M80 82C82 62 77 52 73 45c8 8 12 20 13 37z'/><path d='M102 82C104 58 99 48 95 41c8 8 13 20 14 41z'/></g></svg>");
+  background-size: 120px 82px;
+  opacity: .85;
+  animation: grass-sway 6.8s ease-in-out infinite alternate-reverse;
+}
+@keyframes grass-sway {
+  0%, 100% { transform: translateX(-0.6%) skewX(-1.8deg); }
+  50%      { transform: translateX(0.6%) skewX(1.8deg); }
 }
 @keyframes shadow-move {
   0%, 100% { transform: translateX(-2.1%); }
@@ -215,7 +240,7 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 
 /* ---- Öse + Kette (über dem Ei) + leichtes Mitschwingen ---- */
 .device-wrap {
-  position: relative; display: flex; flex-direction: column; align-items: center; margin-top: -12px;
+  position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; margin-top: -12px;
   transform-origin: top center; animation: sway 7.5s ease-in-out infinite;
 }
 .hanger { display: flex; flex-direction: column; align-items: center; z-index: 0; }
