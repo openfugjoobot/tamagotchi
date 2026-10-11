@@ -91,14 +91,19 @@ function initUI(): void {
   const bgbtns = document.getElementById("bgbtns");
   if (bgbtns) {
     for (const t of THEMES) {
+      const item = document.createElement("div");
+      item.className = "shell-item";
       const b = document.createElement("button");
       b.className = "bgbtn";
       b.dataset.id = t.id;
-      b.style.background = t.c;
       b.title = t.id;
+      b.style.background = t.c;
       b.setAttribute("aria-label", "Background: " + t.id);
       b.addEventListener("click", () => applyBg(t.id));
-      bgbtns.appendChild(b);
+      const label = document.createElement("span");
+      label.textContent = t.id.charAt(0).toUpperCase() + t.id.slice(1);
+      item.append(b, label);
+      bgbtns.appendChild(item);
     }
     applyBg(localStorage.getItem(BG_KEY) ?? "day");
   }
