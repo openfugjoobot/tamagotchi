@@ -282,7 +282,9 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 .shell-stage { display: flex; justify-content: center; align-items: flex-start; height: 154px; overflow: hidden; margin: 6px 0 10px; }
 .shell-stage .mini-device { width: 300px; flex: none; transform: scale(0.42); transform-origin: top center; pointer-events: none; }
 .shell-stage .mini-device .device-shadow { display: none; }
-.shellbtns { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.shellbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 8px; }
+.shell-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.shell-item span { font-size: 10px; color: var(--ink-dim); letter-spacing: .02em; }
 .shellbtn {
   width: 100%; aspect-ratio: 0.85; cursor: pointer; padding: 0;
   border-radius: 50% 50% 50% 50% / 58% 58% 42% 42%;
@@ -304,8 +306,8 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 }
 .icons { width: 100%; height: auto; display: block; image-rendering: pixelated; }
 .screen-well { position: relative; width: 100%; aspect-ratio: 2 / 1; background: var(--lcd-bg); display: grid; place-items: center; overflow: hidden; }
-#lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
-#controls { position: absolute; left: 50%; top: 78%; transform: translateX(-50%); display: flex; gap: clamp(14px, 5vw, 26px); align-items: flex-start; z-index: 2; }
+.lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
+.controls { position: absolute; left: 50%; top: 78%; transform: translateX(-50%); display: flex; gap: clamp(14px, 5vw, 26px); align-items: flex-start; z-index: 2; }
 .ctrl { width: clamp(30px, 9vw, 40px); display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .ctrl:nth-child(1) { transform: translateY(-3px); }
 .ctrl:nth-child(2) { transform: translateY(3px); }

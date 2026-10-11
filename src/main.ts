@@ -114,6 +114,8 @@ function initUI(): void {
       document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === id));
     };
     for (const s of SHELLS) {
+      const item = document.createElement("div");
+      item.className = "shell-item";
       const b = document.createElement("button");
       b.className = "shellbtn";
       b.dataset.id = s.id;
@@ -121,7 +123,10 @@ function initUI(): void {
       b.style.background = `linear-gradient(180deg, ${s.top}, ${s.bot})`;
       b.setAttribute("aria-label", "Shell: " + s.id);
       b.addEventListener("click", () => setShell(s.id));
-      shellbtns.appendChild(b);
+      const label = document.createElement("span");
+      label.textContent = s.id.charAt(0).toUpperCase() + s.id.slice(1);
+      item.append(b, label);
+      shellbtns.appendChild(item);
     }
     const initial = shellParam && SHELLS.some((s) => s.id === shellParam) ? shellParam : savedShell(localStorage);
     setShell(initial);
