@@ -6,15 +6,33 @@ export const ICON_SRCS = Array.from({ length: 8 }, (_, i) => `/emu/icons/${i}.pn
 const ICON_SLOT = 8;   // logische Breite pro Icon
 const ICON_ROW_H = 8;  // logische Höhe der Leiste
 
-export type IconImages = (HTMLImageElement | null)[];
+export type IconImages = (HTMLCanvasElement | null)[];
+
+/** Weißen Hintergrund wegkeyen: dunkle Pixel → Icon-Farbe, helle → transparent. */
+function keyOut(img: HTMLImageElement, r: number, g: number, b: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = img.naturalWidth;
+  c.height = img.naturalHeight;
+  const cx = c.getContext("2d")!;
+  cx.drawImage(img, 0, 0);
+  const id = cx.getImageData(0, 0, c.width, c.height);
+  const d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    if (lum < 128) { d[i] = r; d[i + 1] = g; d[i + 2] = b; d[i + 3] = 255; }
+    else { d[i + 3] = 0; }
+  }
+  cx.putImageData(id, 0, 0);
+  return c;
+}
 
 export async function loadIcons(): Promise<IconImages> {
   return Promise.all(
     ICON_SRCS.map(
       (src) =>
-        new Promise<HTMLImageElement | null>((resolve) => {
+        new Promise<HTMLCanvasElement | null>((resolve) => {
           const img = new Image();
-          img.onload = () => resolve(img);
+          img.onload = () => { try { resolve(keyOut(img, 38, 48, 42)); } catch { resolve(null); } };
           img.onerror = () => resolve(null);
           img.src = src;
         }),
