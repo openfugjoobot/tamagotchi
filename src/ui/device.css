@@ -21,6 +21,7 @@
   --grass-hue: 150;
   --grass-sat: 38%;
   --grass-light: 42%;
+  --bg-solid: #eef4fb;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -40,6 +41,7 @@ body {
 /* ================= Themes ================= */
 /* day – default, soft & airy */
 body[data-bg="day"] {
+  --bg-solid: #eef4fb;
   --grass-hue: 150; --grass-sat: 38%; --grass-light: 42%;
   background-color:#eef4fb; background-image: linear-gradient(180deg, #f4f8ff 0%, #fdf8f0 100%);
   --blobs:
@@ -50,6 +52,7 @@ body[data-bg="day"] {
 }
 /* blossom – soft pink (light) */
 body[data-bg="blossom"] {
+  --bg-solid: #fdeef2;
   --grass-hue: 335; --grass-sat: 46%; --grass-light: 66%;
   background-color:#fdeef2; background-image: linear-gradient(180deg, #fff2f6 0%, #f6eefb 100%);
   --blobs:
@@ -61,6 +64,7 @@ body[data-bg="blossom"] {
 body[data-bg="dusk"] {
   --grass-hue: 22; --grass-sat: 46%; --grass-light: 50%;
   background-color:#2a2140; color:#fbeede;
+  --bg-solid: #2a2140;
   --ink:#fbeede; --ink-dim:#d9c6c0; --accent-text:#ffcf7a;
   --surface: rgba(38,28,58,.72); --surface-2: rgba(46,34,68,.96);
   --border: rgba(255,235,210,.18); --border-strong: rgba(255,235,210,.3);
@@ -75,6 +79,7 @@ body[data-bg="dusk"] {
 body[data-bg="night"] {
   --grass-hue: 205; --grass-sat: 30%; --grass-light: 34%;
   background-color:#0b1a2e; color:#eaf3fb;
+  --bg-solid: #0b1a2e;
   --ink:#eaf3fb; --ink-dim:#9db4c8; --accent-text:#ffd21e;
   --surface: rgba(13,28,47,.9); --surface-2: rgba(22,44,70,.96);
   --border: rgba(205,234,255,.16); --border-strong: rgba(205,234,255,.28);
@@ -87,6 +92,7 @@ body[data-bg="night"] {
 body[data-bg="midnight"] {
   --grass-hue: 220; --grass-sat: 14%; --grass-light: 28%;
   background-color:#05060a; color:#e9eef5;
+  --bg-solid: #05060a;
   --ink:#e9eef5; --ink-dim:#9aa3b2; --accent-text:#ffd21e;
   --surface: rgba(16,18,26,.9); --surface-2: rgba(22,25,36,.97);
   --border: rgba(200,214,235,.16); --border-strong: rgba(200,214,235,.28);
@@ -456,11 +462,11 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 .row button:active { transform: translateY(1px); }
 
 /* ================= Lade-Screen ================= */
-#loading { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #0a1a2e; color: #cdeaff; font-weight: 700; letter-spacing: 2px; font-size: 13px; transition: opacity .25s ease; }
+#loading { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--bg-solid, #0a1a2e); color: var(--ink); font-weight: 700; letter-spacing: 2px; font-size: 13px; transition: opacity .25s ease; }
 #loading.hidden { opacity: 0; pointer-events: none; }
-#loading .spin { width: 34px; height: 34px; border-radius: 50%; border: 4px solid rgba(205,234,255,.25); border-top-color: #ffd21e; animation: spin .9s linear infinite; }
-#loadbar { width: 170px; height: 6px; border-radius: 3px; background: rgba(205,234,255,.2); overflow: hidden; }
-#loadbar i { display: block; height: 100%; width: 0; background: #ffd21e; transition: width .12s linear; }
+#loading .spin { width: 34px; height: 34px; border-radius: 50%; border: 4px solid color-mix(in srgb, var(--ink) 20%, transparent); border-top-color: var(--accent); animation: spin .9s linear infinite; }
+#loadbar { width: 170px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 18%, transparent); overflow: hidden; }
+#loadbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .12s linear; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (min-width: 640px) {
@@ -534,4 +540,4 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 .skip:focus { left: 0; }
 :focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; border-radius: 4px; }
 .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.noscript { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px; background: #0a1a2e; color: #cdeaff; text-align: center; font-weight: 700; line-height: 1.5; }
+.noscript { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px; background: var(--bg-solid, #0a1a2e); color: var(--ink); text-align: center; font-weight: 700; line-height: 1.5; }
