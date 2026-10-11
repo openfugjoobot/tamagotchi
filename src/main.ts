@@ -48,15 +48,37 @@ const shellParam = params.get("shell");
 // ---- Hintergrund-Themes (Definition in src/theme.ts) ----
 // "auto" wählt nach Tageszeit; gespeichert wird die Auswahl, angezeigt das Theme.
 let selectedBg = "day";
-function applyBg(id: string): void {
-  selectedBg = id;
-  document.body.dataset.bg = resolveTheme(id);
-  try { localStorage.setItem(BG_KEY, id); } catch { /* ignore */ }
-  document.querySelectorAll<HTMLElement>(".bgbtn").forEach((el) => {
-    el.classList.toggle("active", el.dataset.id === id);
-  });
-  const g = document.getElementById("grass");
-  if (g) buildGrass(g);
+
+// Kurzes Crossfade beim Umschalten: den alten Hintergrund als Layer darüberlegen
+// und ausblenden, sobald das neue Theme steht. Bei reduced motion: kein Fade.
+function withFade(mutate: () => void): void {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { mutate(); return; }
+  const cs = getComputedStyle(document.body);
+  const blobs = cs.getPropertyValue("--blobs").trim();
+  const grad = cs.backgroundImage === "none" ? "" : cs.backgroundImage;
+  const wash = document.createElement("div");
+  wash.className = "theme-fade";
+  wash.setAttribute("aria-hidden", "true");
+  wash.style.backgroundColor = cs.backgroundColor;
+  wash.style.backgroundImage = blobs ? (grad ? `${blobs}, ${grad}` : blobs) : grad;
+  wash.style.setProperty("--motif", cs.getPropertyValue("--motif"));
+  document.body.appendChild(wash);
+  mutate();
+  window.setTimeout(() => wash.remove(), 460);
+}
+
+function applyBg(id: string, animate = true): void {
+  const commit = (): void => {
+    selectedBg = id;
+    document.body.dataset.bg = resolveTheme(id);
+    try { localStorage.setItem(BG_KEY, id); } catch { /* ignore */ }
+    document.querySelectorAll<HTMLElement>(".bgbtn").forEach((el) => {
+      el.classList.toggle("active", el.dataset.id === id);
+    });
+    const g = document.getElementById("grass");
+    if (g) buildGrass(g);
+  };
+  if (animate) withFade(commit); else commit();
 }
 
 // Bei "auto" das Theme mit der Tageszeit mitführen (nur bei Wechsel neu anwenden).
@@ -117,7 +139,7 @@ function initUI(): void {
       item.append(b, label);
       bgbtns.appendChild(item);
     }
-    applyBg(savedBg(localStorage));
+    applyBg(savedBg(localStorage), false);
   }
 
   const shellbtns = document.getElementById("shellbtns");
@@ -145,11 +167,14 @@ function initUI(): void {
     miniBottomCtx = miniBottom ? miniBottom.getContext("2d") : null;
   }
   if (shellbtns && deviceEl) {
-    const setShell = (id: string) => {
-      applyShell(deviceEl, id, localStorage);
-      if (miniDevice) miniDevice.dataset.shell = id;
-      if (miniWrapEl) miniWrapEl.dataset.shell = id;
-      document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === id));
+    const setShell = (id: string, animate = true) => {
+      const commit = (): void => {
+        applyShell(deviceEl, id, localStorage);
+        if (miniDevice) miniDevice.dataset.shell = id;
+        if (miniWrapEl) miniWrapEl.dataset.shell = id;
+        document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === id));
+      };
+      if (animate) withFade(commit); else commit();
     };
     for (const s of SHELLS) {
       const item = document.createElement("div");
@@ -167,7 +192,7 @@ function initUI(): void {
       shellbtns.appendChild(item);
     }
     const initial = shellParam && SHELLS.some((s) => s.id === shellParam) ? shellParam : savedShell(localStorage);
-    setShell(initial);
+    setShell(initial, false);
   }
 
   const menu = document.getElementById("menu");

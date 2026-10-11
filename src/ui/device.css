@@ -440,8 +440,14 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
   .device { width: 360px; }
   .device-shadow { width: 300px; }
 }
+/* ---- Kurzes Crossfade beim Theme-/Gehäuse-Wechsel ---- */
+.theme-fade { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 1; animation: theme-fade-out .38s ease forwards; }
+@keyframes theme-fade-out { from { opacity: 1; } to { opacity: 0; } }
+.theme-fade::after { content: ""; position: absolute; inset: 0; background-image: var(--motif, none); background-size: 120px 120px; opacity: .07; }
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
+  .theme-fade { display: none; }
 }
 
 /* ---- A11y ---- */

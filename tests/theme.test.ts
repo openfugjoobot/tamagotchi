@@ -14,11 +14,10 @@ function memStorage(init: Record<string, string> = {}): Storage {
 }
 
 describe("theme", () => {
-  it("hat sechs eindeutige Themes, 'auto' am Ende, kein 'forest'", () => {
+  it("ist chronologisch sortiert (Morgen → Nacht), 'auto' am Ende", () => {
     expect(THEMES.length).toBe(6);
     expect(new Set(THEME_IDS).size).toBe(6);
-    expect(THEME_IDS).toContain("day");
-    expect(THEME_IDS[THEME_IDS.length - 1]).toBe(AUTO);
+    expect(THEME_IDS).toEqual(["blossom", "day", "dusk", "night", "midnight", AUTO]);
     expect(THEME_IDS).not.toContain("forest");
   });
 
