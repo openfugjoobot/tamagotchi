@@ -226,7 +226,10 @@ function initUI(): void {
     document.getElementById("menu-close")?.focus();
   };
   document.getElementById("menu-close")?.addEventListener("click", closeMenu);
-  scrim?.addEventListener("click", closeMenu);
+  scrim?.addEventListener("click", () => {
+    // Wenn das Konto-Fenster offen ist, gehoert der Klick ihm.
+    if (document.getElementById("account-pop")?.hidden !== false) closeMenu();
+  });
   menuBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
     if (!menu) return;
@@ -508,16 +511,36 @@ function initAccount(): void {
     ensureButton();
   }
 
-  const close = (): void => { popEl.hidden = true; btnEl.setAttribute("aria-expanded", "false"); };
-  const open = (): void => { popEl.hidden = false; btnEl.setAttribute("aria-expanded", "true"); render(); };
+  const closeEl = document.getElementById("account-close");
+  const scrimEl = document.getElementById("scrim");
+  const menuPanel = document.getElementById("menu");
+  const menuToggle = document.getElementById("btn-menu");
+
+  const close = (): void => {
+    popEl.hidden = true;
+    btnEl.setAttribute("aria-expanded", "false");
+    if (scrimEl && menuPanel && menuPanel.hidden) scrimEl.hidden = true;
+    btnEl.focus();
+  };
+  const open = (): void => {
+    // Nicht beide Fenster gleichzeitig offen halten.
+    if (menuPanel && !menuPanel.hidden) {
+      menuPanel.hidden = true;
+      menuToggle?.setAttribute("aria-expanded", "false");
+    }
+    popEl.hidden = false;
+    btnEl.setAttribute("aria-expanded", "true");
+    if (scrimEl) scrimEl.hidden = false;
+    render(); // erst einblenden, sonst laedt der Google-Button nicht
+    closeEl?.focus();
+  };
   btnEl.addEventListener("click", (e) => {
     e.stopPropagation();
     if (popEl.hidden) open(); else close();
   });
-  document.addEventListener("click", (e) => {
-    if (!popEl.hidden && e.target instanceof Node && !popEl.contains(e.target) && e.target !== btnEl) close();
-  });
-  window.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+  closeEl?.addEventListener("click", () => close());
+  scrimEl?.addEventListener("click", () => { if (!popEl.hidden) close(); });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !popEl.hidden) close(); });
 
   restoreSession();
   renderFace();
