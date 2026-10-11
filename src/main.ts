@@ -517,9 +517,9 @@ function initAccount(): void {
       mail.className = "account-line account-mail";
       mail.textContent = s.name && s.email ? s.email : "";
       const sync = document.createElement("p");
-      sync.className = "account-line";
+      sync.className = "account-line account-meta";
       sync.textContent = t("accountSynced");
-      text.append(name, mail, sync);
+      text.append(name, mail);
       idRow.append(av, text);
       const out = document.createElement("button");
       out.className = "menu-row";
@@ -532,7 +532,7 @@ function initAccount(): void {
         close();
         if (accountModal) accountModal.hidden = false;
       });
-      bodyEl.append(idRow, out, delAcc);
+      bodyEl.append(idRow, sync, out, delAcc);
     }
     renderFace();
     ensureButton();

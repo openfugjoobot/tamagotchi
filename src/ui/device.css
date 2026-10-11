@@ -488,20 +488,23 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 }
 .account-pop[hidden] { display: none; }
 .account-body { display: grid; gap: 8px; }
-.account-id { display: flex; align-items: center; gap: 10px; }
+.account-id { display: flex; align-items: center; gap: 12px; padding: 2px 2px 0; }
 .account-avatar {
-  width: 42px; height: 42px; flex: none; border-radius: 50%; overflow: hidden;
+  width: 52px; height: 52px; flex: none; border-radius: 50%; overflow: hidden;
   display: grid; place-items: center;
   background: color-mix(in srgb, var(--accent) 70%, transparent); color: #4a3400;
+  box-shadow: 0 0 0 1px var(--border-strong);
 }
 .account-avatar .account-face-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.account-id-text { display: grid; gap: 2px; min-width: 0; }
+.account-id-text { display: grid; gap: 3px; min-width: 0; }
 .account-letter { font-weight: 800; text-transform: uppercase; }
-.account-avatar .account-letter { font-size: 18px; }
+.account-avatar .account-letter { font-size: 22px; }
 .account-btn .account-letter { font-size: 16px; }
+.account-meta { padding: 0 2px; }
+.account-body { gap: 9px; }
 .account-line { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink); opacity: .82; }
 .account-mail { color: var(--ink); opacity: .7; font-weight: 500; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.account-name { color: var(--ink); opacity: 1; font-weight: 700; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-name { color: var(--ink); opacity: 1; font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gsi-slot { min-height: 32px; display: flex; align-items: center; justify-content: center; }
 .gsi-slot iframe { max-width: 100%; }
 
