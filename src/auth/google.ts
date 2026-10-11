@@ -131,7 +131,8 @@ export async function renderSignInButton(el: HTMLElement, onSession: (s: Session
       },
     });
     id.renderButton(el, {
-      theme: "filled_black",
+      // Googles Standard-Optik (hell, farbiges G) – ausdruecklicher Wunsch.
+      theme: "outline",
       size: "large",
       shape: "rectangular",
       text: "signin_with",
