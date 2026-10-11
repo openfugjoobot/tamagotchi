@@ -9,6 +9,8 @@ import { saveEmu, loadEmu } from "./storage/persist";
 import { SHELLS, applyShell, savedShell } from "./shell";
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, setLang, LANGS, t, type Lang } from "./i18n";
+import { THEMES, BG_KEY, savedBg } from "./theme";
+import { SOUND_KEY, NOTIFY_KEY, EMU_KEY } from "./storage/keys";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -33,7 +35,7 @@ const menuEl = document.getElementById("menu");
 // Der SW ist network-first, Inhalte kommen also ohnehin frisch. Kein Auto-Reload bei
 // Updates: der erzeugte beim SW-Wechsel (controllerchange) einen zweiten Lade-Spinner.
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js?v=3", { updateViaCache: "none" }).then((r) => r.update()).catch(() => { /* ignore */ });
+  navigator.serviceWorker.register("/sw.js?v=4", { updateViaCache: "none" }).then((r) => r.update()).catch(() => { /* ignore */ });
 }
 
 const params = new URLSearchParams(location.search);
@@ -42,16 +44,7 @@ const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
 const STATIC = Number(params.get("static") ?? "0") || 0;
 const shellParam = params.get("shell");
 
-// ---- Hintergrund-Themes ----
-const BG_KEY = "tamagotchi.bg";
-const THEMES: { id: string; c: string }[] = [
-  { id: "day", c: "#bcd7ff" },
-  { id: "blossom", c: "#ffc2d6" },
-  { id: "forest", c: "#cfe6cf" },
-  { id: "dusk", c: "#e08a5a" },
-  { id: "night", c: "#14233a" },
-  { id: "midnight", c: "#05060a" },
-];
+// ---- Hintergrund-Themes (Definition in src/theme.ts) ----
 function applyBg(id: string): void {
   document.body.dataset.bg = id;
   try { localStorage.setItem(BG_KEY, id); } catch { /* ignore */ }
@@ -63,13 +56,11 @@ function applyBg(id: string): void {
 }
 
 // ---- Benachrichtigungen ----
-const NOTIFY_KEY = "tamagotchi.notify";
 let notifyEnabled = false;
 try { notifyEnabled = localStorage.getItem(NOTIFY_KEY) === "1"; } catch { /* ignore */ }
 let lastNotify = 0;
 
 // ---- Sound ----
-const SOUND_KEY = "***";
 let soundOn = true;
 try { soundOn = localStorage.getItem(SOUND_KEY) !== "0"; } catch { /* ignore */ }
 function updateSoundLabel(): void {
@@ -90,7 +81,6 @@ async function notify(title: string, body: string): Promise<void> {
   if (now - lastNotify < 60_000) return;
   lastNotify = now;
   const opts: NotificationOptions = { body, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: "tamagotchi" };
-  void opts;
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) await reg.showNotification(title, { ...opts, body });
@@ -117,7 +107,7 @@ function initUI(): void {
       item.append(b, label);
       bgbtns.appendChild(item);
     }
-    applyBg(localStorage.getItem(BG_KEY) ?? "day");
+    applyBg(savedBg(localStorage));
   }
 
   const shellbtns = document.getElementById("shellbtns");
@@ -190,11 +180,28 @@ function initUI(): void {
 
   const modal = document.getElementById("modal");
   document.getElementById("btn-reset")?.addEventListener("click", () => { closeMenu(); if (modal) modal.hidden = false; });
-  document.getElementById("btn-cancel")?.addEventListener("click", () => { if (modal) modal.hidden = true; });
-  modal?.addEventListener("click", (e) => { if (e.target === modal) modal.hidden = true; });
+  document.getElementById("btn-cancel")?.addEventListener("click", () => { if (modal) modal.hidden = true; document.getElementById("btn-menu")?.focus(); });
+  modal?.addEventListener("click", (e) => { if (e.target === modal) { modal.hidden = true; document.getElementById("btn-menu")?.focus(); } });
   window.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMenu(); if (modal) modal.hidden = true; } });
+
+  // Fokus im Dialog halten (Tab zyklisch) – Menü und Modal.
+  const focusables = (root: HTMLElement): HTMLElement[] =>
+    [...root.querySelectorAll<HTMLElement>('a[href], button:not([disabled]):not([hidden]), input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+      .filter((el) => el.offsetParent !== null || el === document.activeElement);
+  const trap = (root: HTMLElement | null, e: KeyboardEvent): void => {
+    if (!root || e.key !== "Tab") return;
+    const list = focusables(root);
+    if (list.length === 0) return;
+    const first = list[0], last = list[list.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+  window.addEventListener("keydown", (e) => {
+    if (modal && !modal.hidden) trap(modal.querySelector(".card"), e);
+    else if (menu && !menu.hidden) trap(menu, e);
+  });
   document.getElementById("btn-confirm-reset")?.addEventListener("click", () => {
-    try { localStorage.removeItem("tamagotchi.emu.v1"); } catch { /* ignore */ }
+    try { localStorage.removeItem(EMU_KEY); } catch { /* ignore */ }
     location.reload();
   });
 
@@ -413,8 +420,15 @@ function bindButtons(): void {
   );
   document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
 
-  window.addEventListener("keydown", (e) => { const b = handleKey(e.key); if (b) set(b, true); });
-  window.addEventListener("keyup", (e) => { const b = handleKey(e.key); if (b) set(b, false); });
+  // Pet-Buttons nur, solange kein Dialog offen ist (sonst würde z. B. Escape im
+  // Menü gleichzeitig Button C auslösen).
+  const dialogOpen = (): boolean => {
+    const m = document.getElementById("menu");
+    const d = document.getElementById("modal");
+    return !!((m && !m.hidden) || (d && !d.hidden));
+  };
+  window.addEventListener("keydown", (e) => { if (dialogOpen()) return; const b = handleKey(e.key); if (b) set(b, true); });
+  window.addEventListener("keyup", (e) => { if (dialogOpen()) return; const b = handleKey(e.key); if (b) set(b, false); });
 }
 
 function frame(ts: number): void {

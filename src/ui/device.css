@@ -9,7 +9,7 @@
   --ink: #22303f;
   --ink-dim: #5b6b7c;
   --accent: #ffcf4a;
-  --accent-text: #a86a00;
+  --accent-text: #7a4a00;
   --surface: rgba(255,255,255,.82);
   --surface-2: rgba(255,255,255,.96);
   --border: rgba(34,48,63,.14);
@@ -452,3 +452,5 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 }
 .skip:focus { left: 0; }
 :focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; border-radius: 4px; }
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.noscript { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px; background: #0a1a2e; color: #cdeaff; text-align: center; font-weight: 700; line-height: 1.5; }

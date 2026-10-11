@@ -1,6 +1,33 @@
-const CACHE = "tamagotchi-v3";
+const CACHE = "tamagotchi-v4";
 
-self.addEventListener("install", () => self.skipWaiting());
+// Fallback, falls /precache.json (Build-Artefakt) fehlt oder nicht lesbar ist.
+const FALLBACK = [
+  "/",
+  "/guide.html",
+  "/theme-init.js",
+  "/manifest.webmanifest",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/emu/rom0.bin",
+  "/emu/tamalib.wasm",
+];
+
+// Alles vorab cachen, damit die App schon nach dem ersten Besuch offline läuft.
+self.addEventListener("install", (event) => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    let files = FALLBACK;
+    try {
+      const res = await fetch("/precache.json", { cache: "no-store" });
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list.files)) files = FALLBACK.concat(list.files);
+      }
+    } catch { /* offline / kein Build-Artefakt */ }
+    await Promise.all(files.map((f) => cache.add(f).catch(() => { /* fehlende Datei ignorieren */ })));
+    await self.skipWaiting();
+  })());
+});
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {

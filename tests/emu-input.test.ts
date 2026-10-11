@@ -8,7 +8,9 @@ describe("emu input", () => {
   it("Tastatur-Mapping", () => {
     expect(handleKey("ArrowLeft")).toBe("A");
     expect(handleKey("Enter")).toBe("B");
-    expect(handleKey("Escape")).toBe("C");
+    expect(handleKey("ArrowRight")).toBe("C");
+    // Escape schließt nur Dialoge, drückt keinen Pet-Button.
+    expect(handleKey("Escape")).toBeNull();
     expect(handleKey("z")).toBeNull();
   });
 });

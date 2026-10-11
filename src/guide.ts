@@ -1,12 +1,8 @@
 import { applyI18n, iconNames, currentLang } from "./i18n";
-
-const BG_KEY = "***";
+import { savedBg } from "./theme";
 
 function applySavedBg(): void {
-  try {
-    const bg = localStorage.getItem(BG_KEY);
-    if (bg) document.body.dataset.bg = bg;
-  } catch { /* ignore */ }
+  document.body.dataset.bg = savedBg(localStorage);
 }
 
 function renderIcons(): void {
@@ -19,6 +15,8 @@ function renderIcons(): void {
     const img = document.createElement("img");
     img.src = `/emu/icons/${i}.png`;
     img.alt = name;
+    img.width = 22;
+    img.height = 22;
     const span = document.createElement("span");
     span.textContent = name;
     item.append(img, span);

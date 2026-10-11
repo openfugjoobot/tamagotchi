@@ -1,5 +1,6 @@
 // Emulator-Zustand (Snapshot des WASM-Speichers) in localStorage, gzip-komprimiert.
-export const EMU_KEY = "tamagotchi.emu.v1";
+import { EMU_KEY } from "./keys";
+export { EMU_KEY };
 
 function bytesToB64(bytes: Uint8Array): string {
   let bin = "";

@@ -6,7 +6,7 @@
   <title>Tamagotchi P1 — Play the original 1996 firmware in your browser</title>
   <meta name="description" content="Play the original Tamagotchi P1 (1996) firmware right in your browser. Feed, play with and raise your virtual pet — your progress is saved automatically. Free, no account, works offline." />
   <meta name="theme-color" content="#0a1a2e" />
-  <meta name="color-scheme" content="dark" />
+  <meta name="color-scheme" content="light dark" />
   <link rel="canonical" href="https://tamagotchi.fugjoo.com/" />
   <meta name="robots" content="index, follow" />
 
@@ -15,12 +15,14 @@
   <meta property="og:title" content="Tamagotchi P1 — the original firmware, in your browser" />
   <meta property="og:description" content="Play the original 1996 Tamagotchi P1 firmware in your browser. Feed, play and raise your pet. Progress saves automatically." />
   <meta property="og:url" content="https://tamagotchi.fugjoo.com/" />
-  <meta property="og:image" content="https://tamagotchi.fugjoo.com/icons/icon-512.png" />
+  <meta property="og:image" content="https://tamagotchi.fugjoo.com/icons/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
 
-  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Tamagotchi P1 — the original firmware, in your browser" />
   <meta name="twitter:description" content="Play the original 1996 Tamagotchi P1 firmware in your browser." />
-  <meta name="twitter:image" content="https://tamagotchi.fugjoo.com/icons/icon-512.png" />
+  <meta name="twitter:image" content="https://tamagotchi.fugjoo.com/icons/og.png" />
 
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/icons/icon-192.png" />
@@ -42,6 +44,7 @@
   </script>
 </head>
 <body data-bg="day">
+  <script src="/theme-init.js"></script>
   <a class="skip" href="#device">Skip to the game</a>
   <div class="bg-anim" aria-hidden="true"></div>
   <header class="site-header">
@@ -52,6 +55,7 @@
   </header>
 
   <main id="top">
+    <h1 class="sr-only">Tamagotchi P1 — play the original 1996 firmware in your browser</h1>
     <section class="hero">
       <div class="device-wrap" data-shell="teal">
       <div class="hanger" aria-hidden="true"><span class="chain"></span><span class="ring"></span></div>
@@ -108,7 +112,7 @@
     </div>
   </div>
 
-  <div id="loading"><div class="spin"></div><div class="loadtxt" data-i18n="loading">loading …</div><div id="loadbar" hidden><i id="loadbar-fill"></i></div></div>
+  <div id="loading" role="status" aria-live="polite"><div class="spin"></div><div class="loadtxt" data-i18n="loading">loading …</div><div id="loadbar" hidden><i id="loadbar-fill"></i></div></div>
 
   <div class="menu" id="menu" hidden role="dialog" aria-modal="true" aria-labelledby="menu-title">
     <div class="menu-head"><b id="menu-title" data-i18n="menu">Menu</b><button class="menu-x" id="menu-close" aria-label="Close">✕</button></div>
@@ -137,5 +141,6 @@
   <div id="scrim" hidden></div>
 
   <script type="module" src="/src/main.ts"></script>
+  <noscript><div class="noscript">This game runs on JavaScript and WebAssembly — please enable JavaScript.</div></noscript>
 </body>
 </html>

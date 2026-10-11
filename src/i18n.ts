@@ -1,6 +1,8 @@
+import { LANG_KEY } from "./storage/keys";
+export { LANG_KEY };
+
 export type Lang = "de" | "en" | "it";
 export const LANGS: Lang[] = ["de", "en", "it"];
-export const LANG_KEY = "***";
 
 type Dict = Record<string, string>;
 
@@ -29,10 +31,10 @@ const DICT: Record<Lang, Dict> = {
     guideSub: "Your egg hatches in a few minutes. Feed it, play with it, tidy up after it — and watch it grow. It saves as you go.",
     iconsTitle: "The menu",
     iconsLead: "SELECT scrolls through it, CONFIRM picks, NEXT backs out.",
-    step1: "Set the clock. CONFIRM moves between the fields, SELECT changes the value.",
-    step2: "Wait for the hatch. The egg cracks open after about five minutes.",
-    step3: "Feed it. Pick the bowl with SELECT, then CONFIRM — a meal or a snack.",
-    step4: "Look after it. Lights off while it sleeps, a bath when it's messy, medicine when it's unwell, a gentle scold when it's naughty.",
+    step1: "<b>Set the clock.</b> CONFIRM moves between the fields, SELECT changes the value.",
+    step2: "<b>Wait for the hatch.</b> The egg cracks open after about five minutes.",
+    step3: "<b>Feed it.</b> Pick the bowl with SELECT, then CONFIRM — a meal or a snack.",
+    step4: "<b>Look after it.</b> Lights off while it sleeps, a bath when it's messy, medicine when it's unwell, a gentle scold when it's naughty.",
     notifyTitle: "Your Tamagotchi needs you",
     notifyBody: "It's calling — feed it, clean up or play.",
     installTitle: "Install as app",
@@ -65,10 +67,10 @@ const DICT: Record<Lang, Dict> = {
     guideSub: "Dein Ei schlüpft in ein paar Minuten. Füttere es, spiele mit ihm, räume hinter ihm auf – und sieh zu, wie es wächst. Es speichert automatisch.",
     iconsTitle: "Das Menü",
     iconsLead: "SELECT blättert durch, CONFIRM wählt, NEXT geht zurück.",
-    step1: "Uhr stellen. CONFIRM wechselt die Felder, SELECT ändert den Wert.",
-    step2: "Schlüpfen abwarten. Nach rund fünf Minuten platzt das Ei auf.",
-    step3: "Füttern. Mit SELECT zum Napf, dann CONFIRM – Mahlzeit oder Snack.",
-    step4: "Kümmern. Licht aus beim Schlafen, baden wenn es schmutzig ist, Medizin bei Krankheit, sanft schimpfen wenn es frech ist.",
+    step1: "<b>Uhr stellen.</b> CONFIRM wechselt die Felder, SELECT ändert den Wert.",
+    step2: "<b>Schlüpfen abwarten.</b> Nach rund fünf Minuten platzt das Ei auf.",
+    step3: "<b>Füttern.</b> Mit SELECT zum Napf, dann CONFIRM – Mahlzeit oder Snack.",
+    step4: "<b>Kümmern.</b> Licht aus beim Schlafen, baden wenn es schmutzig ist, Medizin bei Krankheit, sanft schimpfen wenn es frech ist.",
     notifyTitle: "Dein Tamagotchi braucht dich",
     notifyBody: "Es ruft – füttere, räume auf oder spiele.",
     installTitle: "Als App installieren",
@@ -101,10 +103,10 @@ const DICT: Record<Lang, Dict> = {
     guideSub: "Il tuo uovo si schiude in pochi minuti. Nutrilo, gioca con lui, pulisci – e guardalo crescere. Salva da solo.",
     iconsTitle: "Il menu",
     iconsLead: "SELECT scorre, CONFIRM seleziona, NEXT torna indietro.",
-    step1: "Imposta l'orologio. CONFIRM cambia campo, SELECT cambia il valore.",
-    step2: "Aspetta la schiusa. L'uovo si apre dopo circa cinque minuti.",
-    step3: "Nutrilo. Con SELECT vai alla ciotola, poi CONFIRM – pasto o snack.",
-    step4: "Prenditene cura. Luce spenta quando dorme, bagno quando è sporco, medicina se sta male, un rimprovero se è monello.",
+    step1: "<b>Imposta l'orologio.</b> CONFIRM cambia campo, SELECT cambia il valore.",
+    step2: "<b>Aspetta la schiusa.</b> L'uovo si apre dopo circa cinque minuti.",
+    step3: "<b>Nutrilo.</b> Con SELECT vai alla ciotola, poi CONFIRM – pasto o snack.",
+    step4: "<b>Prenditene cura.</b> Luce spenta quando dorme, bagno quando è sporco, medicina se sta male, un rimprovero se è monello.",
     notifyTitle: "Il tuo Tamagotchi ha bisogno di te",
     notifyBody: "Ti sta chiamando – dagli da mangiare, pulisci o gioca.",
     installTitle: "Installa come app",
@@ -142,6 +144,11 @@ export function applyI18n(root: Document | HTMLElement = document): void {
   root.querySelectorAll<HTMLElement>("[data-i18n]").forEach((el) => {
     const key = el.dataset.i18n!;
     el.textContent = t(key);
+  });
+  // Für Strings mit Markup (z. B. <b>…) – nur vertrauenswürdige eigene Dict-Werte.
+  root.querySelectorAll<HTMLElement>("[data-i18n-html]").forEach((el) => {
+    const key = el.dataset.i18nHtml!;
+    el.innerHTML = t(key);
   });
   root.querySelectorAll<HTMLElement>("[data-i18n-aria]").forEach((el) => {
     el.setAttribute("aria-label", t(el.dataset.i18nAria!));

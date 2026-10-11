@@ -14,7 +14,8 @@ export const SHELLS: Shell[] = [
   { id: "mono",   top: "#3a3f47", bot: "#16181d" },
 ];
 
-export const SHELL_KEY = "***";
+import { SHELL_KEY } from "./storage/keys";
+export { SHELL_KEY };
 
 export function applyShell(device: HTMLElement, id: string, storage?: Storage): void {
   const s = SHELLS.find((x) => x.id === id) ?? SHELLS[0];
