@@ -171,8 +171,8 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 /* Hero: Gerät vertikal zentriert */
 .hero {
   position: relative; flex: 1;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  text-align: center; padding: 24px var(--pad); padding-top: max(24px, 11vh);
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  text-align: center; padding: 6px var(--pad) 24px;
 }
 .hero::before {
   content: ""; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
@@ -185,7 +185,7 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 /* ---- Öse + Kette (über dem Ei) + leichtes Mitschwingen ---- */
 .device-wrap {
   position: relative; display: flex; flex-direction: column; align-items: center;
-  transform-origin: top center; animation: sway 5.2s ease-in-out infinite;
+  transform-origin: top center; animation: sway 7.5s ease-in-out infinite;
 }
 .hanger { display: flex; flex-direction: column; align-items: center; z-index: 0; }
 .hanger .chain {
