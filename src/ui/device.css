@@ -491,16 +491,20 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 .account-face { width: 100%; height: 100%; display: grid; place-items: center; }
 .account-face svg { width: 21px; height: 21px; }
 .account-face-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.account-pop {
+.win {
   position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 32;
-  width: min(94vw, 380px); max-height: 90vh; overflow: auto;
-  padding: 12px; display: grid; gap: 8px;
+  max-height: 90vh; overflow: auto; padding: 12px; display: grid; gap: 8px;
   color: var(--ink); background: var(--surface-2);
   border: 1px solid var(--border-strong); border-radius: 20px;
   box-shadow: var(--shadow); backdrop-filter: blur(18px);
   animation: menu-in .18s ease-out;
 }
-.account-pop[hidden] { display: none; }
+.win[hidden] { display: none; }
+.account-pop { width: min(94vw, 380px); }
+.guide-pop { width: min(94vw, 440px); }
+.guide-body { display: grid; gap: 12px; }
+.guide-body .steps li { font-size: 14px; }
+.guide-body .lcd-grid { grid-template-columns: repeat(2, 1fr); }
 .account-body { display: grid; gap: 8px; }
 .account-id { display: flex; align-items: center; gap: 12px; padding: 2px 2px 0; }
 .account-avatar {

@@ -2,7 +2,7 @@ import { createEmulator, LCD_WIDTH, LCD_HEIGHT } from "./emu/emulator";
 import { STEPS_PER_SECOND, unitsForMs, Pacer } from "./emu/clock";
 import type { Emulator } from "./emu/emulator";
 import { drawLcd } from "./render/lcd";
-import { drawIconRow, loadIcons, type IconImages } from "./render/icons";
+import { drawIconRow, loadIcons, renderIconGrid, type IconImages } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu, readSaveRecord } from "./storage/persist";
@@ -12,7 +12,7 @@ import { decideSync, deleteRemote, pullSave, pushSave, type CloudSave } from "./
 import { needsPrompt } from "./sync/cloud";
 import { SHELLS, applyShell, savedShell, starPolygon } from "./shell";
 import { buildGrass } from "./grass";
-import { applyI18n, currentLang, t } from "./i18n";
+import { applyI18n, currentLang, iconNames, t } from "./i18n";
 import { THEMES, BG_KEY, AUTO, savedBg, resolveTheme } from "./theme";
 import { SOUND_KEY, NOTIFY_KEY, EMU_KEY } from "./storage/keys";
 
@@ -235,8 +235,12 @@ function initUI(): void {
   };
   document.getElementById("menu-close")?.addEventListener("click", closeMenu);
   scrim?.addEventListener("click", () => {
-    // Wenn das Konto-Fenster offen ist, gehoert der Klick ihm.
-    if (document.getElementById("account-pop")?.hidden !== false) closeMenu();
+    // Wenn ein anderes Fenster offen ist, gehoert der Klick ihm.
+    const acc = document.getElementById("account-pop");
+    const gui = document.getElementById("guide-modal");
+    if (acc && !acc.hidden) return;
+    if (gui && !gui.hidden) return;
+    closeMenu();
   });
   menuBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -331,6 +335,7 @@ function initUI(): void {
 
   // Konto (nur wenn eine Client-ID hinterlegt ist)
   initAccount();
+  initGuideDialog();
 
   // Gras am Boden
   const grassEl = document.getElementById("grass");
@@ -506,6 +511,45 @@ async function syncBeforeBoot(): Promise<void> {
   } else if (action === "push" && local) {
     void pushSave(s.token, asCloud(local));
   }
+}
+
+/** Anleitung als Fenster im Menue-Stil (Inhalt steht in index.html). */
+function initGuideDialog(): void {
+  const btn = document.getElementById("btn-guide");
+  const panel = document.getElementById("guide-modal");
+  const closeEl = document.getElementById("guide-close");
+  const grid = document.getElementById("guide-grid");
+  const scrim = document.getElementById("scrim");
+  if (!btn || !panel) return;
+  if (grid) renderIconGrid(grid, iconNames());
+
+  const close = (): void => {
+    panel.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    const menu = document.getElementById("menu");
+    if (scrim && menu && menu.hidden) scrim.hidden = true;
+    btn.focus();
+  };
+  const open = (): void => {
+    const menu = document.getElementById("menu");
+    const acc = document.getElementById("account-pop");
+    if (menu && !menu.hidden) {
+      menu.hidden = true;
+      document.getElementById("btn-menu")?.setAttribute("aria-expanded", "false");
+    }
+    if (acc) acc.hidden = true;
+    panel.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    if (scrim) scrim.hidden = false;
+    closeEl?.focus();
+  };
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (panel.hidden) open(); else close();
+  });
+  closeEl?.addEventListener("click", () => close());
+  scrim?.addEventListener("click", () => { if (!panel.hidden) close(); });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) close(); });
 }
 
 function initAccount(): void {

@@ -1,4 +1,5 @@
-import { applyI18n, iconNames, currentLang } from "./i18n";
+import { applyI18n, currentLang, iconNames } from "./i18n";
+import { renderIconGrid } from "./render/icons";
 import { savedBg, resolveTheme } from "./theme";
 
 function applySavedBg(): void {
@@ -7,21 +8,7 @@ function applySavedBg(): void {
 
 function renderIcons(): void {
   const grid = document.getElementById("icon-grid");
-  if (!grid) return;
-  grid.replaceChildren();
-  iconNames().forEach((name, i) => {
-    const item = document.createElement("div");
-    item.className = "lcd-item";
-    const img = document.createElement("img");
-    img.src = `/emu/icons/${i}.png`;
-    img.alt = name;
-    img.width = 22;
-    img.height = 22;
-    const span = document.createElement("span");
-    span.textContent = name;
-    item.append(img, span);
-    grid.appendChild(item);
-  });
+  if (grid) renderIconGrid(grid, iconNames());
 }
 
 function initGuide(): void {

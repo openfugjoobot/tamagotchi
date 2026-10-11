@@ -55,13 +55,13 @@
         <a class="brand" href="#top">Tamagotchi<span>P1</span></a>
       </div>
       <div class="header-actions">
-        <a class="icon-link" href="/guide.html" data-i18n-aria="guide" data-i18n-title="guide">
+        <button class="icon-link" id="btn-guide" aria-haspopup="dialog" aria-expanded="false" data-i18n-aria="guide" data-i18n-title="guide">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <circle cx="12" cy="12" r="9.25" fill="none" stroke="currentColor" stroke-width="1.7" />
             <circle cx="12" cy="8.15" r="1.3" fill="currentColor" />
             <rect x="11.1" y="10.8" width="1.8" height="6.4" rx="0.9" fill="currentColor" />
           </svg>
-        </a>
+        </button>
         <button class="account-btn" id="account-btn" hidden aria-haspopup="dialog" aria-expanded="false" data-i18n-aria="account">
           <span class="account-face" id="account-face" aria-hidden="true"></span>
         </button>
@@ -209,10 +209,25 @@
       </button>
     </nav>
   </div>
-  <div id="account-pop" class="account-pop" hidden role="dialog" aria-modal="true" aria-labelledby="account-title">
+  <div id="account-pop" class="win account-pop" hidden role="dialog" aria-modal="true" aria-labelledby="account-title">
     <div class="menu-head"><b id="account-title" data-i18n="account">Account</b><button class="menu-x" id="account-close" aria-label="Close">✕</button></div>
     <div class="account-body" id="account-body"></div>
   </div>
+  <div id="guide-modal" class="win guide-pop" hidden role="dialog" aria-modal="true" aria-labelledby="guide-title">
+    <div class="menu-head"><b id="guide-title" data-i18n="guide">Guide</b><button class="menu-x" id="guide-close" aria-label="Close">✕</button></div>
+    <div class="guide-body">
+      <p class="account-line" data-i18n="guideSub">Your egg hatches in a few minutes.</p>
+      <ol class="steps">
+        <li data-i18n-html="step1"><b>Set the clock.</b> CONFIRM moves between the fields, SELECT changes the value.</li>
+        <li data-i18n-html="step2"><b>Wait for the hatch.</b> The egg cracks open after about five minutes.</li>
+        <li data-i18n-html="step3"><b>Feed it.</b> Pick the bowl with SELECT, then CONFIRM — a meal or a snack.</li>
+        <li data-i18n-html="step4"><b>Look after it.</b> Lights off while it sleeps, a bath when it's messy, medicine when it's unwell, a gentle scold when it's naughty.</li>
+      </ol>
+      <p class="account-line" data-i18n="iconsLead">SELECT scrolls through it, CONFIRM picks, NEXT backs out.</p>
+      <div class="lcd-panel"><div class="lcd-grid" id="guide-grid"></div></div>
+    </div>
+  </div>
+
   <div id="scrim" hidden></div>
 
   <script type="module" src="/src/main.ts"></script>

@@ -43,6 +43,27 @@ export async function loadIcons(): Promise<IconImages> {
 }
 
 /**
+ * Zeichnet das Icon-Raster der Anleitung (echte P1-Icons + Namen).
+ * Genutzt von der Guide-Seite und dem Anleitungs-Fenster im Spiel.
+ */
+export function renderIconGrid(container: HTMLElement, names: string[]): void {
+  container.replaceChildren();
+  names.forEach((name, i) => {
+    const item = document.createElement("div");
+    item.className = "lcd-item";
+    const img = document.createElement("img");
+    img.src = `/emu/icons/${i}.png`;
+    img.alt = name;
+    img.width = 22;
+    img.height = 22;
+    const span = document.createElement("span");
+    span.textContent = name;
+    item.append(img, span);
+    container.appendChild(item);
+  });
+}
+
+/**
  * Zeichnet eine Icon-Reihe (4 Slots). Alle Icons sichtbar;
  * aktive (ROM-Bit) voll, inaktive dezent.
  */
