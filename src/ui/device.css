@@ -453,8 +453,20 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 }
 /* ---- Konto ---- */
 .account-body { display: grid; gap: 6px; }
-.account-line { margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--ink-dim); }
-.gsi-slot { min-height: 32px; }
+.account-card {
+  display: grid; gap: 10px; justify-items: center; text-align: center;
+  padding: 12px; border: 1px solid var(--border); border-radius: 14px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+.account-line { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-dim); max-width: 34ch; }
+.gsi-slot { min-height: 32px; display: flex; align-items: center; justify-content: center; }
+.account-id { display: flex; align-items: center; gap: 9px; min-width: 0; max-width: 100%; }
+.account-avatar {
+  width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: #4a3400; font-weight: 800; font-size: 13px; text-transform: uppercase;
+}
+.account-mail { font-size: 13px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---- Kurzes Crossfade beim Theme-/Gehäuse-Wechsel ---- */
 .theme-fade { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 1; animation: theme-fade-out .38s ease forwards; }

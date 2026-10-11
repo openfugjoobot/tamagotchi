@@ -445,17 +445,31 @@ function initAccount(): void {
   function render(): void {
     const s = currentSession();
     bodyEl.replaceChildren();
+    const card = document.createElement("div");
+    card.className = "account-card";
     if (!s) {
       const hint = document.createElement("p");
       hint.className = "account-line";
       hint.textContent = t("accountHint");
       const slot = document.createElement("div");
       slot.className = "gsi-slot";
-      bodyEl.append(hint, slot);
+      card.append(hint, slot);
+      bodyEl.append(card);
     } else {
-      const line = document.createElement("p");
-      line.className = "account-line";
-      line.textContent = `${t("signedInAs")} ${s.email ?? s.name ?? ""}`;
+      const idRow = document.createElement("div");
+      idRow.className = "account-id";
+      const avatar = document.createElement("span");
+      avatar.className = "account-avatar";
+      avatar.setAttribute("aria-hidden", "true");
+      avatar.textContent = (s.email ?? s.name ?? "?").trim().charAt(0).toUpperCase() || "?";
+      const mail = document.createElement("span");
+      mail.className = "account-mail";
+      mail.textContent = s.email ?? s.name ?? "";
+      idRow.append(avatar, mail);
+      const sync = document.createElement("p");
+      sync.className = "account-line";
+      sync.textContent = t("accountSynced");
+      card.append(idRow, sync);
       const out = document.createElement("button");
       out.className = "menu-row";
       out.textContent = t("signOut");
@@ -471,7 +485,7 @@ function initAccount(): void {
           render();
         })();
       });
-      bodyEl.append(line, out, del);
+      bodyEl.append(card, out, del);
     }
     ensureButton();
   }
