@@ -28,6 +28,12 @@ describe("pwa", () => {
     expect(sw).toContain("caches.open(CACHE)");
   });
 
+  it("manifest-Icons existieren", () => {
+    const m = JSON.parse(readFileSync("public/manifest.webmanifest", "utf8"));
+    for (const i of m.icons) expect(existsSync("public" + i.src)).toBe(true);
+    for (const s of m.screenshots) expect(existsSync("public" + s.src)).toBe(true);
+  });
+
   it("precache-Generator existiert", () => {
     expect(existsSync("scripts/gen-precache.mjs")).toBe(true);
   });

@@ -28,4 +28,12 @@ describe("html pages", () => {
     expect(readFileSync("public/robots.txt", "utf8")).toContain("Sitemap:");
     expect(readFileSync("public/sitemap.xml", "utf8")).toContain("</urlset>");
   });
+
+  it("verweisen nur auf vorhandene Icon-Dateien", () => {
+    for (const page of [index, guide]) {
+      for (const m of page.matchAll(/href="\/icons\/([^"]+)"/g)) {
+        expect(existsSync(`public/icons/${m[1]}`)).toBe(true);
+      }
+    }
+  });
 });

@@ -36,7 +36,7 @@ const menuEl = document.getElementById("menu");
 // Der SW ist network-first, Inhalte kommen also ohnehin frisch. Kein Auto-Reload bei
 // Updates: der erzeugte beim SW-Wechsel (controllerchange) einen zweiten Lade-Spinner.
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js?v=4", { updateViaCache: "none" }).then((r) => r.update()).catch(() => { /* ignore */ });
+  navigator.serviceWorker.register("/sw.js?v=5", { updateViaCache: "none" }).then((r) => r.update()).catch(() => { /* ignore */ });
 }
 
 const params = new URLSearchParams(location.search);
@@ -81,7 +81,7 @@ async function notify(title: string, body: string): Promise<void> {
   const now = Date.now();
   if (now - lastNotify < 60_000) return;
   lastNotify = now;
-  const opts: NotificationOptions = { body, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: "tamagotchi" };
+  const opts: NotificationOptions = { body, icon: "/icons/icon-192-v2.png", badge: "/icons/icon-192-v2.png", tag: "tamagotchi" };
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (reg) await reg.showNotification(title, { ...opts, body });

@@ -1,4 +1,4 @@
-const CACHE = "tamagotchi-v4";
+const CACHE = "tamagotchi-v5";
 
 // Fallback, falls /precache.json (Build-Artefakt) fehlt oder nicht lesbar ist.
 const FALLBACK = [
@@ -6,8 +6,8 @@ const FALLBACK = [
   "/guide.html",
   "/theme-init.js",
   "/manifest.webmanifest",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
+  "/icons/icon-192-v2.png",
+  "/icons/icon-512-v2.png",
   "/emu/rom0.bin",
   "/emu/tamalib.wasm",
 ];
