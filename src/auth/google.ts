@@ -135,6 +135,9 @@ export async function renderSignInButton(el: HTMLElement, onSession: (s: Session
       size: "large",
       shape: "rectangular",
       text: "signin_with",
+      // Feste Breite: passt auch auf 320px-Geraeten und laesst dem laengeren
+      // deutschen Text Platz (sonst schneidet Google den Label ab).
+      width: 260,
       locale: currentLang(),
     });
     return true;

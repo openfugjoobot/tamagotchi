@@ -487,7 +487,7 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 .account-face-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .account-pop {
   position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 32;
-  width: min(92vw, 360px); max-height: 90vh; overflow: auto;
+  width: min(94vw, 380px); max-height: 90vh; overflow: auto;
   padding: 12px; display: grid; gap: 8px;
   color: var(--ink); background: var(--surface-2);
   border: 1px solid var(--border-strong); border-radius: 20px;
@@ -513,7 +513,7 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 .account-line { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ink); opacity: .82; }
 .account-mail { color: var(--ink); opacity: .7; font-weight: 500; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-name { color: var(--ink); opacity: 1; font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gsi-slot { min-height: 32px; display: flex; align-items: center; justify-content: center; }
+.gsi-slot { min-height: 44px; display: flex; align-items: center; justify-content: center; width: 100%; }
 .gsi-slot iframe { max-width: 100%; }
 
 /* ---- Kurzes Crossfade beim Theme-/Gehäuse-Wechsel ---- */
