@@ -522,17 +522,6 @@ function initAccount(): void {
       out.className = "menu-row";
       out.textContent = t("signOut");
       out.addEventListener("click", () => { signOut(); render(); });
-      const del = document.createElement("button");
-      del.className = "menu-row danger";
-      del.textContent = t("deleteData");
-      del.addEventListener("click", () => {
-        void (async () => {
-          const tok = currentSession()?.token;
-          if (tok) await deleteRemote(tok);
-          signOut();
-          render();
-        })();
-      });
       const delAcc = document.createElement("button");
       delAcc.className = "menu-row danger";
       delAcc.textContent = t("deleteAccount");
@@ -540,7 +529,7 @@ function initAccount(): void {
         close();
         if (accountModal) accountModal.hidden = false;
       });
-      bodyEl.append(idRow, out, del, delAcc);
+      bodyEl.append(idRow, out, delAcc);
     }
     renderFace();
     ensureButton();
