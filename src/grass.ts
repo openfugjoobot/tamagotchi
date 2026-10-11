@@ -28,7 +28,7 @@ export function buildGrass(container: HTMLElement): void {
       "d",
       `M${x.toFixed(1)} ${h} Q ${(x + lean * 0.3).toFixed(1)} ${(h - len * 0.55).toFixed(1)} ${(x + lean).toFixed(1)} ${(h - len).toFixed(1)}`,
     );
-    p.setAttribute("stroke", `hsl(${hue.toFixed(0)} 45% ${light.toFixed(0)}%)`);
+    p.setAttribute("stroke", `hsl(${hue.toFixed(0)} ${sat} ${light.toFixed(0)}%)`);
     p.setAttribute("stroke-width", thick.toFixed(2));
     p.setAttribute("fill", "none");
     p.setAttribute("stroke-linecap", "round");
