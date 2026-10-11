@@ -19,20 +19,21 @@
         <canvas id="lcd" width="32" height="16"></canvas>
       </div>
     </div>
-    <div id="buttons">
-      <button id="btn-a" aria-label="A"></button>
-      <button id="btn-b" aria-label="B"></button>
-      <button id="btn-c" aria-label="C"></button>
+    <div id="controls">
+      <div class="ctrl"><button id="btn-a" aria-label="Select"></button><span>SELECT</span></div>
+      <div class="ctrl"><button id="btn-b" aria-label="Confirm"></button><span>CONFIRM</span></div>
+      <div class="ctrl"><button id="btn-c" aria-label="Next"></button><span>NEXT</span></div>
     </div>
-    <div class="labels"><span>SELECT</span><span>CONFIRM</span><span>NEXT</span></div>
   </div>
   <script type="module" src="/src/main.ts"></script>
   <script>
     if ("serviceWorker" in navigator) {
+      const hadController = !!navigator.serviceWorker.controller;
       navigator.serviceWorker.register("/sw.js").then((r) => r.update()).catch(() => {});
       let refreshing = false;
       navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (!refreshing) { refreshing = true; location.reload(); }
+        // Nur bei einem echten Update neu laden (nicht beim Erst-Install).
+        if (hadController && !refreshing) { refreshing = true; location.reload(); }
       });
     }
   </script>
