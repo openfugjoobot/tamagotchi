@@ -267,6 +267,17 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 }
 .device { z-index: 1; }
 
+/* Stern (Element um den Screen) folgt der Shell */
+.sun-1 { stop-color: var(--sun-1, #ffe45c); }
+.sun-2 { stop-color: var(--sun-2, #ffd21e); }
+.sun-3 { stop-color: var(--sun-3, #f0b400); }
+[data-shell="teal"]   { --sun-1: #a9f2ea; --sun-2: #63e0d4; --sun-3: #1fb3a7; }
+[data-shell="pink"]   { --sun-1: #ffd9ec; --sun-2: #ff9ecb; --sun-3: #d94a86; }
+[data-shell="blue"]   { --sun-1: #d6e8ff; --sun-2: #8cc0ff; --sun-3: #3f7fd8; }
+[data-shell="purple"] { --sun-1: #e6d8ff; --sun-2: #bfa2ff; --sun-3: #7b4fd6; }
+[data-shell="sunset"] { --sun-1: #ffe3b8; --sun-2: #ffb066; --sun-3: #e0563f; }
+[data-shell="mono"]   { --sun-1: #8b939d; --sun-2: #565c66; --sun-3: #232830; }
+
 /* ================= Gerät ================= */
 .device {
   position: relative; margin: 0 auto;

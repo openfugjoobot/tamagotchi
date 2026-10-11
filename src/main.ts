@@ -6,7 +6,7 @@ import { drawIconRow, loadIcons, type IconImages } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu } from "./storage/persist";
-import { SHELLS, applyShell, savedShell } from "./shell";
+import { SHELLS, applyShell, savedShell, starPolygon } from "./shell";
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, t } from "./i18n";
 import { THEMES, BG_KEY, AUTO, savedBg, resolveTheme } from "./theme";
@@ -151,6 +151,12 @@ function initUI(): void {
     clone.removeAttribute("id");
     clone.querySelectorAll("[id]").forEach((e) => e.removeAttribute("id"));
     clone.classList.add("mini-device");
+    // Eigener Stern-Verlauf, damit die Vorschau ihre eigene Shell-Farbe nutzt.
+    const grad = clone.querySelector("linearGradient");
+    if (grad) {
+      grad.setAttribute("id", "sun-mini");
+      clone.querySelector("polygon")?.setAttribute("fill", "url(#sun-mini)");
+    }
     // Öse (Ring) über der Vorschau – ohne Kette.
     const wrap = document.createElement("div");
     wrap.className = "mini-wrap";
@@ -172,6 +178,12 @@ function initUI(): void {
         applyShell(deviceEl, id, localStorage);
         if (miniDevice) miniDevice.dataset.shell = id;
         if (miniWrapEl) miniWrapEl.dataset.shell = id;
+        const shape = SHELLS.find((s) => s.id === id)?.star;
+        if (shape) {
+          const pts = starPolygon(shape);
+          deviceEl.querySelector("svg.star polygon")?.setAttribute("points", pts);
+          miniWrapEl?.querySelector("svg.star polygon")?.setAttribute("points", pts);
+        }
         document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === id));
       };
       if (animate) withFade(commit); else commit();
