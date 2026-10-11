@@ -282,9 +282,9 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 .shell-stage { display: flex; justify-content: center; align-items: flex-start; height: 154px; overflow: hidden; margin: 6px 0 10px; }
 .shell-stage .mini-device { width: 300px; flex: none; transform: scale(0.42); transform-origin: top center; pointer-events: none; }
 .shell-stage .mini-device .device-shadow { display: none; }
-.shellbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 8px; }
+.shellbtns { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .shell-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.shell-item span { font-size: 10px; color: var(--ink-dim); letter-spacing: .02em; }
+.shell-item span { font-size: 9px; color: var(--ink-dim); letter-spacing: .01em; }
 .shellbtn {
   width: 100%; aspect-ratio: 0.85; cursor: pointer; padding: 0;
   border-radius: 50% 50% 50% 50% / 58% 58% 42% 42%;
