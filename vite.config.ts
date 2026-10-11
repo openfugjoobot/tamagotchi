@@ -8,5 +8,11 @@ export default defineConfig({
   build: {
     target: "es2022",
     outDir: "dist",
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, "index.html"),
+        guide: resolve(__dirname, "guide.html"),
+      },
+    },
   },
 });

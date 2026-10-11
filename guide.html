@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Guide — Tamagotchi P1</title>
+  <meta name="description" content="How to play the Tamagotchi P1: what every icon does and how to set the clock, hatch and feed your pet." />
+  <meta name="theme-color" content="#0a1a2e" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="canonical" href="https://tamagotchi.fugjoo.com/guide.html" />
+  <meta name="robots" content="index, follow" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="Tamagotchi P1 — Guide" />
+  <meta property="og:description" content="What every icon does and how to raise your Tamagotchi P1." />
+  <meta property="og:url" content="https://tamagotchi.fugjoo.com/guide.html" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icons/icon-192.png" />
+  <link rel="stylesheet" href="/src/ui/device.css" />
+</head>
+<body data-bg="navy">
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="/">Tamagotchi<span>P1</span></a>
+      <a class="menuitem back" href="/">← Play</a>
+    </div>
+  </header>
+
+  <main class="guide guide-page">
+    <h1>Guide</h1>
+    <p class="section-lead">Feed it, keep it happy and clean, and it will grow up. Progress saves automatically.</p>
+
+    <h2>The icons</h2>
+    <p class="section-lead">Press <b>SELECT</b> to cycle through the icons, <b>CONFIRM</b> to choose, <b>NEXT</b> to cancel.</p>
+    <div class="icon-grid" id="icon-grid"></div>
+
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><b>Set the clock:</b> CONFIRM moves through the fields, SELECT changes the value.</li>
+      <li>The egg hatches in about 5 minutes.</li>
+      <li><b>Feed it:</b> SELECT to the bowl icon, then CONFIRM (meal or snack).</li>
+      <li><b>Care:</b> turn the light off when it sleeps, clean up, give medicine when sick, scold it when it misbehaves.</li>
+    </ol>
+  </main>
+
+  <footer class="site-footer">
+    <p>For personal use · real P1 firmware via TamaLIB · <span id="year"></span></p>
+  </footer>
+
+  <script type="module" src="/src/guide.ts"></script>
+</body>
+</html>

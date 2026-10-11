@@ -41,9 +41,7 @@ function applyBg(id: string): void {
   });
 }
 
-// ---- Guide: the 8 icons (names only) ----
-const ICON_NAMES = ["Food", "Light", "Game", "Medicine", "Bath", "Status", "Discipline", "Attention"];
-
+// ---- Hintergrund-Themes ----
 function initUI(): void {
   const bgbtns = document.getElementById("bgbtns");
   if (bgbtns) {
@@ -60,21 +58,6 @@ function initUI(): void {
     applyBg(localStorage.getItem(BG_KEY) ?? "navy");
   }
 
-  const grid = document.getElementById("icon-grid");
-  if (grid) {
-    ICON_NAMES.forEach((name, i) => {
-      const card = document.createElement("article");
-      card.className = "icon-card";
-      const img = document.createElement("img");
-      img.src = `/emu/icons/${i}.png`;
-      img.alt = name;
-      const h3 = document.createElement("h3");
-      h3.textContent = name;
-      card.append(img, h3);
-      grid.appendChild(card);
-    });
-  }
-
   const menu = document.getElementById("menu");
   const menuBtn = document.getElementById("btn-menu");
   const closeMenu = () => { if (menu) menu.hidden = true; menuBtn?.setAttribute("aria-expanded", "false"); };
@@ -86,10 +69,6 @@ function initUI(): void {
   });
   document.addEventListener("click", (e) => {
     if (menu && !menu.hidden && e.target instanceof Node && !menu.contains(e.target) && e.target !== menuBtn) closeMenu();
-  });
-  document.getElementById("menu-guide")?.addEventListener("click", () => {
-    closeMenu();
-    document.getElementById("guide")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   const modal = document.getElementById("modal");
