@@ -13,6 +13,7 @@ const iconsBottom = document.getElementById("icons-bottom") as HTMLCanvasElement
 const ctxTop = iconsTop.getContext("2d")!;
 const ctxBottom = iconsBottom.getContext("2d")!;
 const piezo = createPiezo(() => new AudioContext());
+const loadingEl = document.getElementById("loading");
 
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
@@ -35,6 +36,13 @@ let emu: Emulator | null = null;
 let iconImgs: IconImages = [];
 let lastTs = 0;
 let saveTick = 0;
+let booted = false;
+
+function saveNow(): void {
+  if (SPEED !== 1 || !emu) return;
+  const state = emu.saveState();
+  void saveEmu(localStorage, state).catch(() => { /* Quota */ });
+}
 
 async function boot(): Promise<void> {
   const [wasm, romBuf] = await Promise.all([
@@ -46,12 +54,15 @@ async function boot(): Promise<void> {
   if (params.has("debug")) (window as unknown as { __emu: Emulator }).__emu = emu;
 
   if (SPEED === 1) {
-    const saved = loadEmu(localStorage);
+    const saved = await loadEmu(localStorage);
     if (saved) { try { emu.loadState(saved); } catch { /* inkompatibler Save */ } }
   }
 
   bindButtons();
   lastTs = performance.now();
+  // Robust speichern: beim Verlassen/Verstecken der Seite sofort sichern.
+  window.addEventListener("pagehide", saveNow);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) saveNow(); });
   requestAnimationFrame(frame);
 }
 
@@ -118,9 +129,11 @@ function frame(ts: number): void {
   const b = emu.buzzer();
   piezo.update(b.freq, b.on);
 
-  if (SPEED === 1 && STATIC === 0 && ++saveTick % 180 === 0) {
-    try { saveEmu(localStorage, emu.saveState()); } catch { /* Quota */ }
+  // periodisch speichern (alle ~5s)
+  if (SPEED === 1 && STATIC === 0 && ++saveTick % 300 === 0) {
+    void saveEmu(localStorage, emu.saveState()).catch(() => { /* Quota */ });
   }
+  if (!booted) { booted = true; loadingEl?.classList.add("hidden"); }
   if (STATIC === 0) requestAnimationFrame(frame);
 }
 

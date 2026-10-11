@@ -1,4 +1,4 @@
-// Emulator-Zustand (Snapshot des WASM-Speichers) in localStorage.
+// Emulator-Zustand (Snapshot des WASM-Speichers) in localStorage, gzip-komprimiert.
 export const EMU_KEY = "tamagotchi.emu.v1";
 
 function bytesToB64(bytes: Uint8Array): string {
@@ -14,15 +14,30 @@ function b64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-export function saveEmu(storage: Storage, state: Uint8Array): void {
-  storage.setItem(EMU_KEY, bytesToB64(state));
+async function gzip(data: Uint8Array): Promise<Uint8Array> {
+  if (typeof CompressionStream === "undefined") return data;
+  const cs = new CompressionStream("gzip");
+  const stream = new Blob([data as unknown as BlobPart]).stream().pipeThrough(cs as unknown as TransformStream<Uint8Array, Uint8Array>);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-export function loadEmu(storage: Storage): Uint8Array | null {
+async function gunzip(data: Uint8Array): Promise<Uint8Array> {
+  if (typeof DecompressionStream === "undefined") return data;
+  const ds = new DecompressionStream("gzip");
+  const stream = new Blob([data as unknown as BlobPart]).stream().pipeThrough(ds as unknown as TransformStream<Uint8Array, Uint8Array>);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+export async function saveEmu(storage: Storage, state: Uint8Array): Promise<void> {
+  const packed = await gzip(state);
+  storage.setItem(EMU_KEY, bytesToB64(packed));
+}
+
+export async function loadEmu(storage: Storage): Promise<Uint8Array | null> {
   const raw = storage.getItem(EMU_KEY);
   if (!raw) return null;
   try {
-    return b64ToBytes(raw);
+    return await gunzip(b64ToBytes(raw));
   } catch {
     return null;
   }
