@@ -2,6 +2,7 @@
 export interface Piezo {
   update(freq: number, on: boolean): void;
   setMuted(muted: boolean): void;
+  unlock(): void;
 }
 
 export function createPiezo(createCtx: () => AudioContext): Piezo {
@@ -9,6 +10,7 @@ export function createPiezo(createCtx: () => AudioContext): Piezo {
   let osc: OscillatorNode | null = null;
   let gain: GainNode | null = null;
   let muted = false;
+  let unlocked = false;
   let currentFreq = 0;
 
   const ensure = () => {
@@ -24,8 +26,9 @@ export function createPiezo(createCtx: () => AudioContext): Piezo {
   };
 
   return {
+    unlock() { unlocked = true; try { if (ctx && ctx.state === "suspended") void ctx.resume(); } catch { /* ignore */ } },
     update(freq, on) {
-      const audible = on && !muted && freq > 0;
+      const audible = on && !muted && freq > 0 && unlocked;
       if (!audible) {
         if (gain && ctx) gain.gain.setValueAtTime(0.0001, ctx.currentTime);
         return;

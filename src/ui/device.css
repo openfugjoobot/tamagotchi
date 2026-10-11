@@ -1,71 +1,74 @@
-:root { --lcd-bg: #a6c65a; }
+:root {
+  --shell: #16b8b0;
+  --shell-dark: #0f8f89;
+  --lcd-bg: #d8dcd6;
+  --lcd-fg: #2a2a2a;
+}
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: #141414; font-family: system-ui, sans-serif; }
-body { display: grid; place-items: center; padding: 40px 18px 24px; }
+html, body { margin: 0; height: 100%; }
+body {
+  font-family: system-ui, sans-serif;
+  background: #0b1e33;
+  background-image: radial-gradient(ellipse at 50% 38%, #16324f 0%, #0b1e33 60%, #081526 100%);
+  display: grid; place-items: center;
+  padding: 44px 16px 28px;
+}
 
 /* ---- Ei-Gehäuse ---- */
 #device {
   position: relative;
-  width: min(92vw, 330px);
-  aspect-ratio: 0.78;
-  border-radius: 50% 50% 50% 50% / 57% 57% 43% 43%;
+  width: min(92vw, 340px);
+  aspect-ratio: 0.8;
+  border-radius: 50% 50% 50% 50% / 56% 56% 44% 44%;
   display: flex; flex-direction: column; align-items: center;
-  padding: 15% 12% 12%;
+  padding: 13% 11% 10%;
   box-shadow:
-    inset 0 -20px 34px rgba(0,0,0,.20),
-    inset 0 14px 26px rgba(255,255,255,.30),
-    0 20px 44px rgba(0,0,0,.55);
+    inset 0 -22px 36px rgba(0,0,0,.28),
+    inset 0 16px 28px rgba(255,255,255,.35),
+    0 24px 50px rgba(0,0,0,.6);
 }
 
-/* Gehäuse-Varianten (Muster) */
-.shell-blue {
-  background-color: #25c7e0;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><polygon points='18,12 30,32 6,32' fill='%23ff3ea5'/><polygon points='96,78 108,98 84,98' fill='%23ff3ea5'/><polyline points='12,66 20,58 28,66 36,58 44,66' fill='none' stroke='%23ffd400' stroke-width='4'/><circle cx='70' cy='22' r='4' fill='%23ffffff'/><circle cx='46' cy='104' r='4' fill='%23ffffff'/><path d='M92 20 a7 7 0 1 1 -0.1 0' fill='none' stroke='%237b3fe4' stroke-width='4'/></svg>");
-  background-size: 120px 120px;
-}
-.shell-pink {
-  background-color: #ff2f8e;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><path d='M20 14 l4 8 9 1 -6.5 6 1.5 9 -8-4.5 -8 4.5 1.5-9 -6.5-6 9-1z' fill='%23ffd400'/><path d='M92 70 l3 6 7 .8 -5 4.6 1.2 7 -6.2-3.5 -6.2 3.5 1.2-7 -5-4.6 7-.8z' fill='%23ffd400'/><polyline points='14,70 22,62 30,70 38,62 46,70' fill='none' stroke='%233a7bff' stroke-width='4'/><path d='M70 96 c-6-6 -12 2 -6 8 l6 6 6-6 c6-6 0-14 -6-8z' fill='%23ffc0dd'/><path d='M98 24 c-5-5 -10 2 -5 6 l5 5 5-5 c5-4 0-11 -5-6z' fill='%23ffc0dd'/></svg>");
-  background-size: 120px 120px;
+/* Teal-Shell mit weißen Pixel-Motiven */
+.shell-teal {
+  background-color: #16b8b0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g fill='%23ffffff'><rect x='10' y='8' width='5' height='5'/><rect x='74' y='14' width='5' height='5'/><rect x='44' y='42' width='5' height='5'/><rect x='20' y='70' width='5' height='5'/><rect x='80' y='72' width='5' height='5'/><path d='M60 8l2 5 5 .5-3.8 3.4 1 5-4.2-2.6-4.2 2.6 1-5L53 13.5l5-.5z'/><path d='M30 52l2 5 5 .5-3.8 3.4 1 5-4.2-2.6-4.2 2.6 1-5L23 57.5l5-.5z'/><path d='M16 34l3-6 3 6z'/><path d='M70 52l4 2-2 4-4-2z'/><path d='M52 74c-4-5-10 2-5 6l5 5 5-5c5-4-1-11-5-6z'/></g></svg>");
+  background-size: 96px 96px;
 }
 
-/* ---- Ball-Chain + Öse ---- */
-.keychain { position: absolute; top: -36px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
-.keychain .chain { width: 9px; height: 20px; background: repeating-linear-gradient(#d7dade 0 3px, #9298a0 3px 6px); border-radius: 5px; }
-.keychain .ring { width: 22px; height: 22px; border: 4px solid #cfd3d8; border-radius: 50%; margin-top: -3px; box-shadow: inset 0 0 3px rgba(0,0,0,.3); }
-
-/* ---- Schriftzug ---- */
-.brand {
-  margin-top: 1%;
-  font-weight: 900; letter-spacing: 1.5px;
-  font-size: clamp(13px, 4.4vw, 18px);
-  color: #fff;
-  text-shadow: 0 2px 0 rgba(0,0,0,.18), 0 -1px 0 rgba(255,255,255,.6);
-  -webkit-text-stroke: 0.6px rgba(0,0,0,.18);
-  font-family: "Trebuchet MS", "Comic Sans MS", system-ui, sans-serif;
-}
+/* ---- Ball-Chain (oben links) ---- */
+.keychain { position: absolute; top: -34px; left: 16%; display: flex; flex-direction: column; align-items: center; }
+.keychain .chain { width: 9px; height: 22px; background: repeating-linear-gradient(#e2e5e8 0 3px, #9aa0a6 3px 6px); border-radius: 5px; }
+.keychain .ring { width: 22px; height: 22px; border: 4px solid #d3d7db; border-radius: 50%; margin-top: -3px; box-shadow: inset 0 0 3px rgba(0,0,0,.35); }
 
 /* ---- LCD mit Zacken-Rahmen ---- */
-.screen-frame { position: relative; width: 94%; aspect-ratio: 1; display: grid; place-items: center; margin-top: 3%; }
-.star { position: absolute; inset: -8%; width: 116%; height: 116%; filter: drop-shadow(0 2px 2px rgba(0,0,0,.25)); }
-.star polygon { fill: #ffd400; }
+.screen-frame { position: relative; width: 96%; aspect-ratio: 1; display: grid; place-items: center; margin-top: 2%; }
+.star { position: absolute; inset: -8%; width: 116%; height: 116%; filter: drop-shadow(0 2px 2px rgba(0,0,0,.3)); }
+.star polygon { fill: #ffd21e; }
 .screen-well {
-  position: relative; width: 88%; aspect-ratio: 2 / 1;
+  position: relative; width: 84%; aspect-ratio: 2 / 1;
   background: var(--lcd-bg);
-  border: 3px solid #b98b00; border-radius: 6px;
-  box-shadow: inset 0 0 0 2px #eac74c, inset 0 0 8px rgba(0,0,0,.25);
+  border: 3px solid #b9900f; border-radius: 4px;
+  box-shadow: inset 0 0 0 2px #ecd35a, inset 0 0 10px rgba(0,0,0,.2);
   display: grid; place-items: center; overflow: hidden;
 }
 #lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
 
 /* ---- Buttons ---- */
-#buttons { display: flex; gap: 15%; margin-top: 7%; }
+#buttons { display: flex; gap: 14%; margin-top: 7%; }
 #buttons button {
-  width: clamp(30px, 9vw, 40px); aspect-ratio: 1; border-radius: 50%;
-  border: 2px solid #e0a800; background: #ffd400; cursor: pointer;
-  box-shadow: inset 0 -3px 5px rgba(0,0,0,.28), inset 0 2px 3px rgba(255,255,255,.5), 0 3px 4px rgba(0,0,0,.35);
+  width: clamp(34px, 10vw, 46px); aspect-ratio: 1; border-radius: 50%;
+  border: none; background: #ffd21e; cursor: pointer;
+  box-shadow: inset 0 -3px 6px rgba(0,0,0,.28), inset 0 2px 4px rgba(255,255,255,.6), 0 4px 6px rgba(0,0,0,.4);
   touch-action: manipulation;
 }
-#buttons button:active { transform: translateY(2px); filter: brightness(.92); }
+#buttons button:active { transform: translateY(2px); filter: brightness(.93); }
 
-@media (max-width: 480px) { #device { width: 86vw; } }
+/* ---- Labels ---- */
+.labels {
+  display: flex; gap: 14%; margin-top: 4%;
+  font-size: clamp(9px, 2.7vw, 12px); font-weight: 700; letter-spacing: 1px;
+  color: #bfe9ff; text-align: center;
+}
+.labels span { width: clamp(34px, 10vw, 46px); }
+
+@media (max-width: 480px) { #device { width: 88vw; } }

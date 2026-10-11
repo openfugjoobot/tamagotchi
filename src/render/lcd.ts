@@ -5,8 +5,8 @@ export function drawLcd(
   ctx: CanvasRenderingContext2D,
   lcd: Uint8Array,
   scale: number,
-  fg = "#1b2a1b",
-  bg = "#a6c65a",
+  fg = "#2a2a2a",
+  bg = "#d8dcd6",
 ): void {
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = bg;

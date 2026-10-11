@@ -11,6 +11,8 @@ const piezo = createPiezo(() => new AudioContext());
 
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
+// Testmodus: feste Schrittzahl, ein Frame, dann Stopp (kein rAF-Loop).
+const STATIC = Number(params.get("static") ?? "0") || 0;
 const shell = params.get("shell");
 if (shell === "pink" || shell === "blue") {
   document.getElementById("device")!.className = `shell-${shell}`;
@@ -46,6 +48,9 @@ function press(btn: LogicalButton, down: boolean): void {
 }
 
 function bindButtons(): void {
+  const unlock = () => piezo.unlock();
+  window.addEventListener("pointerdown", unlock, { once: true });
+  window.addEventListener("keydown", unlock, { once: true });
   (["a", "b", "c"] as const).forEach((id) => {
     const el = document.getElementById(`btn-${id}`)!;
     const b = id.toUpperCase() as LogicalButton;
@@ -60,9 +65,14 @@ function bindButtons(): void {
 
 function frame(ts: number): void {
   if (!emu) return;
-  const dt = Math.min(ts - lastTs, 100);
-  lastTs = ts;
-  const steps = Math.min(MAX_STEPS_PER_FRAME, Math.round((dt / 1000) * STEPS_PER_SECOND * SPEED));
+  let steps: number;
+  if (STATIC > 0) {
+    steps = STATIC;
+  } else {
+    const dt = Math.min(ts - lastTs, 100);
+    lastTs = ts;
+    steps = Math.min(MAX_STEPS_PER_FRAME, Math.round((dt / 1000) * STEPS_PER_SECOND * SPEED));
+  }
   if (steps > 0) emu.step(steps);
 
   const scale = Math.max(1, Math.floor(canvas.clientWidth / LCD_WIDTH));
@@ -73,10 +83,10 @@ function frame(ts: number): void {
   const b = emu.buzzer();
   piezo.update(b.freq, b.on);
 
-  if (SPEED === 1 && ++saveTick % 180 === 0) {
+  if (SPEED === 1 && STATIC === 0 && ++saveTick % 180 === 0) {
     try { saveEmu(localStorage, emu.saveState()); } catch { /* Quota */ }
   }
-  requestAnimationFrame(frame);
+  if (STATIC === 0) requestAnimationFrame(frame);
 }
 
 boot();
