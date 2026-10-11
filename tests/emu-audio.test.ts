@@ -14,9 +14,16 @@ describe("piezo", () => {
     p.update(440, false);
     expect((ctx as any).osc.start).not.toHaveBeenCalled();
   });
+  it("spielt nichts ohne unlock (Autoplay-Policy)", () => {
+    const ctx = fakeCtx();
+    const p = createPiezo(() => ctx);
+    p.update(440, true);
+    expect((ctx as any).osc.start).not.toHaveBeenCalled();
+  });
   it("spielt bei an einen Square-Oscillator", () => {
     const ctx = fakeCtx();
     const p = createPiezo(() => ctx);
+    p.unlock();
     p.update(440, true);
     expect((ctx as any).osc.start).toHaveBeenCalled();
     expect((ctx as any).osc.type).toBe("square");
@@ -24,6 +31,7 @@ describe("piezo", () => {
   it("muted unterdrückt Ton", () => {
     const ctx = fakeCtx();
     const p = createPiezo(() => ctx);
+    p.unlock();
     p.setMuted(true);
     p.update(440, true);
     expect((ctx as any).osc.start).not.toHaveBeenCalled();
