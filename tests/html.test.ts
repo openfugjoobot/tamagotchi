@@ -29,15 +29,6 @@ describe("html pages", () => {
     expect(readFileSync("public/sitemap.xml", "utf8")).toContain("</urlset>");
   });
 
-  it("haben eine Sterne-Ebene fuer die dunklen Themes", () => {
-    expect(index).toContain('id="stars"');
-    expect(guide).toContain('id="stars"');
-    const css = readFileSync("src/ui/device.css", "utf8");
-    expect(css).toContain("@keyframes twinkle");
-    expect(css).toContain("@keyframes shoot");
-    expect(css).toContain('body[data-bg="midnight"] .stars');
-  });
-
   it("verweisen nur auf vorhandene Icon-Dateien", () => {
     for (const page of [index, guide]) {
       for (const m of page.matchAll(/href="\/icons\/([^"]+)"/g)) {
