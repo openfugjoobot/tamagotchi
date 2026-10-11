@@ -1,7 +1,7 @@
 import { createEmulator, LCD_WIDTH, LCD_HEIGHT } from "./emu/emulator";
 import type { Emulator } from "./emu/emulator";
 import { drawLcd } from "./render/lcd";
-import { drawIconRow } from "./render/icons";
+import { drawIconRow, loadIcons, type IconImages } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu } from "./storage/persist";
@@ -32,6 +32,7 @@ const MAX_STEPS_PER_FRAME = STEPS_PER_SECOND; // max. ~1s Emulation pro Frame (s
 let pendingSteps = 0;
 
 let emu: Emulator | null = null;
+let iconImgs: IconImages = [];
 let lastTs = 0;
 let saveTick = 0;
 
@@ -41,6 +42,7 @@ async function boot(): Promise<void> {
     fetch("/emu/rom0.bin").then((r) => r.arrayBuffer()),
   ]);
   emu = await createEmulator({ wasm, rom: new Uint8Array(romBuf) });
+  iconImgs = await loadIcons();
   if (params.has("debug")) (window as unknown as { __emu: Emulator }).__emu = emu;
 
   if (SPEED === 1) {
@@ -109,8 +111,8 @@ function frame(ts: number): void {
   const icons = emu.icons();
   for (const [el, c, row] of [[iconsTop, ctxTop, 0], [iconsBottom, ctxBottom, 1]] as const) {
     el.width = LCD_WIDTH * scale;
-    el.height = 7 * scale;
-    drawIconRow(c, icons, row, scale);
+    el.height = 8 * scale;
+    drawIconRow(c, icons, row, scale, iconImgs);
   }
 
   const b = emu.buzzer();
