@@ -312,7 +312,8 @@ const loadbarFill = document.getElementById("loadbar-fill");
 
 function showCatchup(frac: number): void {
   const pct = Math.round(Math.min(1, Math.max(0, frac)) * 100);
-  if (loadtxtEl) loadtxtEl.textContent = `${t("catchingUp")} ${pct}%`;
+  const label = t("loading").replace(/…/g, "").trim();
+  if (loadtxtEl) loadtxtEl.textContent = `${label} ${pct}%`;
   if (loadbarEl) loadbarEl.hidden = false;
   if (loadbarFill) loadbarFill.style.width = pct + "%";
 }

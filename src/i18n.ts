@@ -7,7 +7,6 @@ type Dict = Record<string, string>;
 const DICT: Record<Lang, Dict> = {
   en: {
     loading: "loading …",
-    catchingUp: "catching up …",
     menu: "Menu",
     shell: "Shell",
     background: "Background",
@@ -44,7 +43,6 @@ const DICT: Record<Lang, Dict> = {
   },
   de: {
     loading: "lädt …",
-    catchingUp: "Aufholen …",
     menu: "Menü",
     shell: "Gehäuse",
     background: "Hintergrund",
@@ -81,7 +79,6 @@ const DICT: Record<Lang, Dict> = {
   },
   it: {
     loading: "caricamento …",
-    catchingUp: "recupero …",
     menu: "Menu",
     shell: "Scocca",
     background: "Sfondo",
