@@ -232,10 +232,28 @@ initUI();
 // Zeitstempel sind in 1/32768 s (E0C6S46 @ 32768 Hz) → Echtzeit = 32768 Einheiten/s.
 const TS_FREQ = 32768;
 const TS_PER_STEP = 5.648;
-const STEPS_PER_SECOND = Math.round(TS_FREQ / TS_PER_STEP); // ≈ 5802
-const MAX_STEPS_PER_FRAME = 120 * STEPS_PER_SECOND; // Aufholen: bis 120 s Emulation pro Frame
+const STEPS_PER_SECOND = Math.round(TS_FREQ / TS_PER_STEP); // nur Startschätzung
+const UNITS_PER_MS = TS_FREQ / 1000; // 32.768
+const MAX_STEPS_PER_FRAME = 120 * STEPS_PER_SECOND;
+const MAX_FRAME_CATCHUP_S = 120;
 const MAX_CATCHUP_S = 2 * 3600; // höchstens 2 h nachholen
-let pendingSteps = 0;
+// Ziel-Emulatorzeit (in TamaLIB-Zeitstempel-Einheiten). Wir steppen, bis der
+// Emulator diese Zeit erreicht hat – so bleibt die Uhr exakt in Echtzeit,
+// unabhängig davon, wie viele Schritte eine Zeiteinheit braucht.
+let targetUnits = 0;
+
+function catchUp(maxSteps: number): void {
+  if (!emu) return;
+  let budget = maxSteps;
+  let guard = 0;
+  while (budget > 0 && guard++ < 2000) {
+    const remaining = targetUnits - emu.now();
+    if (remaining <= 0) break;
+    const steps = remaining < 2000 ? 1 : Math.min(budget, Math.round(remaining / TS_PER_STEP), 200000);
+    emu.step(steps);
+    budget -= steps;
+  }
+}
 
 let emu: Emulator | null = null;
 let iconImgs: IconImages = [];
@@ -262,25 +280,22 @@ async function boot(): Promise<void> {
     w.__notify = notify;
   }
 
+  let saved: Awaited<ReturnType<typeof loadEmu>> = null;
   if (SPEED === 1) {
-    const saved = await loadEmu(localStorage);
+    saved = await loadEmu(localStorage);
     if (saved) {
       try { emu.loadState(saved.bytes); } catch { /* inkompatibler Save */ }
-      // Wanduhr-Zeit seit dem Speichern nachholen (App war geschlossen).
-      if (saved.at) {
-        const elapsedSec = Math.min(MAX_CATCHUP_S, Math.max(0, (Date.now() - saved.at) / 1000));
-        pendingSteps += elapsedSec * STEPS_PER_SECOND;
-      }
     }
+  }
+  targetUnits = emu.now();
+  if (saved?.at) {
+    const elapsedSec = Math.min(MAX_CATCHUP_S, Math.max(0, (Date.now() - saved.at) / 1000));
+    targetUnits += elapsedSec * TS_FREQ;
   }
   // Aufholen sofort erledigen (Lade-Screen bleibt bis dahin), Rest im Loop.
   {
     const t0 = performance.now();
-    while (pendingSteps > 0 && performance.now() - t0 < 1500) {
-      const chunk = Math.min(pendingSteps, 300000);
-      emu.step(chunk);
-      pendingSteps -= chunk;
-    }
+    while (emu.now() < targetUnits && performance.now() - t0 < 1500) catchUp(300000);
   }
 
   bindButtons();
@@ -326,18 +341,16 @@ function bindButtons(): void {
 
 function frame(ts: number): void {
   if (!emu) return;
-  let steps: number;
   if (STATIC > 0) {
-    steps = STATIC;
+    emu.step(STATIC);
   } else {
     const dt = Math.max(0, ts - lastTs);
     lastTs = ts;
-    // Echtzeit-Fortschritt inkl. Hintergrund: aufgelaufene Schritte nachziehen.
-    pendingSteps += (dt / 1000) * STEPS_PER_SECOND * SPEED;
-    steps = Math.min(MAX_STEPS_PER_FRAME, Math.floor(pendingSteps));
-    pendingSteps -= steps;
+    targetUnits += dt * UNITS_PER_MS * SPEED;
+    const maxUnits = MAX_FRAME_CATCHUP_S * 1000 * UNITS_PER_MS;
+    if (targetUnits - emu.now() > maxUnits) targetUnits = emu.now() + maxUnits;
+    catchUp(MAX_STEPS_PER_FRAME);
   }
-  if (steps > 0) emu.step(steps);
 
   const scale = Math.max(1, Math.floor(canvas.clientWidth / LCD_WIDTH));
   if (canvas.width !== LCD_WIDTH * scale) {
@@ -370,7 +383,7 @@ function frame(ts: number): void {
   if (SPEED === 1 && STATIC === 0 && ++saveTick % 300 === 0) {
     void saveEmu(localStorage, emu.saveState()).catch(() => { /* Quota */ });
   }
-  if (!booted && pendingSteps < 1) { booted = true; loadingEl?.classList.add("hidden"); }
+  if (!booted && targetUnits - emu.now() < 1) { booted = true; loadingEl?.classList.add("hidden"); }
   if (STATIC === 0) requestAnimationFrame(frame);
 }
 
@@ -380,10 +393,8 @@ setInterval(() => {
   const now = performance.now();
   const dt = Math.min((now - lastTs) / 1000, 3600);
   lastTs = now;
-  pendingSteps += dt * STEPS_PER_SECOND;
-  const steps = Math.min(MAX_STEPS_PER_FRAME, Math.floor(pendingSteps));
-  pendingSteps -= steps;
-  if (steps > 0) emu.step(steps);
+  targetUnits += dt * TS_FREQ;
+  catchUp(MAX_STEPS_PER_FRAME);
   if (emu.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
     void notify("Your Tamagotchi needs you", "It's calling — feed it, clean up or play.");
   }
