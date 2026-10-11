@@ -231,8 +231,9 @@ function initUI(): void {
       const b = document.createElement("button");
       b.className = "langbtn";
       b.dataset.lang = l;
-      b.textContent = l.toUpperCase();
-      b.setAttribute("aria-label", "Language: " + l);
+      b.textContent = { de: "🇩🇪", en: "🇬🇧", it: "🇮🇹" }[l];
+      b.title = { de: "Deutsch", en: "English", it: "Italiano" }[l];
+      b.setAttribute("aria-label", { de: "Deutsch", en: "English", it: "Italiano" }[l]);
       b.addEventListener("click", () => {
         setLang(l as Lang);
         applyI18n();
