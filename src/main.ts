@@ -18,8 +18,11 @@ if (shell === "pink" || shell === "blue") {
   document.getElementById("device")!.className = `shell-${shell}`;
 }
 
-// Kalibriert: ~5,648 µs emulierte Zeit pro CPU-Schritt → ~177.000 Schritte/s Echtzeit.
-const STEPS_PER_SECOND = 177_000;
+// Kalibriert: ~5,648 TamaLIB-Zeitstempel-Einheiten pro CPU-Schritt.
+// Zeitstempel sind in 1/32768 s (E0C6S46 @ 32768 Hz) → Echtzeit = 32768 Einheiten/s.
+const TS_FREQ = 32768;
+const TS_PER_STEP = 5.648;
+const STEPS_PER_SECOND = Math.round(TS_FREQ / TS_PER_STEP); // ≈ 5802
 const MAX_STEPS_PER_FRAME = STEPS_PER_SECOND; // Klemme gegen Riesen-Sprünge
 
 let emu: Emulator | null = null;
@@ -43,24 +46,37 @@ async function boot(): Promise<void> {
   requestAnimationFrame(frame);
 }
 
-function press(btn: LogicalButton, down: boolean): void {
-  emu?.setButton(BUTTON_MAP[btn], down);
-}
-
 function bindButtons(): void {
   const unlock = () => piezo.unlock();
   window.addEventListener("pointerdown", unlock, { once: true });
   window.addEventListener("keydown", unlock, { once: true });
+
+  const pressed = new Set<LogicalButton>();
+  const set = (b: LogicalButton, down: boolean) => {
+    if (down) pressed.add(b); else pressed.delete(b);
+    emu?.setButton(BUTTON_MAP[b], down);
+  };
+  const releaseAll = () => { for (const b of [...pressed]) set(b, false); };
+
   (["a", "b", "c"] as const).forEach((id) => {
     const el = document.getElementById(`btn-${id}`)!;
     const b = id.toUpperCase() as LogicalButton;
-    el.addEventListener("pointerdown", () => press(b, true));
-    el.addEventListener("pointerup", () => press(b, false));
-    el.addEventListener("pointerleave", () => press(b, false));
+    el.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      set(b, true);
+    });
     el.addEventListener("contextmenu", (e) => e.preventDefault());
   });
-  window.addEventListener("keydown", (e) => { const b = handleKey(e.key); if (b) press(b, true); });
-  window.addEventListener("keyup", (e) => { const b = handleKey(e.key); if (b) press(b, false); });
+
+  // Global freigeben – greift auch, wenn der Zeiger den Button verlässt.
+  (["pointerup", "pointercancel", "mouseup", "touchend", "blur"] as const).forEach((ev) =>
+    window.addEventListener(ev, releaseAll),
+  );
+  document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
+
+  window.addEventListener("keydown", (e) => { const b = handleKey(e.key); if (b) set(b, true); });
+  window.addEventListener("keyup", (e) => { const b = handleKey(e.key); if (b) set(b, false); });
 }
 
 function frame(ts: number): void {
