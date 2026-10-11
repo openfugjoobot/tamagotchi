@@ -3,7 +3,17 @@ import { drawLcd } from "@/render/lcd";
 import { LCD_WIDTH, LCD_HEIGHT } from "@/emu/emulator";
 
 function mockCtx() {
-  return { imageSmoothingEnabled: true, fillStyle: "", fillRect: vi.fn() } as unknown as CanvasRenderingContext2D & { fillRect: ReturnType<typeof vi.fn> };
+  return {
+    imageSmoothingEnabled: true,
+    fillStyle: "",
+    strokeStyle: "",
+    lineWidth: 0,
+    fillRect: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
+  } as unknown as CanvasRenderingContext2D & { fillRect: ReturnType<typeof vi.fn> };
 }
 
 describe("drawLcd", () => {
