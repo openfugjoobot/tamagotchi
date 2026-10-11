@@ -59,6 +59,7 @@ body[data-bg="blossom"] {
 }
 /* dusk – warm sunset (mid) */
 body[data-bg="dusk"] {
+  --star: #ffe6c9;
   --grass-hue: 22; --grass-sat: 46%; --grass-light: 50%;
   background-color:#2a2140; color:#fbeede;
   --ink:#fbeede; --ink-dim:#d9c6c0; --accent-text:#ffcf7a;
@@ -73,6 +74,7 @@ body[data-bg="dusk"] {
 }
 /* night – deep blue (dark) */
 body[data-bg="night"] {
+  --star: #ffffff;
   --grass-hue: 205; --grass-sat: 30%; --grass-light: 34%;
   background-color:#0b1a2e; color:#eaf3fb;
   --ink:#eaf3fb; --ink-dim:#9db4c8; --accent-text:#ffd21e;
@@ -85,6 +87,7 @@ body[data-bg="night"] {
 }
 /* midnight – near black */
 body[data-bg="midnight"] {
+  --star: #dfe9ff;
   --grass-hue: 220; --grass-sat: 14%; --grass-light: 28%;
   background-color:#05060a; color:#e9eef5;
   --ink:#e9eef5; --ink-dim:#9aa3b2; --accent-text:#ffd21e;
@@ -440,6 +443,30 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
   .device { width: 360px; }
   .device-shadow { width: 300px; }
 }
+/* ---- Sterne (nur dusk / night / midnight) ---- */
+.stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; display: none; }
+body[data-bg="dusk"] .stars, body[data-bg="night"] .stars, body[data-bg="midnight"] .stars { display: block; }
+.star-dot {
+  position: absolute; border-radius: 50%; background: var(--star, #ffffff); opacity: 0;
+  animation: twinkle var(--dur, 12s) ease-in-out infinite; animation-delay: var(--delay, 0s);
+}
+@keyframes twinkle {
+  0%, 90%, 100% { opacity: 0; transform: scale(.6); }
+  93% { opacity: var(--max, .9); transform: scale(1); }
+  97% { opacity: .25; }
+}
+.shooter {
+  position: absolute; width: 130px; height: 2px; border-radius: 2px; opacity: 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.7) 68%, var(--star, #ffffff) 100%);
+  animation: shoot var(--dur, 18s) linear infinite; animation-delay: var(--delay, 0s);
+}
+@keyframes shoot {
+  0%, 94% { opacity: 0; transform: translate3d(0, 0, 0) rotate(24deg); }
+  95% { opacity: 1; }
+  99% { opacity: 0; transform: translate3d(34vw, 15vw, 0) rotate(24deg); }
+  100% { opacity: 0; transform: translate3d(34vw, 15vw, 0) rotate(24deg); }
+}
+
 /* ---- Kurzes Crossfade beim Theme-/Gehäuse-Wechsel ---- */
 .theme-fade { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 1; animation: theme-fade-out .38s ease forwards; }
 @keyframes theme-fade-out { from { opacity: 1; } to { opacity: 0; } }

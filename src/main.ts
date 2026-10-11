@@ -8,6 +8,7 @@ import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu } from "./storage/persist";
 import { SHELLS, applyShell, savedShell } from "./shell";
 import { buildGrass } from "./grass";
+import { buildStars } from "./stars";
 import { applyI18n, currentLang, t } from "./i18n";
 import { THEMES, BG_KEY, AUTO, savedBg, resolveTheme } from "./theme";
 import { SOUND_KEY, NOTIFY_KEY, EMU_KEY } from "./storage/keys";
@@ -295,6 +296,10 @@ function initUI(): void {
     closeMenu();
   });
   window.addEventListener("appinstalled", () => { if (installBtn) installBtn.hidden = true; });
+
+  // Sterne (nur in den dunklen Themes sichtbar; CSS schaltet sie frei)
+  const starsEl = document.getElementById("stars");
+  if (starsEl) buildStars(starsEl);
 
   // Gras am Boden
   const grassEl = document.getElementById("grass");

@@ -1,5 +1,6 @@
 import { applyI18n, iconNames, currentLang } from "./i18n";
 import { savedBg, resolveTheme } from "./theme";
+import { buildStars } from "./stars";
 
 function applySavedBg(): void {
   document.body.dataset.bg = resolveTheme(savedBg(localStorage));
@@ -29,6 +30,8 @@ function initGuide(): void {
   applyI18n();
   document.documentElement.lang = currentLang();
   renderIcons();
+  const starsEl = document.getElementById("stars");
+  if (starsEl) buildStars(starsEl);
 }
 
 initGuide();
