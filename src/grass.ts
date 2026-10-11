@@ -11,13 +11,17 @@ export function buildGrass(container: HTMLElement): void {
   svg.setAttribute("preserveAspectRatio", "none");
 
   const count = Math.round(w / 3);
+  const cs = getComputedStyle(container);
+  const baseHue = parseFloat(cs.getPropertyValue("--grass-hue")) || 150;
+  const sat = (cs.getPropertyValue("--grass-sat") || "40%").trim();
+  const baseLight = parseFloat(cs.getPropertyValue("--grass-light")) || 42;
   for (let i = 0; i < count; i++) {
     const x = Math.random() * w;
     const len = h * (0.12 + Math.pow(Math.random(), 1.6) * 0.88);
     const thick = 0.6 + Math.random() * 2.6;
     const lean = (Math.random() - 0.5) * 16;
-    const hue = 100 + Math.random() * 45;
-    const light = 30 + Math.random() * 24;
+    const hue = baseHue + (Math.random() - 0.5) * 26;
+    const light = Math.max(10, Math.min(85, baseLight + (Math.random() - 0.5) * 18));
 
     const p = document.createElementNS(NS, "path");
     p.setAttribute(

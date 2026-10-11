@@ -48,6 +48,8 @@ function applyBg(id: string): void {
   document.querySelectorAll<HTMLElement>(".bgbtn").forEach((el) => {
     el.classList.toggle("active", el.dataset.id === id);
   });
+  const g = document.getElementById("grass");
+  if (g) buildGrass(g);
 }
 
 // ---- Benachrichtigungen ----

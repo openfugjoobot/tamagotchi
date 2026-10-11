@@ -18,6 +18,9 @@
   --pad: 16px;
   --maxw: 960px;
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --grass-hue: 150;
+  --grass-sat: 38%;
+  --grass-light: 42%;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -37,6 +40,7 @@ body {
 /* ================= Themes ================= */
 /* day – default, soft & airy */
 body[data-bg="day"] {
+  --grass-hue: 150; --grass-sat: 38%; --grass-light: 42%;
   background-color:#eef4fb; background-image: linear-gradient(180deg, #f4f8ff 0%, #fdf8f0 100%);
   --blobs:
     radial-gradient(58% 46% at 16% 10%, #ffe9c9 0%, rgba(255,233,201,0) 60%),
@@ -46,6 +50,7 @@ body[data-bg="day"] {
 }
 /* blossom – soft pink (light) */
 body[data-bg="blossom"] {
+  --grass-hue: 335; --grass-sat: 46%; --grass-light: 66%;
   background-color:#fdeef2; background-image: linear-gradient(180deg, #fff2f6 0%, #f6eefb 100%);
   --blobs:
     radial-gradient(60% 46% at 18% 10%, #ffd9e6 0%, rgba(255,217,230,0) 60%),
@@ -54,6 +59,7 @@ body[data-bg="blossom"] {
 }
 /* forest – calm, muted green (light) */
 body[data-bg="forest"] {
+  --grass-hue: 115; --grass-sat: 42%; --grass-light: 38%;
   background-color:#eaf3ea; background-image: linear-gradient(180deg, #f0f7ef 0%, #e4f0e2 100%);
   --blobs:
     radial-gradient(60% 46% at 18% 8%, #d7ecd2 0%, rgba(215,236,210,0) 60%),
@@ -62,6 +68,7 @@ body[data-bg="forest"] {
 }
 /* dusk – warm sunset (mid) */
 body[data-bg="dusk"] {
+  --grass-hue: 22; --grass-sat: 46%; --grass-light: 50%;
   background-color:#2a2140; color:#fbeede;
   --ink:#fbeede; --ink-dim:#d9c6c0; --accent-text:#ffcf7a;
   --surface: rgba(38,28,58,.72); --surface-2: rgba(46,34,68,.96);
@@ -75,6 +82,7 @@ body[data-bg="dusk"] {
 }
 /* night – deep blue (dark) */
 body[data-bg="night"] {
+  --grass-hue: 205; --grass-sat: 30%; --grass-light: 34%;
   background-color:#0b1a2e; color:#eaf3fb;
   --ink:#eaf3fb; --ink-dim:#9db4c8; --accent-text:#ffd21e;
   --surface: rgba(13,28,47,.9); --surface-2: rgba(22,44,70,.96);
@@ -86,6 +94,7 @@ body[data-bg="night"] {
 }
 /* midnight – near black */
 body[data-bg="midnight"] {
+  --grass-hue: 220; --grass-sat: 14%; --grass-light: 28%;
   background-color:#05060a; color:#e9eef5;
   --ink:#e9eef5; --ink-dim:#9aa3b2; --accent-text:#ffd21e;
   --surface: rgba(16,18,26,.9); --surface-2: rgba(22,25,36,.97);
