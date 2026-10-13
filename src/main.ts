@@ -546,12 +546,12 @@ async function catchUpAll(units: number): Promise<void> {
 let cloudDirty = false;
 let cloudTimer: number | null = null;
 
-// Nach jedem lokalen Speichern den Cloud-Push entprellt nachziehen (max. alle 90 s).
+// Nach jedem lokalen Speichern den Cloud-Push entprellt nachziehen (max. alle 30 s).
 function markCloudDirty(): void {
   if (!AUTH_ENABLED) return;
   cloudDirty = true;
   if (cloudTimer !== null) return;
-  cloudTimer = window.setTimeout(() => { cloudTimer = null; void flushCloud(); }, 90_000);
+  cloudTimer = window.setTimeout(() => { cloudTimer = null; void flushCloud(); }, 30_000);
 }
 
 async function flushCloud(): Promise<void> {
