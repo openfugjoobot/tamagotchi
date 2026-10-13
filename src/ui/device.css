@@ -344,10 +344,6 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   --shell-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g fill='%23ffffff' fill-opacity='0.9'><circle cx='20' cy='20' r='3'/><circle cx='60' cy='34' r='2.5'/><circle cx='34' cy='62' r='3'/><circle cx='78' cy='70' r='2.5'/><circle cx='84' cy='18' r='2'/></g></svg>");
 }
 
-/* Shell-Swatches im Menü */
-@keyframes shell-pulse { 0% { opacity: 1; } 45% { opacity: .7; } 100% { opacity: 1; } }
-.device-wrap.shell-swap { animation: shell-pulse .26s ease; }
-
 /* ---- Shell-Karussell: horizontal scrollbar, endlos, Auswahl in der Mitte ---- */
 .shell-carousel {
   position: relative;
@@ -388,7 +384,8 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   width: 100px; height: 130px; scroll-snap-align: center;
   padding: 6px 0 4px; margin: 0; border: 1px solid transparent; border-radius: 14px;
   background: transparent; color: var(--ink); cursor: pointer;
-  opacity: .45; transition: opacity .18s ease, border-color .15s ease, background .15s ease;
+  opacity: .45; transition: opacity .12s ease;
+  contain: layout style paint;
 }
 .shell-card[aria-selected="true"] { opacity: 1; }
 .shell-card:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }

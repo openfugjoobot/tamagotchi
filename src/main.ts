@@ -245,16 +245,6 @@ function initUI(): void {
     const itemW = (): number => (cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : 106);
     const setW = (): number => N * itemW();
     const centerOf = (card: HTMLElement): number => card.offsetLeft - (carousel.clientWidth - card.offsetWidth) / 2;
-    const centeredIndex = (): number => {
-      const mid = carousel.scrollLeft + carousel.clientWidth / 2;
-      let best = 0;
-      let bestD = Number.POSITIVE_INFINITY;
-      cards.forEach((c, i) => {
-        const d = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid);
-        if (d < bestD) { bestD = d; best = i; }
-      });
-      return best;
-    };
 
     const makeCard = (shell: Shell): HTMLButtonElement => {
       const card = document.createElement("button");
@@ -297,26 +287,34 @@ function initUI(): void {
     let current = "";
     const markCards = (): void => {
       carousel.querySelectorAll<HTMLElement>(".shell-card").forEach((el) => {
-        el.setAttribute("aria-selected", String(el.dataset.shell === current));
+        // Klone niemals als ausgewaehlt markieren (sonst doppelte Auswahl).
+        const sel = !el.dataset.clone && el.dataset.shell === current;
+        el.setAttribute("aria-selected", String(sel));
       });
     };
-    // Kurzer Puls am Geraet statt bildschirmgrosser Kreuzblende – wirkt fluessiger.
-    const pulse = (): void => {
-      deviceEl2.classList.remove("shell-swap");
-      void deviceEl2.offsetWidth; // Animation neu anstossen
-      deviceEl2.classList.add("shell-swap");
-      window.setTimeout(() => deviceEl2.classList.remove("shell-swap"), 320);
-    };
-    const pickShell = (id: string, animate = true): void => {
+    // Kein Puls mehr: die Auswahl greift sofort (Deckkraft) statt einer traegen
+    // 320ms-Animation am Geraet.
+    const pickShell = (id: string): void => {
       current = id;
       applyShell(deviceEl2, id, localStorage);
       const shape = SHELLS.find((s) => s.id === id)?.star;
       if (shape) deviceEl2.querySelector("svg.star polygon")?.setAttribute("points", starPolygon(shape));
       markCards();
-      if (animate) pulse();
     };
 
-    for (let set = 0; set < 3; set++) for (const s of SHELLS) cards.push(makeCard(s));
+    // Nur EIN Satz Karten + je ein Klon links/rechts fuer den Endlos-Sprung.
+    // Drei volle Saetze (27 Karten) kosteten unnoetig Renderzeit (Ruckeln).
+    const originals = SHELLS.map((s) => makeCard(s));
+    const clone = (src: HTMLButtonElement): HTMLButtonElement => {
+      const c = src.cloneNode(true) as HTMLButtonElement;
+      c.dataset.clone = "1";
+      c.setAttribute("aria-hidden", "true");
+      c.tabIndex = -1;
+      return c;
+    };
+    const lastClone = clone(originals[originals.length - 1]);
+    const firstClone = clone(originals[0]);
+    cards.push(lastClone, ...originals, firstClone);
     const track = document.createElement("span");
     track.className = "shell-track";
     track.append(...cards);
@@ -333,23 +331,60 @@ function initUI(): void {
       if (posSet || !menuEl || menuEl.hidden) return;
       posSet = true;
       if (cards[startIndex]) carousel.scrollLeft = centerOf(cards[startIndex]);
+      measure();
     };
     if (menuEl) new MutationObserver(placeOnce).observe(menuEl, { attributes: true, attributeFilter: ["hidden"] });
     placeOnce();
-    pickShell(initial, false);
+    pickShell(initial);
 
-    let selectTimer = 0;
-    carousel.addEventListener("scroll", () => {
-      // Aus den aeusseren Saetzen unbemerkt in die Mitte springen -> endlos.
+    // Endlos: nur EIN Set + Klone. Wird der linke Klon erreicht, springen wir
+    // um eine Satzbreite nach rechts (auf das Original), und umgekehrt.
+    let scrollRaf = 0;
+    let cardGeo: { left: number; width: number }[] = [];
+
+    function measure(): void {
+      cardGeo = cards.map((c) => ({ left: c.offsetLeft, width: c.offsetWidth }));
+    }
+
+    // Welche Karte liegt in der Mitte? Frisch gemessen (einmal pro Frame ist
+    // guenstig und immer korrekt; ein Cache veraltete und verschob die Auswahl).
+    const centeredIndex = (): number => {
+      measure();
+      const mid = carousel.scrollLeft + carousel.clientWidth / 2;
+      let best = 0;
+      let bestD = Number.POSITIVE_INFINITY;
+      for (let i = 0; i < cardGeo.length; i++) {
+        const d = Math.abs(cardGeo[i].left + cardGeo[i].width / 2 - mid);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      return best;
+    };
+
+    // Auswahl sofort aus der aktuellen Position ableiten (kein Debounce mehr).
+    // Wichtig: die *Karte* liefert die Shell-Id (das Karten-Array ist durch die
+    // Klone verschoben, SHELLS[index] passt daher nicht).
+    const updateSelection = (): void => {
+      const card = cards[centeredIndex()];
+      if (card && card.dataset.shell && card.dataset.shell !== current) pickShell(card.dataset.shell);
+      else markCards();
+    };
+
+    const applyScroll = (): void => {
+      scrollRaf = 0;
       const w = setW();
+      // Erst die Auswahl aus der *aktuellen* Position bestimmen, dann bei Bedarf
+      // unbemerkt um eine Satzbreite springen (Endlos). So geht die Auswahl nie
+      // durch den Sprung verloren.
+      updateSelection();
       if (carousel.scrollLeft < w * 0.5) carousel.scrollLeft += w;
       else if (carousel.scrollLeft > w * 1.5) carousel.scrollLeft -= w;
-      window.clearTimeout(selectTimer);
-      selectTimer = window.setTimeout(() => {
-        const shell = SHELLS[centeredIndex() % N];
-        if (shell.id !== current) pickShell(shell.id, true); else markCards();
-      }, 140);
-    });
+    };
+
+    carousel.addEventListener("scroll", () => {
+      if (scrollRaf) return;
+      scrollRaf = requestAnimationFrame(applyScroll);
+    }, { passive: true });
+    window.addEventListener("resize", measure);
     for (const card of cards) {
       card.addEventListener("click", () => {
         carousel.scrollTo({ left: centerOf(card), behavior: "smooth" });
