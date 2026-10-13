@@ -40,3 +40,23 @@ describe("piezo", () => {
     expect(values[values.length - 1]).toBe(0.0001);
   });
 });
+
+describe("piezo: Diagnose + Suspended-Netz", () => {
+  it("state() meldet den echten Zustand", () => {
+    const ctx = fakeCtx();
+    const p = createPiezo(() => ctx);
+    expect(p.state().created).toBe(false);
+    p.unlock();
+    expect(p.state().created).toBe(true);
+    expect(p.state().ctxState).toBe("running");
+  });
+  it("update weckt einen suspended Kontext (Hintergrund-Tab)", () => {
+    const ctx = fakeCtx();
+    (ctx as any).state = "suspended";
+    const p = createPiezo(() => ctx);
+    p.unlock();
+    (ctx as any).state = "suspended"; // z. B. Tab war lange im Hintergrund
+    p.update(440, true);
+    expect((ctx as any).resume).toHaveBeenCalled();
+  });
+});

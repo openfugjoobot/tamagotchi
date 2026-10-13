@@ -877,10 +877,16 @@ async function boot(): Promise<void> {
   emu = await createEmulator({ wasm, rom: new Uint8Array(romBuf) });
   iconImgs = await loadIcons();
   if (params.has("debug")) {
-    const w = window as unknown as { __emu: Emulator; __notify: (t: string, b: string) => Promise<void>; __sync: () => Promise<void> };
+    const w = window as unknown as {
+      __emu: Emulator;
+      __notify: (t: string, b: string) => Promise<void>;
+      __sync: () => Promise<void>;
+      __audio: () => ReturnType<typeof piezo.state>;
+    };
     w.__emu = emu;
     w.__notify = notify;
     w.__sync = syncAfterSignIn;
+    w.__audio = () => piezo.state();
   }
 
   if (AUTH_ENABLED) await syncBeforeBoot();

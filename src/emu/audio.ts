@@ -3,6 +3,8 @@ export interface Piezo {
   update(freq: number, on: boolean): void;
   setMuted(muted: boolean): void;
   unlock(): void;
+  /** Diagnose: aktueller Audio-Zustand (fuer Debug/Console). */
+  state(): { created: boolean; unlocked: boolean; muted: boolean; ctxState: string; freq: number };
 }
 
 export function createPiezo(createCtx: () => AudioContext): Piezo {
@@ -37,6 +39,9 @@ export function createPiezo(createCtx: () => AudioContext): Piezo {
       } catch { /* Audio nicht verfügbar */ }
     },
     update(freq, on) {
+      // Sicherheitsnetz: Falls der Kontext doch suspended ist (z. B. Tab war lange
+      // im Hintergrund), beim naechsten Ton versuchen zu wecken.
+      if (ctx && ctx.state === "suspended") void ctx.resume();
       const audible = on && !muted && freq > 0 && unlocked;
       if (!audible) {
         if (gain && ctx) gain.gain.setValueAtTime(0.0001, ctx.currentTime);
@@ -52,5 +57,7 @@ export function createPiezo(createCtx: () => AudioContext): Piezo {
       } catch { /* Audio nicht verfügbar */ }
     },
     setMuted(m) { muted = m; },
+    /** Nur fuer Diagnose/Debug: aktueller Zustand. */
+    state() { return { created: !!ctx, unlocked, muted, ctxState: ctx?.state ?? "none", freq: currentFreq }; },
   };
 }
