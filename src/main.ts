@@ -767,13 +767,20 @@ function initAccount(): void {
   function render(): void {
     const s = currentSession();
     bodyEl.replaceChildren();
+    // Datenschutz-Hinweis immer am Ende des Konto-Fensters (frueher in guide.html).
+    const privacy = (): HTMLElement => {
+      const p = document.createElement("p");
+      p.className = "account-line account-privacy";
+      p.textContent = t("privacyBody");
+      return p;
+    };
     if (!s) {
       const hint = document.createElement("p");
       hint.className = "account-line";
       hint.textContent = t("accountHint");
       const slot = document.createElement("div");
       slot.className = "gsi-slot";
-      bodyEl.append(hint, slot);
+      bodyEl.append(hint, slot, privacy());
     } else {
       const idRow = document.createElement("div");
       idRow.className = "account-id";
@@ -804,7 +811,7 @@ function initAccount(): void {
         close();
         if (accountModal) accountModal.hidden = false;
       });
-      bodyEl.append(idRow, sync, out, delAcc);
+      bodyEl.append(idRow, sync, out, delAcc, privacy());
     }
     renderFace();
     ensureButton();

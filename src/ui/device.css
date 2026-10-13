@@ -565,6 +565,7 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 .account-mail { color: var(--ink); opacity: .7; font-weight: 500; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-name { color: var(--ink); opacity: 1; font-weight: 700; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gsi-slot { min-height: 44px; display: flex; align-items: center; justify-content: center; width: 100%; }
+.account-privacy { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11.5px; opacity: .62; }
 .gsi-slot iframe { max-width: 100%; }
 
 /* ---- Kurzes Crossfade beim Theme-/Gehäuse-Wechsel ---- */
