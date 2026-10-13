@@ -243,7 +243,6 @@ function initUI(): void {
     const N = SHELLS.length;
     const cards: HTMLButtonElement[] = [];
     const itemW = (): number => (cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : 106);
-    const setW = (): number => N * itemW();
     const centerOf = (card: HTMLElement): number => card.offsetLeft - (carousel.clientWidth - card.offsetWidth) / 2;
 
     const makeCard = (shell: Shell): HTMLButtonElement => {
@@ -360,24 +359,26 @@ function initUI(): void {
       return best;
     };
 
-    // Auswahl sofort aus der aktuellen Position ableiten (kein Debounce mehr).
-    // Wichtig: die *Karte* liefert die Shell-Id (das Karten-Array ist durch die
-    // Klone verschoben, SHELLS[index] passt daher nicht).
-    const updateSelection = (): void => {
-      const card = cards[centeredIndex()];
-      if (card && card.dataset.shell && card.dataset.shell !== current) pickShell(card.dataset.shell);
-      else markCards();
-    };
-
+    // Endlos: Wir springen nur, wenn die zentrierte Karte ein KLON ist - dann
+    // um genau eine Satzbreite (itemW * N) auf das entsprechende Original. Eine
+    // Schwelle auf scrollLeft (w*0.5) war falsch: der nutzbare Scrollweg ist
+    // kleiner als eine Satzbreite, daher wurden die ersten Shells unerreichbar.
     const applyScroll = (): void => {
       scrollRaf = 0;
-      const w = setW();
-      // Erst die Auswahl aus der *aktuellen* Position bestimmen, dann bei Bedarf
-      // unbemerkt um eine Satzbreite springen (Endlos). So geht die Auswahl nie
-      // durch den Sprung verloren.
-      updateSelection();
-      if (carousel.scrollLeft < w * 0.5) carousel.scrollLeft += w;
-      else if (carousel.scrollLeft > w * 1.5) carousel.scrollLeft -= w;
+      let i = centeredIndex();
+      const card = cards[i];
+      if (card && card.dataset.clone) {
+        const step = itemW() * N;
+        // i ist der Index im Kartenarray: 0 = Klon des letzten (rechts springen),
+        // cards.length-1 = Klon des ersten (links springen).
+        const dir = i === 0 ? 1 : -1;
+        carousel.scrollLeft += dir * step;
+        measure();
+        i = centeredIndex();
+      }
+      const sel = cards[i];
+      if (sel && sel.dataset.shell && sel.dataset.shell !== current) pickShell(sel.dataset.shell);
+      else markCards();
     };
 
     carousel.addEventListener("scroll", () => {

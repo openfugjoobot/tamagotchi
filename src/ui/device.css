@@ -373,7 +373,7 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 /* ---- Shell-Karussell: horizontal scrollbar, endlos, Auswahl in der Mitte ---- */
 .shell-carousel {
   position: relative;
-  height: 136px; overflow-x: auto; overflow-y: hidden;
+  height: 146px; overflow-x: auto; overflow-y: hidden;
   scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
   scrollbar-width: none; display: block; padding: 0;
   cursor: grab;
@@ -407,7 +407,7 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 .shell-carousel::-webkit-scrollbar { display: none; }
 .shell-card {
   flex: none; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px;
-  width: 100px; height: 130px; scroll-snap-align: center;
+  width: 100px; height: 140px; scroll-snap-align: center;
   padding: 6px 0 4px; margin: 0; border: 1px solid transparent; border-radius: 14px;
   background: transparent; color: var(--ink); cursor: pointer;
   opacity: .45; transition: opacity .12s ease;
