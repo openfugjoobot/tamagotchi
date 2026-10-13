@@ -916,9 +916,12 @@ async function boot(): Promise<void> {
 }
 
 function bindButtons(): void {
-  const unlock = () => piezo.unlock();
-  window.addEventListener("pointerdown", unlock, { once: true });
-  window.addEventListener("keydown", unlock, { once: true });
+  // AudioContext erst nach einer echten Nutzer-Geste erzeugen/resumen (Autoplay-Policy).
+  // Beide Listener bleiben aktiv: schlaegt die Erzeugung einmal fehl, greift die
+  // naechste Geste. Kein "once", sonst waere der Ton danach endgueltig tot.
+  const unlock = (): void => piezo.unlock();
+  window.addEventListener("pointerdown", unlock);
+  window.addEventListener("keydown", unlock);
 
   const pressed = new Set<LogicalButton>();
   const set = (b: LogicalButton, down: boolean) => {

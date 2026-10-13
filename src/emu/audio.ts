@@ -26,7 +26,16 @@ export function createPiezo(createCtx: () => AudioContext): Piezo {
   };
 
   return {
-    unlock() { unlocked = true; try { if (ctx && ctx.state === "suspended") void ctx.resume(); } catch { /* ignore */ } },
+    unlock() {
+      // AudioContext muss IN der Nutzer-Geste erzeugt/resumed werden. Wird er
+      // erst spaeter beim ersten Ton (ausserhalb der Geste) angelegt, bleibt er
+      // "suspended" und es kommt nie ein Ton heraus.
+      unlocked = true;
+      try {
+        ensure();
+        if (ctx && ctx.state === "suspended") void ctx.resume();
+      } catch { /* Audio nicht verfügbar */ }
+    },
     update(freq, on) {
       const audible = on && !muted && freq > 0 && unlocked;
       if (!audible) {
