@@ -399,7 +399,7 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 .shell-card .device { width: 84px; margin: 0; flex: none; }
 .shell-card .mini-screen-wrap { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); width: 62%; aspect-ratio: 2 / 1; z-index: 2; }
 .shell-card .mini-star { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 132%; aspect-ratio: 1; }
-.shell-card .mini-screen { position: absolute; inset: 0; background: var(--lcd-bg); border: 1.5px solid #b9900f; border-radius: 2px; box-shadow: inset 0 0 0 1px #f2dd7e; }
+.shell-card .mini-screen { position: absolute; inset: 0; background: var(--lcd-bg); border-radius: 2px; }
 .shell-card .shell-name { font-size: 11px; font-weight: 700; color: var(--ink-dim); text-align: center; }
 .shell-card[aria-selected="true"] .shell-name { color: var(--ink); }
 .shell-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
