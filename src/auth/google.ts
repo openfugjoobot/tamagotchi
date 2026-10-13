@@ -19,6 +19,8 @@ interface GsiId {
     callback: (r: { credential?: string }) => void;
     use_fedcm_for_button?: boolean;
     auto_select?: boolean;
+    /** Wird auch ohne sichtbaren Button aufgerufen, wenn GIS still erneuert. */
+    moment_callback?: (m: { getCredentialResponse?: () => { credential?: string } }) => void;
   }): void;
   renderButton(el: HTMLElement, opts: Record<string, string | number>): void;
   disableAutoSelect?(): void;
@@ -37,6 +39,18 @@ const SKEW_MS = 60_000; // 1 min Puffer
 
 let session: Session | null = null;
 let loader: Promise<GsiId> | null = null;
+/** Laeuft der GIS-Init schon? initialize genau EINMAL mit gemeinsamem Callback. */
+let gsiInit: Promise<GsiId | null> | null = null;
+/** Zu rufen bei einem *neuen* Login (frische Anmeldung ueber den Button). */
+const loginListeners = new Set<(s: Session) => void>();
+/** Zu rufen bei einem stillen Token-Refresh (Silent-Refresh). */
+const refreshListeners = new Set<(s: Session) => void>();
+
+/** Bei einem still erneuerten Token benachrichtigen (z. B. fuer die UI). */
+export function onSessionRefresh(cb: (s: Session) => void): () => void {
+  refreshListeners.add(cb);
+  return () => refreshListeners.delete(cb);
+}
 
 function decodePayload(token: string): { exp?: number; email?: string; name?: string; picture?: string } {
   try {
@@ -126,30 +140,60 @@ export function signOut(): void {
 }
 
 /**
+ * Initialisiert GIS einmalig inkl. Silent-Refresh.
+ *
+ * auto_select: Google erneuert das ID-Token im Hintergrund, solange die
+ * Google-Session im Browser noch gilt - der Nutzer bleibt also angemeldet,
+ * ohne sich nach Ablauf des Tokens (~1 h) neu anmelden zu muessen. Der
+ * gemeinsame Callback liefert frische Tokens (auch ohne sichtbaren Button).
+ *
+ * Grenze: Das klappt nur, wenn der Browser Cookies fuer accounts.google.com
+ * zulaesst (3rd-Party-Cookie-Blockade kann es verhindern). Dann greift der
+ * normale Anmelde-Button.
+ */
+export async function initGsi(onSession: (s: Session) => void): Promise<GsiId | null> {
+  // Registrierung sofort (falls der Init bereits laeuft und das Token schon da ist).
+  loginListeners.add(onSession);
+  if (gsiInit) return gsiInit;
+  gsiInit = (async () => {
+    try {
+      const id = await loadScript();
+      id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        use_fedcm_for_button: false,
+        auto_select: true,
+        callback: (res) => {
+          if (!res.credential) return;
+          const s = toSession(res.credential);
+          if (!s) return;
+          const isRefresh = !!session;
+          setSession(s);
+          // Stiller Refresh -> nur benachrichtigen. Echter Login -> Aufrufer
+          // (z. B. UI neu zeichnen + synchronisieren).
+          if (isRefresh) for (const cb of refreshListeners) cb(s);
+          else for (const cb of loginListeners) cb(s);
+        },
+      });
+      return id;
+    } catch {
+      gsiInit = null; // beim naechsten Versuch erneut probieren
+      return null;
+    }
+  })();
+  return gsiInit;
+}
+
+/**
  * Rendert Googles eigenen Button in `el`. Der Callback liefert das ID-Token.
  * Gibt zurück, ob das Rendern geklappt hat.
  */
 export async function renderSignInButton(el: HTMLElement, onSession: (s: Session) => void): Promise<boolean> {
   try {
-    const id = await loadScript();
-    id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      // Kein FedCM: dann oeffnet Google den klassischen Dialog im eigenen Fenster
-      // statt des weissen "Als … fortfahren"-Waehlers mitten in unserer Seite.
-      use_fedcm_for_button: false,
-      auto_select: false,
-      callback: (res) => {
-        if (!res.credential) return;
-        const s = toSession(res.credential);
-        if (s) {
-          setSession(s);
-          onSession(s);
-        }
-      },
-    });
+    const id = await initGsi(onSession);
+    if (!id) return false;
     id.renderButton(el, {
-      // Googles Standard-Optik (hell, farbiges G) – ausdruecklicher Wunsch.
-      theme: "outline",
+      // Blauer Google-Button – ausdruecklicher Wunsch, passt zum Konto-Fenster.
+      theme: "filled_blue",
       size: "large",
       shape: "rectangular",
       text: "signin_with",

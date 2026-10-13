@@ -7,7 +7,7 @@ import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu, readSaveRecord } from "./storage/persist";
 import { AUTH_ENABLED } from "./auth/config";
-import { currentSession, restoreSession, renderSignInButton, signOut, type Session } from "./auth/google";
+import { currentSession, restoreSession, renderSignInButton, signOut, initGsi, onSessionRefresh, type Session } from "./auth/google";
 import { deleteRemote, readSave, planSync, pushSave, type CloudSave, type SyncAction } from "./sync/cloud";
 import { SHELLS, applyShell, savedShell, starPolygon, type Shell } from "./shell";
 import { buildGrass } from "./grass";
@@ -936,6 +936,17 @@ function initAccount(): void {
   restoreSession();
   renderFace();
   render();
+
+  // Silent-Refresh: GIS im Hintergrund initialisieren, damit ein abgelaufenes
+  // ID-Token ohne manuellen Login erneuert wird. Der Callback laeuft auch ohne
+  // sichtbaren Button. Bei einem stillen Refresh nur die UI aktualisieren.
+  void initGsi(() => {}).then((id) => {
+    if (!id) return;
+    onSessionRefresh(() => {
+      render();
+      void syncAfterSignIn();
+    });
+  });
 }
 
 function saveNow(): void {

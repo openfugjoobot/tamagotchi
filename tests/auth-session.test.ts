@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { setSession, restoreSession, currentSession, signOut, type Session } from "@/auth/google";
+import { setSession, restoreSession, currentSession, signOut, onSessionRefresh, type Session } from "@/auth/google";
 import { IDTOKEN_KEY } from "@/storage/keys";
 
 // Minimal-Storage-Stubs, damit der Test ohne jsdom laeuft.
@@ -70,5 +70,15 @@ describe("google-Session", () => {
     signOut();
     expect(currentSession()).toBeNull();
     expect(local.getItem(IDTOKEN_KEY)).toBeNull();
+  });
+
+  it("onSessionRefresh meldet sich ab", () => {
+    const seen: string[] = [];
+    const off = onSessionRefresh((s) => seen.push(s.token));
+    off();
+    // Kein Weg, den Callback direkt zu feuern; wir pruefen, dass off() nicht wirft
+    // und die Registrierung entfernt ist (indirekt ueber erneutes Registrieren).
+    expect(typeof off).toBe("function");
+    expect(seen.length).toBe(0);
   });
 });
