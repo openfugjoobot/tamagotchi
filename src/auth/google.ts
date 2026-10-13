@@ -2,6 +2,7 @@
 // Ohne GOOGLE_CLIENT_ID passiert hier nichts (siehe config.ts).
 import { GOOGLE_CLIENT_ID } from "./config";
 import { currentLang } from "../i18n";
+import { IDTOKEN_KEY } from "../storage/keys";
 
 export interface Session {
   token: string;
@@ -30,7 +31,8 @@ declare global {
 }
 
 const SCRIPT_SRC = "https://accounts.google.com/gsi/client";
-const STORE_KEY = "tamagotchi.idtoken";
+/** Alter Schluessel aus der Zeit, als die Session in sessionStorage lag. */
+const LEGACY_KEY = "tamagotchi.idtoken";
 const SKEW_MS = 60_000; // 1 min Puffer
 
 let session: Session | null = null;
@@ -71,15 +73,30 @@ function loadScript(): Promise<GsiId> {
   return loader;
 }
 
-/** Session aus sessionStorage wiederherstellen (nur wenn noch gültig). */
+/**
+ * Session wiederherstellen (nur wenn noch gueltig).
+ *
+ * Liegt in localStorage, damit die Anmeldung das Schliessen des Tabs ueberlebt.
+ * (sessionStorage starb mit dem Tab - man musste sich jedes Mal neu anmelden.)
+ * Die Gueltigkeit kommt aus der exp-Claim des ID-Tokens.
+ */
 export function restoreSession(): Session | null {
   if (session) return session;
   try {
-    const raw = sessionStorage.getItem(STORE_KEY);
+    let raw = localStorage.getItem(IDTOKEN_KEY);
+    if (!raw) {
+      // Einmalige Migration: alten Eintrag aus sessionStorage uebernehmen.
+      const legacy = sessionStorage.getItem(LEGACY_KEY);
+      if (legacy) {
+        localStorage.setItem(IDTOKEN_KEY, legacy);
+        sessionStorage.removeItem(LEGACY_KEY);
+        raw = legacy;
+      }
+    }
     if (!raw) return null;
     const s = JSON.parse(raw) as Session;
     if (!s.token || s.exp - SKEW_MS <= Date.now()) {
-      sessionStorage.removeItem(STORE_KEY);
+      localStorage.removeItem(IDTOKEN_KEY);
       return null;
     }
     session = s;
@@ -96,8 +113,8 @@ export function currentSession(): Session | null {
 export function setSession(s: Session | null): void {
   session = s;
   try {
-    if (s) sessionStorage.setItem(STORE_KEY, JSON.stringify(s));
-    else sessionStorage.removeItem(STORE_KEY);
+    if (s) localStorage.setItem(IDTOKEN_KEY, JSON.stringify(s));
+    else localStorage.removeItem(IDTOKEN_KEY);
   } catch {
     /* ignorieren */
   }

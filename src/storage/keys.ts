@@ -4,3 +4,6 @@ export const SOUND_KEY = "tamagotchi.sound";
 export const SHELL_KEY = "tamagotchi.shell";
 export const BG_KEY = "tamagotchi.bg";
 export const NOTIFY_KEY = "tamagotchi.notify";
+/** Google-ID-Token. localStorage, damit die Anmeldung das Schliessen des Tabs
+ *  ueberlebt; die Gueltigkeit wird ueber die exp-Claim geprueft. */
+export const IDTOKEN_KEY = "tamagotchi.idtoken.v1";

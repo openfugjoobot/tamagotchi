@@ -661,10 +661,12 @@ function askWhichSave(localAt: number, cloudAt: string): Promise<"push" | "pull"
 /**
  * Nach dem Login den geladenen Cloud-Stand in den laufenden Emulator bringen.
  *
- * Frueher rief der Login-Pfad location.reload() auf. Das war doppelt schlecht:
- * die Session liegt in sessionStorage und stirbt mit dem Tab - nach dem
- * Reload war sie weg, syncBeforeBoot stieg wieder aus, und der Abgleich machte
- * sich selbst zunichte. Stattdessen wird hier der Emulator neu gestartet.
+ * Frueher rief der Login-Pfad location.reload() auf. Das war schlecht: die
+ * Session lag damals in sessionStorage und starb mit dem Tab - nach dem Reload
+ * war sie weg, syncBeforeBoot stieg wieder aus, und der Abgleich machte sich
+ * selbst zunichte. (Die Session liegt inzwischen in localStorage und ueberlebt
+ * ein Reload; der Emulator wird trotzdem neu gestartet statt die Seite zu laden -
+ * schneller und ohne den uebrigen Zustand zu verwerfen.)
  */
 async function reloadAfterCloud(): Promise<void> {
   if (!emu) { location.reload(); return; }
