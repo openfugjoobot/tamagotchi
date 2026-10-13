@@ -27,6 +27,14 @@ describe("sync: Entscheidung beim Start (planSync)", () => {
     expect(planSync({ kind: "error", reason: "offline" }, 1000)).toBe("none");
     expect(planSync({ kind: "error", reason: "timeout" }, null)).toBe("none");
   });
+  it("forceAsk (Login-Pfad): Cloud da -> immer fragen, auch wenn lokal neuer", () => {
+    expect(planSync(found("2026-01-01T09:00:00Z"), Date.parse("2026-01-01T10:00:00Z"), { forceAsk: true })).toBe("ask");
+    expect(planSync(found("2026-01-01T10:00:00Z"), Date.parse("2026-01-01T10:00:00Z"), { forceAsk: true })).toBe("ask");
+    expect(planSync(found("2026-01-01T10:00:00Z"), Date.parse("2026-01-01T09:00:00Z"), { forceAsk: true })).toBe("ask");
+  });
+  it("forceAsk lädt trotzdem still, wenn kein lokaler Stand da ist", () => {
+    expect(planSync(found("2026-01-01T10:00:00Z"), null, { forceAsk: true })).toBe("pull");
+  });
 });
 
 interface Seen {

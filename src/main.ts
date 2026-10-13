@@ -638,9 +638,10 @@ async function syncAfterSignIn(): Promise<void> {
   // gescheiterter Abruf fuehrt zu "none" - es wird NICHT mehr still
   // hochgeladen, nur weil man nicht nachsehen konnte.
   const cloud = await readSave(s.token);
-  let action: SyncAction = planSync(cloud, local?.t ?? null);
-  // Beide Staende vorhanden -> immer fragen. Ein frisches Ei (neuer Browser)
-  // darf den echten Cloud-Stand nicht still ueberschreiben.
+  // Beim Anmelden: sobald ein Cloud-Stand da ist, die Wahl anbieten - auch wenn
+  // die lokale Session (frisch gestartet) zeitlich "neuer" ist. Ihr Stand ist
+  // wertlos, darf die Cloud also nicht still ueberschreiben.
+  let action: SyncAction = planSync(cloud, local?.t ?? null, { forceAsk: true });
   if (action === "ask") action = await askWhichSave(local?.t ?? 0, cloud.kind === "found" ? cloud.save.updatedAt : "");
   if (action === "pull" && cloud.kind === "found") {
     applyCloudSave(cloud.save, false);

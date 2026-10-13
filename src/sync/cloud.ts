@@ -74,20 +74,21 @@ export async function readSave(token: string, deps: CloudDeps = {}): Promise<Rea
  *   found + Cloud neuer        -> "ask" (anderes Geraet hat echten Fortschritt)
  *   found + lokal gleich/neuer -> push  (Normalfall: lokal weiter, still hochladen)
  *
- * Warum nicht bei JEDEM beidseitigen Stand fragen: der Normalfall (hier wurde gerade
- * gespielt, Cloud ist aelter oder gleich alt) wuerde sonst bei jedem Start nerven.
- * Ein frisches Ei hat zwar t=jetzt, aber die Cloud ist dann aelter - kein Prompt.
- * Der stille Cloud-Override, der den echten Stand zerstoerte, entsteht nur, wenn die
- * Cloud NEUER ist als lokal - und genau dann wird gefragt.
+ * Der Login-Pfad will staerker fragen: sobald beim Anmelden ueberhaupt ein Cloud-Stand
+ * existiert, soll die Wahl angeboten werden - auch wenn lokal neuer ist. Denn eine
+ * frisch gestartete Session hat lokal "jetzt", aber ihr Stand ist wertlos; er darf die
+ * Cloud nicht still ueberschreiben. Dafuer gibt es `forceAsk`.
  */
 export type SyncAction = "push" | "pull" | "none" | "ask";
 
-export function planSync(cloud: ReadResult, localAt: number | null): SyncAction {
+export function planSync(cloud: ReadResult, localAt: number | null, opts: { forceAsk?: boolean } = {}): SyncAction {
   const hasLocal = typeof localAt === "number" && Number.isFinite(localAt);
   if (cloud.kind === "error") return "none";
   if (cloud.kind === "absent") return hasLocal ? "push" : "none";
   // Cloud hat einen Stand.
   if (!hasLocal) return "pull";
+  // Beim Anmelden: Cloud-Stand da + lokaler Stand da -> immer fragen.
+  if (opts.forceAsk) return "ask";
   const cloudAt = Date.parse(cloud.save.updatedAt);
   if (!Number.isFinite(cloudAt)) return "push"; // kaputter Cloud-Zeitstempel: lokal gewinnt
   return cloudAt > localAt! ? "ask" : "push";
