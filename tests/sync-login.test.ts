@@ -77,20 +77,20 @@ describe("planSync: der stille Upload darf nicht passieren", () => {
     expect(planSync({ kind: "absent" }, null)).toBe("none");
   });
 
-  it("Cloud neuer -> nachfragen (kein stiller Upload, kein stiller Pull)", () => {
+  it("Cloud neuer -> nachfragen (echter Fortschritt auf anderem Geraet)", () => {
     expect(planSync({ kind: "found", save: { snapshot: "S", updatedAt: "2026-01-01T10:00:00.000Z" } }, Date.parse("2026-01-01T09:00:00.000Z"))).toBe("ask");
   });
 
-  it("lokal neuer -> nachfragen (frisches Ei darf die Cloud nicht still ueberschreiben)", () => {
-    expect(planSync({ kind: "found", save: { snapshot: "S", updatedAt: "2026-01-01T09:00:00.000Z" } }, Date.parse("2026-01-01T10:00:00.000Z"))).toBe("ask");
+  it("lokal neuer -> still hochladen, kein Prompt", () => {
+    expect(planSync({ kind: "found", save: { snapshot: "S", updatedAt: "2026-01-01T09:00:00.000Z" } }, Date.parse("2026-01-01T10:00:00.000Z"))).toBe("push");
   });
 
   it("nur in der Cloud (frischer Browser) -> laden, NIE hochladen", () => {
     expect(planSync({ kind: "found", save: { snapshot: "S", updatedAt: "2026-01-01T10:00:00.000Z" } }, null)).toBe("pull");
   });
 
-  it("beide vorhanden, egal wie alt -> immer nachfragen", () => {
+  it("beide vorhanden, gleich alt -> still hochladen, kein Prompt", () => {
     const t = "2026-01-01T10:00:00.000Z";
-    expect(planSync({ kind: "found", save: { snapshot: "S", updatedAt: t } }, Date.parse(t))).toBe("ask");
+    expect(planSync({ kind: "found", save: { snapshot: "S", updatedAt: t } }, Date.parse(t))).toBe("push");
   });
 });

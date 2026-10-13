@@ -13,11 +13,15 @@ describe("sync: Entscheidung beim Start (planSync)", () => {
   it("nur in der Cloud → laden", () => {
     expect(planSync(found("2026-01-01T10:00:00Z"), null)).toBe("pull");
   });
-  it("beide da (Cloud neuer) → nachfragen, nicht still überschreiben", () => {
+  it("beide da (Cloud neuer) → nachfragen, echter Fortschritt auf anderem Gerät", () => {
     expect(planSync(found("2026-01-01T10:00:00Z"), Date.parse("2026-01-01T09:00:00Z"))).toBe("ask");
   });
-  it("beide da (lokal neuer, z. B. frisches Ei) → nachfragen", () => {
-    expect(planSync(found("2026-01-01T09:00:00Z"), Date.parse("2026-01-01T10:00:00Z"))).toBe("ask");
+  it("beide da (lokal neuer) → still hochladen, kein Prompt", () => {
+    expect(planSync(found("2026-01-01T09:00:00Z"), Date.parse("2026-01-01T10:00:00Z"))).toBe("push");
+  });
+  it("beide da (gleich alt) → still hochladen, kein Prompt", () => {
+    const t = "2026-01-01T10:00:00Z";
+    expect(planSync(found(t), Date.parse(t))).toBe("push");
   });
   it("Abruf gescheitert → nichts tun", () => {
     expect(planSync({ kind: "error", reason: "offline" }, 1000)).toBe("none");
@@ -45,14 +49,14 @@ function stubFetch(reply: () => Response, seen: Seen): typeof fetch {
 
 const emptySeen = (): Seen => ({ url: "", method: "", auth: "", body: "" });
 
-describe("sync: Nachfrage wenn BEIDE Seiten einen Stand haben", () => {
-  it("nur wenn lokal UND Cloud vorhanden sind", () => {
+describe("sync: Nachfrage nur wenn die Cloud neuer ist", () => {
+  it("nur bei echtem Cloud-Fortschritt", () => {
     const t = Date.parse("2026-01-01T10:00:00Z");
     expect(needsPrompt(t, null)).toBe(false);
     expect(needsPrompt(null, "2026-01-01T10:00:00Z")).toBe(false);
-    expect(needsPrompt(t, "2026-01-01T10:00:00Z")).toBe(true);
+    expect(needsPrompt(t, "2026-01-01T10:00:00Z")).toBe(false);
     expect(needsPrompt(t, "2026-01-01T11:00:00Z")).toBe(true);
-    expect(needsPrompt(t, "2025-12-31T23:00:00Z")).toBe(true);
+    expect(needsPrompt(t, "2025-12-31T23:00:00Z")).toBe(false);
     expect(needsPrompt(t, "keinDatum")).toBe(false);
   });
 });

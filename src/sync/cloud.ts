@@ -71,12 +71,14 @@ export async function readSave(token: string, deps: CloudDeps = {}): Promise<Rea
  *   error  -> none  (nie still hochladen, wenn man nicht nachsehen konnte)
  *   absent -> push, wenn lokal vorhanden, sonst none
  *   found + kein lokaler Stand -> pull  (frischer Browser: Cloud laden, NIE ueberschreiben)
- *   found + lokaler Stand      -> "ask" (beide da: immer nachfragen, nichts still ueberschreiben)
+ *   found + Cloud neuer        -> "ask" (anderes Geraet hat echten Fortschritt)
+ *   found + lokal gleich/neuer -> push  (Normalfall: lokal weiter, still hochladen)
  *
- * Warum kein Zeitstempel-Vergleich mehr: ein frisch geschluepftes Ei in einem neuen
- * Browser hat den Zeitstempel "jetzt" und galt damit als neuester Stand - der
- * Login-Pfad lud ihn still hoch und ueberschrieb den echten Cloud-Fortschritt.
- * Zeitstempel koennen "frisches Ei" nicht von "echtem Fortschritt" trennen.
+ * Warum nicht bei JEDEM beidseitigen Stand fragen: der Normalfall (hier wurde gerade
+ * gespielt, Cloud ist aelter oder gleich alt) wuerde sonst bei jedem Start nerven.
+ * Ein frisches Ei hat zwar t=jetzt, aber die Cloud ist dann aelter - kein Prompt.
+ * Der stille Cloud-Override, der den echten Stand zerstoerte, entsteht nur, wenn die
+ * Cloud NEUER ist als lokal - und genau dann wird gefragt.
  */
 export type SyncAction = "push" | "pull" | "none" | "ask";
 
@@ -86,7 +88,9 @@ export function planSync(cloud: ReadResult, localAt: number | null): SyncAction 
   if (cloud.kind === "absent") return hasLocal ? "push" : "none";
   // Cloud hat einen Stand.
   if (!hasLocal) return "pull";
-  return "ask";
+  const cloudAt = Date.parse(cloud.save.updatedAt);
+  if (!Number.isFinite(cloudAt)) return "push"; // kaputter Cloud-Zeitstempel: lokal gewinnt
+  return cloudAt > localAt! ? "ask" : "push";
 }
 
 /** Cloud-Stand hochladen. true = angenommen (oder serverseitig als älter verworfen). */
@@ -112,12 +116,13 @@ export async function deleteRemote(token: string, deps: CloudDeps = {}): Promise
 }
 
 /**
- * Soll der Nutzer gefragt werden? Immer, wenn lokal UND Cloud einen Stand haben -
- * egal wer "neuer" ist. Nur so kann ein frisches Ei den echten Cloud-Stand nicht
- * still ueberschreiben (und umgekehrt).
+ * Soll gefragt werden? Nur wenn die Cloud neuer ist als der lokale Stand - dann
+ * koennte ein anderes Geraet echten Fortschritt haben. Ist lokal gleich alt oder
+ * neuer (Normalfall), wird still der lokale Stand hochgeladen.
  */
 export function needsPrompt(localAt: number | null, cloudUpdatedAt: string | null): boolean {
   const hasLocal = typeof localAt === "number" && Number.isFinite(localAt);
-  const hasCloud = !!cloudUpdatedAt && Number.isFinite(Date.parse(cloudUpdatedAt));
-  return hasLocal && hasCloud;
+  const cloudAt = cloudUpdatedAt ? Date.parse(cloudUpdatedAt) : NaN;
+  if (!hasLocal || !Number.isFinite(cloudAt)) return false;
+  return cloudAt > localAt!;
 }
