@@ -8,8 +8,7 @@ import { createPiezo } from "./emu/audio";
 import { saveEmu, loadEmu, readSaveRecord } from "./storage/persist";
 import { AUTH_ENABLED } from "./auth/config";
 import { currentSession, restoreSession, renderSignInButton, signOut, type Session } from "./auth/google";
-import { decideSync, deleteRemote, pullSave, pushSave, type CloudSave } from "./sync/cloud";
-import { needsPrompt } from "./sync/cloud";
+import { deleteRemote, readSave, planSync, pushSave, type CloudSave, type SyncAction } from "./sync/cloud";
 import { SHELLS, applyShell, savedShell, starPolygon, type Shell } from "./shell";
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, iconNames, t } from "./i18n";
@@ -547,14 +546,6 @@ async function catchUpAll(units: number): Promise<void> {
 let cloudDirty = false;
 let cloudTimer: number | null = null;
 
-async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
-  let timer = 0;
-  const limit = new Promise<null>((resolve) => { timer = window.setTimeout(() => resolve(null), ms); });
-  const res = await Promise.race([p, limit]);
-  window.clearTimeout(timer);
-  return res;
-}
-
 // Nach jedem lokalen Speichern den Cloud-Push entprellt nachziehen (max. alle 90 s).
 function markCloudDirty(): void {
   if (!AUTH_ENABLED) return;
@@ -600,6 +591,24 @@ function askWhichSave(localAt: number, cloudAt: string): Promise<"push" | "pull"
   });
 }
 
+/**
+ * Nach dem Login den geladenen Cloud-Stand in den laufenden Emulator bringen.
+ *
+ * Frueher rief der Login-Pfad location.reload() auf. Das war doppelt schlecht:
+ * die Session liegt in sessionStorage und stirbt mit dem Tab - nach dem
+ * Reload war sie weg, syncBeforeBoot stieg wieder aus, und der Abgleich machte
+ * sich selbst zunichte. Stattdessen wird hier der Emulator neu gestartet.
+ */
+async function reloadAfterCloud(): Promise<void> {
+  if (!emu) { location.reload(); return; }
+  let saved: Awaited<ReturnType<typeof loadEmu>> = null;
+  try { saved = await loadEmu(localStorage); } catch { /* Quota/kaputt */ }
+  if (!saved) { location.reload(); return; }
+  try { emu.loadState(saved.bytes); } catch { location.reload(); return; }
+  if (saved.at) await catchUpAll(unitsForMs(Math.max(0, Date.now() - saved.at)));
+  lastTs = performance.now();
+}
+
 /** Cloud-Stand lokal ablegen; mitten in der Sitzung danach neu laden. */
 function applyCloudSave(cloud: CloudSave, reload: boolean): void {
   const at = Date.parse(cloud.updatedAt);
@@ -608,32 +617,36 @@ function applyCloudSave(cloud: CloudSave, reload: boolean): void {
   } catch { /* Quota */ }
   if (reload) location.reload();
 }
-
 function asCloud(rec: { d: string; t: number }): CloudSave {
   return { snapshot: rec.d, updatedAt: new Date(rec.t).toISOString(), saveVer: 1 };
 }
 
 /**
- * Direkt nach dem Anmelden abgleichen – ohne Neuladen: bei Konflikt fragen,
+ * Direkt nach dem Anmelden abgleichen - ohne Neuladen: bei Konflikt fragen,
  * sonst den neueren Stand gewinnen lassen.
+ *
+ * Achtung: Hier laeuft der Emulator bereits. Ein Cloud-Stand kann daher nicht
+ * einfach "hineingeladen" werden wie beim Boot - er wird im localStorage
+ * abgelegt und der Emulator anschliessend aus dem neuen Stand neu gestartet
+ * (siehe reloadAfterCloud), statt die ganze Seite neu zu laden.
  */
 async function syncAfterSignIn(): Promise<void> {
   const s = currentSession();
   if (!s) return;
   const local = readSaveRecord(localStorage);
-  const cloud = await withTimeout(pullSave(s.token), 4000);
-  if (!cloud) {
-    if (local) await pushSave(s.token, asCloud(local));
+  // readSave unterscheidet "keine Cloud" von "Abruf gescheitert". Ein
+  // gescheiterter Abruf fuehrt zu "none" - es wird NICHT mehr still
+  // hochgeladen, nur weil man nicht nachsehen konnte.
+  const cloud = await readSave(s.token);
+  let action: SyncAction = planSync(cloud, local?.t ?? null);
+  // Beide Staende vorhanden -> immer fragen. Ein frisches Ei (neuer Browser)
+  // darf den echten Cloud-Stand nicht still ueberschreiben.
+  if (action === "ask") action = await askWhichSave(local?.t ?? 0, cloud.kind === "found" ? cloud.save.updatedAt : "");
+  if (action === "pull" && cloud.kind === "found") {
+    applyCloudSave(cloud.save, false);
+    await reloadAfterCloud();
     return;
   }
-  if (local && needsPrompt(local.t, cloud.updatedAt)) {
-    const choice = await askWhichSave(local.t, cloud.updatedAt);
-    if (choice === "pull") { applyCloudSave(cloud, true); return; }
-    await pushSave(s.token, asCloud(local));
-    return;
-  }
-  const action = decideSync(local?.t ?? null, cloud.updatedAt);
-  if (action === "pull") { applyCloudSave(cloud, true); return; }
   if (action === "push" && local) await pushSave(s.token, asCloud(local));
 }
 
@@ -642,14 +655,12 @@ async function syncBeforeBoot(): Promise<void> {
   const s = currentSession();
   if (!s) return;
   const local = readSaveRecord(localStorage);
-  const cloud = await withTimeout(pullSave(s.token), 4000);
-  // Beide da und unterschiedlich? Dann fragen, statt still zu ueberschreiben.
-  let action = decideSync(local?.t ?? null, cloud?.updatedAt ?? null);
-  if (local && cloud && needsPrompt(local.t, cloud.updatedAt)) {
-    action = await askWhichSave(local.t, cloud.updatedAt);
-  }
-  if (action === "pull" && cloud) {
-    applyCloudSave(cloud, false);
+  const cloud = await readSave(s.token);
+  // Immer fragen, wenn beide Seiten einen Stand haben - nichts still ueberschreiben.
+  let action: SyncAction = planSync(cloud, local?.t ?? null);
+  if (action === "ask") action = await askWhichSave(local?.t ?? 0, cloud.kind === "found" ? cloud.save.updatedAt : "");
+  if (action === "pull" && cloud.kind === "found") {
+    applyCloudSave(cloud.save, false);
   } else if (action === "push" && local) {
     void pushSave(s.token, asCloud(local));
   }

@@ -1,4 +1,4 @@
-const CACHE = "tamagotchi-v5";
+const CACHE = "tamagotchi-v6";
 
 // Fallback, falls /precache.json (Build-Artefakt) fehlt oder nicht lesbar ist.
 const FALLBACK = [

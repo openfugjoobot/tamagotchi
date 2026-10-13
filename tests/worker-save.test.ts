@@ -23,7 +23,7 @@ function fakeKv(): { store: SaveStore; map: Map<string, string> } {
 
 interface Ctx { env: Env; map: Map<string, string>; deps: { fetchImpl: typeof fetch; now: number }; token: string }
 
-async function ctx(sub = "user-1"): Promise<Ctx> {
+async function ctx(sub = "user-1", shared?: SaveStore): Promise<Ctx> {
   resetJwksCache(); // jeder Kontext hat seinen eigenen Schlüssel
   const k = await makeTestKey();
   const token = await signJwt(k.priv, {
@@ -32,7 +32,7 @@ async function ctx(sub = "user-1"): Promise<Ctx> {
     iss: "https://accounts.google.com",
     exp: Math.floor(NOW / 1000) + 3600,
   });
-  const kv = fakeKv();
+  const kv = shared ? { store: shared, map: new Map<string, string>() } : fakeKv();
   return { env: { SAVES: kv.store, GOOGLE_CLIENT_ID: CLIENT }, map: kv.map, deps: { fetchImpl: jwksFetch(k.jwk), now: NOW }, token };
 }
 
@@ -117,10 +117,18 @@ describe("worker: /api/save", () => {
   });
 
   it("trennt Nutzer über die sub", async () => {
-    const a = await ctx("user-a");
-    const b = await ctx("user-b");
+    // WICHTIG: beide Nutzer teilen sich denselben KV-Store. Nur so kann der
+    // Test ueberhaupt rot werden, wenn die sub nicht in den Key einfliesst -
+    // mit getrennten Maps bestuende er auch bei voellig fehlender Trennung.
+    const shared = fakeKv();
+    const a = await ctx("user-a", shared.store);
+    const b = await ctx("user-b", shared.store);
     await handle(req("PUT", a.token, record("2026-01-01T12:00:00.000Z", "A")), a.env, a.deps);
     resetJwksCache(); // im Test hat jeder Kontext einen eigenen Schlüssel
+    // B darf A's Stand nicht sehen.
     expect((await handle(req("GET", b.token), b.env, b.deps)).status).toBe(404);
+    // Und der Schreibvorgang muss tatsaechlich im gemeinsamen Store gelandet
+    // sein - sonst prueft der 404 oben nichts.
+    expect([...shared.map.keys()]).toEqual(["save:user-a"]);
   });
 });

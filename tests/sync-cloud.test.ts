@@ -1,29 +1,27 @@
 import { describe, it, expect } from "vitest";
-import { decideSync, needsPrompt, pullSave, pushSave, deleteRemote } from "@/sync/cloud";
+import { needsPrompt, readSave, planSync, pushSave, deleteRemote } from "@/sync/cloud";
 
-describe("sync: Entscheidung beim Start", () => {
-  const cloud = (iso: string) => iso;
+describe("sync: Entscheidung beim Start (planSync)", () => {
+  const found = (iso: string) => ({ kind: "found" as const, save: { snapshot: "S", updatedAt: iso } });
 
   it("nichts da → nichts tun", () => {
-    expect(decideSync(null, null)).toBe("none");
+    expect(planSync({ kind: "absent" }, null)).toBe("none");
   });
   it("nur lokal → hochladen", () => {
-    expect(decideSync(Date.parse("2026-01-01T10:00:00Z"), null)).toBe("push");
+    expect(planSync({ kind: "absent" }, 1000)).toBe("push");
   });
   it("nur in der Cloud → laden", () => {
-    expect(decideSync(null, cloud("2026-01-01T10:00:00Z"))).toBe("pull");
+    expect(planSync(found("2026-01-01T10:00:00Z"), null)).toBe("pull");
   });
-  it("Cloud neuer → laden", () => {
-    expect(decideSync(Date.parse("2026-01-01T09:00:00Z"), "2026-01-01T10:00:00Z")).toBe("pull");
+  it("beide da (Cloud neuer) → nachfragen, nicht still überschreiben", () => {
+    expect(planSync(found("2026-01-01T10:00:00Z"), Date.parse("2026-01-01T09:00:00Z"))).toBe("ask");
   });
-  it("lokal neuer → hochladen", () => {
-    expect(decideSync(Date.parse("2026-01-01T11:00:00Z"), "2026-01-01T10:00:00Z")).toBe("push");
+  it("beide da (lokal neuer, z. B. frisches Ei) → nachfragen", () => {
+    expect(planSync(found("2026-01-01T09:00:00Z"), Date.parse("2026-01-01T10:00:00Z"))).toBe("ask");
   });
-  it("gleich alt → nichts", () => {
-    expect(decideSync(Date.parse("2026-01-01T10:00:00Z"), "2026-01-01T10:00:00Z")).toBe("none");
-  });
-  it("kaputter Zeitstempel in der Cloud → lokal gewinnt", () => {
-    expect(decideSync(Date.parse("2026-01-01T10:00:00Z"), "keinDatum")).toBe("push");
+  it("Abruf gescheitert → nichts tun", () => {
+    expect(planSync({ kind: "error", reason: "offline" }, 1000)).toBe("none");
+    expect(planSync({ kind: "error", reason: "timeout" }, null)).toBe("none");
   });
 });
 
@@ -47,14 +45,14 @@ function stubFetch(reply: () => Response, seen: Seen): typeof fetch {
 
 const emptySeen = (): Seen => ({ url: "", method: "", auth: "", body: "" });
 
-describe("sync: Nachfrage nur wenn die Cloud neuer ist", () => {
-  it("entscheidet nach Zeitstempel", () => {
+describe("sync: Nachfrage wenn BEIDE Seiten einen Stand haben", () => {
+  it("nur wenn lokal UND Cloud vorhanden sind", () => {
     const t = Date.parse("2026-01-01T10:00:00Z");
     expect(needsPrompt(t, null)).toBe(false);
     expect(needsPrompt(null, "2026-01-01T10:00:00Z")).toBe(false);
-    expect(needsPrompt(t, "2026-01-01T10:00:00Z")).toBe(false);
+    expect(needsPrompt(t, "2026-01-01T10:00:00Z")).toBe(true);
     expect(needsPrompt(t, "2026-01-01T11:00:00Z")).toBe(true);
-    expect(needsPrompt(t, "2025-12-31T23:00:00Z")).toBe(false);
+    expect(needsPrompt(t, "2025-12-31T23:00:00Z")).toBe(true);
     expect(needsPrompt(t, "keinDatum")).toBe(false);
   });
 });
@@ -73,20 +71,21 @@ describe("sync: API-Aufrufe", () => {
     expect(JSON.parse(seen.body)).toMatchObject({ snapshot: "SNAP" });
   });
 
-  it("GET liefert den Stand oder null", async () => {
-    const seen = emptySeen();
-    const rec = await pullSave("t", {
-      fetchImpl: stubFetch(() => new Response(JSON.stringify({ snapshot: "X", updatedAt: "2026-01-01T10:00:00.000Z" }), { status: 200 }), seen),
+  it("GET liefert found oder absent", async () => {
+    const rec = await readSave("t", {
+      fetchImpl: stubFetch(() => new Response(JSON.stringify({ snapshot: "X", updatedAt: "2026-01-01T10:00:00.000Z" }), { status: 200 }), emptySeen()),
+      api: "/api/save",
     });
-    expect(rec?.snapshot).toBe("X");
+    expect(rec.kind).toBe("found");
+    if (rec.kind === "found") expect(rec.save.snapshot).toBe("X");
 
-    const empty = await pullSave("t", { fetchImpl: stubFetch(() => new Response(null, { status: 404 }), emptySeen()) });
-    expect(empty).toBeNull();
+    const empty = await readSave("t", { fetchImpl: stubFetch(() => new Response(null, { status: 404 }), emptySeen()) });
+    expect(empty.kind).toBe("absent");
   });
 
   it("Netzfehler sind kein Absturz", async () => {
     const boom = (async () => { throw new Error("offline"); }) as unknown as typeof fetch;
-    expect(await pullSave("t", { fetchImpl: boom })).toBeNull();
+    expect((await readSave("t", { fetchImpl: boom })).kind).toBe("error");
     expect(await pushSave("t", { snapshot: "x", updatedAt: "2026-01-01T00:00:00.000Z" }, { fetchImpl: boom })).toBe(false);
     expect(await deleteRemote("t", { fetchImpl: boom })).toBe(false);
   });
