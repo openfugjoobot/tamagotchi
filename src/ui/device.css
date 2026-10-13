@@ -291,6 +291,10 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 [data-shell="mint"]   { --sun-1: #ffe45c; --sun-2: #ffd21e; --sun-3: #f0b400; }
 [data-shell="coral"]  { --sun-1: #d9fff6; --sun-2: #6fe3cd; --sun-3: #149e8c; }
 [data-shell="pearl"]  { --sun-1: #b8f0e6; --sun-2: #4fc3b0; --sun-3: #0f8b7e; }
+[data-shell="raptor"] { --sun-1: #f2f7c4; --sun-2: #cfe06a; --sun-3: #7f9a1e; }
+[data-shell="amber"]  { --sun-1: #fff0c2; --sun-2: #f5c65a; --sun-3: #b57c14; }
+[data-shell="swamp"]  { --sun-1: #d6f0c2; --sun-2: #8fc07a; --sun-3: #3d6b2e; }
+[data-shell="gecko"]  { --sun-1: #ffe9a8; --sun-2: #f0c454; --sun-3: #b07d1a; }
 
 /* ================= Gerät ================= */
 .device {
@@ -342,6 +346,28 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 [data-shell="mono"] {
   --shell-top:#3a3f47; --shell-bot:#16181d;
   --shell-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g fill='%23ffffff' fill-opacity='0.9'><circle cx='20' cy='20' r='3'/><circle cx='60' cy='34' r='2.5'/><circle cx='34' cy='62' r='3'/><circle cx='78' cy='70' r='2.5'/><circle cx='84' cy='18' r='2'/></g></svg>");
+}
+
+/* ---- Dino-/Reptilien-Eier ---- */
+/* Raptor: Schuppenreihen wie eine getarnte Echsenhaut. */
+[data-shell="raptor"] {
+  --shell-top:#8fae5a; --shell-bot:#3f5e22;
+  --shell-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g fill='%23ffffff' fill-opacity='0.55'><path d='M0 0q11 13 22 0t22 0t22 0t22 0t22 0v-13H0z'/><path d='M0 32q11 13 22 0t22 0t22 0t22 0t22 0v-13H0z'/><path d='M0 64q11 13 22 0t22 0t22 0t22 0t22 0v-13H0z'/><path d='M0 96q11 13 22 0t22 0t22 0t22 0t22 0v-13H0z'/></g><g stroke='%23ffffff' stroke-opacity='0.5' stroke-width='1.5' fill='none'><path d='M11 0v13M33 0v13M55 0v13M77 0v13M11 32v13M33 32v13M55 32v13M77 32v13M11 64v13M33 64v13M55 64v13M77 64v13'/></g></svg>");
+}
+/* Amber: fossiles Ei mit Rissen/Spruengen. */
+[data-shell="amber"] {
+  --shell-top:#e6b45a; --shell-bot:#a4661c;
+  --shell-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g stroke='%23fff3d0' stroke-opacity='0.75' fill='none' stroke-width='2' stroke-linecap='round'><path d='M14 8l6 9-4 7 7 6-5 8'/><path d='M70 30l-7 10 5 6-8 7 4 8'/><path d='M34 66l8 7-4 8 6 7'/></g><g fill='%23ffffff' fill-opacity='0.5'><circle cx='60' cy='14' r='2.2'/><circle cx='26' cy='44' r='2'/><circle cx='82' cy='72' r='2.4'/></g></svg>");
+}
+/* Swamp: dunkelgruenes Sumpf-Ei, Algenflecken. */
+[data-shell="swamp"] {
+  --shell-top:#4a7a52; --shell-bot:#1d3324;
+  --shell-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g fill='%23ffffff' fill-opacity='0.32'><ellipse cx='22' cy='24' rx='15' ry='10'/><ellipse cx='66' cy='52' rx='18' ry='11'/><ellipse cx='40' cy='78' rx='13' ry='9'/></g><g fill='%23ffffff' fill-opacity='0.6'><circle cx='22' cy='24' r='2.5'/><circle cx='30' cy='20' r='1.8'/><circle cx='66' cy='52' r='3'/><circle cx='58' cy='48' r='2'/><circle cx='74' cy='56' r='1.8'/><circle cx='40' cy='78' r='2.4'/></g></svg>");
+}
+/* Gecko: sandbraunes Ei mit Tupfen, wie ein Leopardgecko. */
+[data-shell="gecko"] {
+  --shell-top:#d8a06a; --shell-bot:#8a5a2f;
+  --shell-pattern: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96'><g fill='%23ffffff' fill-opacity='0.55'><ellipse cx='20' cy='18' rx='7' ry='5'/><ellipse cx='52' cy='30' rx='8' ry='5.5'/><ellipse cx='80' cy='14' rx='5' ry='4'/><ellipse cx='30' cy='52' rx='8' ry='5'/><ellipse cx='66' cy='62' rx='9' ry='6'/><ellipse cx='14' cy='80' rx='6' ry='4.5'/><ellipse cx='54' cy='86' rx='7' ry='5'/><ellipse cx='88' cy='48' rx='5' ry='4'/></g></svg>");
 }
 
 /* ---- Shell-Karussell: horizontal scrollbar, endlos, Auswahl in der Mitte ---- */

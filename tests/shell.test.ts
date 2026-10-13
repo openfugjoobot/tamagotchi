@@ -18,10 +18,14 @@ function fakeDevice(): HTMLElement {
 }
 
 describe("shell", () => {
-  it("hat 9 Varianten mit eindeutigen IDs", () => {
+  it("hat mindestens 9 Varianten (Basis + Dino-Eier) mit eindeutigen IDs", () => {
     const ids = SHELLS.map((s) => s.id);
-    expect(ids.length).toBe(9);
-    expect(new Set(ids).size).toBe(9);
+    expect(ids.length).toBeGreaterThanOrEqual(9);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+  it("enthält die Dino-/Reptilien-Eier", () => {
+    const ids = new Set(SHELLS.map((s) => s.id));
+    for (const id of ["raptor", "amber", "swamp", "gecko"]) expect(ids.has(id)).toBe(true);
   });
   it("applyShell setzt Attribut und speichert", () => {
     const st = memStorage();

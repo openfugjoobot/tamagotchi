@@ -26,6 +26,11 @@ export const SHELLS: Shell[] = [
   { id: "mint",   top: "#7ee6b0", bot: "#1f9e6a", star: { points: 12, inner: 0.72, rot: 15 } },
   { id: "coral",  top: "#ff9a8b", bot: "#d94a3d", star: { points: 9,  inner: 0.62, rot: 4 } },
   { id: "pearl",  top: "#f3efe4", bot: "#c9bda4", star: { points: 16, inner: 0.88, rot: 0 } },
+  // --- Dino-/Reptilien-Eier ---
+  { id: "raptor", top: "#8fae5a", bot: "#3f5e22", star: { points: 13, inner: 0.74, rot: 0 } },
+  { id: "amber",  top: "#e6b45a", bot: "#a4661c", star: { points: 9,  inner: 0.70, rot: 6 } },
+  { id: "swamp",  top: "#4a7a52", bot: "#1d3324", star: { points: 17, inner: 0.86, rot: 3 } },
+  { id: "gecko",  top: "#d8a06a", bot: "#8a5a2f", star: { points: 11, inner: 0.66, rot: 10 } },
 ];
 
 /** Polygon-Punkte ("x,y …") für einen Stern im 100×100-Raster. */
