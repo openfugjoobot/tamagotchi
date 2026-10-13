@@ -26,11 +26,30 @@ const ctxBottom = iconsBottom.getContext("2d")!;
 let miniDevice: HTMLElement | null = null;
 let miniWrapEl: HTMLElement | null = null;
 let miniTop: HTMLCanvasElement | null = null;
+/** Icon-Canvas der Vorschau-Karten: [oben, unten] je Karte (nach loadIcons befuellt). */
+const miniIconCanvases: { top: HTMLCanvasElement; bottom: HTMLCanvasElement }[] = [];
 let miniLcd: HTMLCanvasElement | null = null;
 let miniBottom: HTMLCanvasElement | null = null;
 let miniTopCtx: CanvasRenderingContext2D | null = null;
 let miniLcdCtx: CanvasRenderingContext2D | null = null;
 let miniBottomCtx: CanvasRenderingContext2D | null = null;
+
+/** Zeichnet die P1-Icon-Reihen in alle Vorschau-Karten (nach loadIcons).
+ *  Die Vorschau zeigt keinen laufenden Emulator, daher leere Icon-Zustaende -
+ *  die Icons selbst stammen aus den echten P1-Sprites. */
+function paintMiniIcons(): void {
+  const ms = 2; // 32x8 logisch -> 64x16 px
+  const blank = new Uint8Array(8);
+  for (const { top, bottom } of miniIconCanvases) {
+    for (const [cv, row] of [[top, 0], [bottom, 1]] as const) {
+      const ctx = cv.getContext("2d");
+      if (!ctx) continue;
+      cv.width = LCD_WIDTH * ms;
+      cv.height = 8 * ms;
+      drawIconRow(ctx, blank, row, ms, iconImgs);
+    }
+  }
+}
 const piezo = createPiezo(() => new AudioContext());
 const loadingEl = document.getElementById("loading");
 const menuEl = document.getElementById("menu");
@@ -259,9 +278,15 @@ function initUI(): void {
         `<stop offset="0" class="sun-1" /><stop offset="0.5" class="sun-2" /><stop offset="1" class="sun-3" />` +
         `</linearGradient></defs>` +
         `<polygon points="${starPolygon(shell.star)}" fill="url(#sun-${shell.id})" /></svg>` +
+        `<span class="mini-screen-stack">` +
+        `<canvas class="mini-icons" width="32" height="8" aria-hidden="true"></canvas>` +
         `<span class="mini-screen"></span>` +
+        `<canvas class="mini-icons" width="32" height="8" aria-hidden="true"></canvas>` +
+        `</span>` +
         `</span>`;
       wrap.append(ring, dev);
+      const icons = dev.querySelectorAll<HTMLCanvasElement>(".mini-icons");
+      if (icons.length >= 2) miniIconCanvases.push({ top: icons[0], bottom: icons[1] });
       const name = document.createElement("span");
       name.className = "shell-name";
       name.textContent = shell.id.charAt(0).toUpperCase() + shell.id.slice(1);
@@ -506,8 +531,7 @@ function pump(maxSteps: number): void {
 
 let emu: Emulator | null = null;
 let iconImgs: IconImages = [];
-let lastTs = 0;
-let saveTick = 0;
+let lastTs = 0;let saveTick = 0;
 let booted = false;
 
 const loadtxtEl = document.querySelector<HTMLElement>("#loading .loadtxt");
@@ -883,6 +907,7 @@ async function boot(): Promise<void> {
   ]);
   emu = await createEmulator({ wasm, rom: new Uint8Array(romBuf) });
   iconImgs = await loadIcons();
+  paintMiniIcons();
   if (params.has("debug")) {
     const w = window as unknown as {
       __emu: Emulator;
