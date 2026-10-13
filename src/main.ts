@@ -301,19 +301,18 @@ function initUI(): void {
       markCards();
     };
 
-    // Nur EIN Satz Karten + je ein Klon links/rechts fuer den Endlos-Sprung.
-    // Drei volle Saetze (27 Karten) kosteten unnoetig Renderzeit (Ruckeln).
-    const originals = SHELLS.map((s) => makeCard(s));
-    const clone = (src: HTMLButtonElement): HTMLButtonElement => {
-      const c = src.cloneNode(true) as HTMLButtonElement;
-      c.dataset.clone = "1";
-      c.setAttribute("aria-hidden", "true");
-      c.tabIndex = -1;
-      return c;
-    };
-    const lastClone = clone(originals[originals.length - 1]);
-    const firstClone = clone(originals[0]);
-    cards.push(lastClone, ...originals, firstClone);
+    // Endlos braucht mindestens 3 Saetze: der nutzbare Scrollweg muss groesser
+    // als 2 Satzbreiten sein, sonst laesst sich nicht nahtlos umlaufen. Wir bauen
+    // daher 3 volle Saetze (der mittlere ist der sichtbare Arbeitsbereich) und
+    // spiegeln beim Sprung um genau eine Satzbreite. Die Performance kommt aus
+    // den uebrigen Massnahmen (kein Puls, rAF, frische Messung, contain).
+    for (let set = 0; set < 3; set++) {
+      for (const sh of SHELLS) {
+        const c = makeCard(sh);
+        if (set !== 1) { c.dataset.clone = "1"; c.setAttribute("aria-hidden", "true"); c.tabIndex = -1; }
+        cards.push(c);
+      }
+    }
     const track = document.createElement("span");
     track.className = "shell-track";
     track.append(...cards);
@@ -321,16 +320,24 @@ function initUI(): void {
 
     const initial = shellParam && SHELLS.some((s) => s.id === shellParam) ? shellParam : savedShell(localStorage);
     const idx = Math.max(0, SHELLS.findIndex((s) => s.id === initial));
-    // Das Menue ist beim Aufbau versteckt (display:none) – ein verstecktes Element
-    // laesst sich nicht scrollen. Startposition daher beim ersten Oeffnen setzen.
+    // Das Menue ist beim Aufbau versteckt (display:none) – dann sind clientWidth
+    // und offsetLeft 0, ein Scrollen ist unmoeglich. Startposition und Highlight
+    // daher erst setzen, wenn das Menue sichtbar ist UND das Layout steht (rAF).
     const menuEl = document.getElementById("menu");
     let posSet = false;
     const startIndex = N + idx;
     const placeOnce = (): void => {
       if (posSet || !menuEl || menuEl.hidden) return;
-      posSet = true;
-      if (cards[startIndex]) carousel.scrollLeft = centerOf(cards[startIndex]);
-      measure();
+      requestAnimationFrame(() => {
+        if (posSet || menuEl.hidden) return;
+        posSet = true;
+        if (cards[startIndex]) carousel.scrollLeft = centerOf(cards[startIndex]);
+        measure();
+        // Auswahl anhand der (jetzt gueltigen) Position markieren.
+        const card = cards[centeredIndex()];
+        if (card && card.dataset.shell) current = card.dataset.shell;
+        markCards();
+      });
     };
     if (menuEl) new MutationObserver(placeOnce).observe(menuEl, { attributes: true, attributeFilter: ["hidden"] });
     placeOnce();
@@ -359,20 +366,20 @@ function initUI(): void {
       return best;
     };
 
-    // Endlos: Wir springen nur, wenn die zentrierte Karte ein KLON ist - dann
-    // um genau eine Satzbreite (itemW * N) auf das entsprechende Original. Eine
-    // Schwelle auf scrollLeft (w*0.5) war falsch: der nutzbare Scrollweg ist
-    // kleiner als eine Satzbreite, daher wurden die ersten Shells unerreichbar.
+    // Endlos (3 Saetze): Wir halten uns im mittleren Satz auf (Karten N..2N-1).
+    // Laeuft die zentrierte Karte in den linken/rechten Satz, springen wir um
+    // genau eine Satzbreite (itemW * N) zurueck in die Mitte. Beide Richtungen
+    // sind damit nahtlos, weil der Scrollweg > 2 Satzbreiten ist.
     const applyScroll = (): void => {
       scrollRaf = 0;
       let i = centeredIndex();
-      const card = cards[i];
-      if (card && card.dataset.clone) {
-        const step = itemW() * N;
-        // i ist der Index im Kartenarray: 0 = Klon des letzten (rechts springen),
-        // cards.length-1 = Klon des ersten (links springen).
-        const dir = i === 0 ? 1 : -1;
-        carousel.scrollLeft += dir * step;
+      const step = itemW() * N;
+      if (i < N) {
+        carousel.scrollLeft += step;
+        measure();
+        i = centeredIndex();
+      } else if (i >= 2 * N) {
+        carousel.scrollLeft -= step;
         measure();
         i = centeredIndex();
       }

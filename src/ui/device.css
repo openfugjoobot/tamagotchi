@@ -374,7 +374,9 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 .shell-carousel {
   position: relative;
   height: 146px; overflow-x: auto; overflow-y: hidden;
-  scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+  /* proximity statt mandatory: laesst den Endlos-Sprung des JS zu, ohne dass
+     der Browser die Position beim Einrasten zurueckerzwingt. */
+  scroll-snap-type: x proximity; overscroll-behavior-x: contain;
   scrollbar-width: none; display: block; padding: 0;
   cursor: grab;
 }
