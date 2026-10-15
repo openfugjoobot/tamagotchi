@@ -13,14 +13,38 @@ export interface Session {
   picture?: string;
 }
 
+/**
+ * Was GIS ueber moment_callback meldet. Zwei Formen:
+ *  - FedCM: eine Notification, aus der man das Credential aktiv holen muss.
+ *  - Legacy: direkt eine Antwort mit `credential` (Silent-Refresh).
+ * Beide Wege muessen behandelt werden; sonst verpufft der stille Refresh.
+ */
+interface GsiNotification {
+  getCredentialResponse?: () => { credential?: string };
+  isDisplayMoment?: () => boolean;
+  isDisplayed?: () => boolean;
+  isNotDisplayed?: () => boolean;
+  getNotDisplayedReason?: () => string;
+  getSkippedReason?: () => string;
+  getDismissedReason?: () => string;
+  credential?: string;
+}
+
 interface GsiId {
   initialize(cfg: {
     client_id: string;
     callback: (r: { credential?: string }) => void;
-    use_fedcm_for_button?: boolean;
+    /** Pflicht, sobald auto_select gesetzt ist (siehe initGsi). */
     auto_select?: boolean;
-    /** Wird auch ohne sichtbaren Button aufgerufen, wenn GIS still erneuert. */
-    moment_callback?: (m: { getCredentialResponse?: () => { credential?: string } }) => void;
+    /** Zwingend neben auto_select: ohne moment_callback schaltet GIS den
+     *  stillen Pfad komplett ab - der Button bleibt dann wirkungslos. */
+    moment_callback?: (m: GsiNotification) => void;
+    /** FedCM statt des abgekuendigten One-Tap-Iframes (Pflicht in Chromium 14x). */
+    use_fedcm_for_button?: boolean;
+    /** Bessere Chancen auf den stillen Refresh trotz Tracking-Schutz. */
+    itp_support?: boolean;
+    /** Kein erneutes Einblenden von UI waehrend der stillen Erneuerung. */
+    cancel_on_tap_outside?: boolean;
   }): void;
   renderButton(el: HTMLElement, opts: Record<string, string | number>): void;
   disableAutoSelect?(): void;
@@ -140,17 +164,88 @@ export function signOut(): void {
 }
 
 /**
+ * Ein eingetroffenes Token verarbeiten.
+ *
+ * Entscheidend ist die Unterscheidung "stiller Refresh" gegen "echter Login":
+ * nur ein Refresh darf die Sync-Listener (und damit einen Cloud-Abgleich)
+ * ausloesen, ein Login geht an die Aufrufer der UI.
+ */
+function acceptCredential(credential: string): void {
+  const s = toSession(credential);
+  if (!s) return;
+  const isRefresh = !!session;
+  setSession(s);
+  if (isRefresh) for (const cb of refreshListeners) cb(s);
+  else for (const cb of loginListeners) cb(s);
+}
+
+/**
+ * Antwort aus einer GIS-Notification ziehen.
+ *
+ * FedCM meldet ueber moment_callback nur eine *Notification*; das Credential
+ * muss man dort aktiv mit getCredentialResponse() abholen. Der Legacy-Pfad
+ * legt `credential` dagegen direkt ins Objekt. Beide Formen kommen vor, je
+ * nachdem ob use_fedcm_for_button greift.
+ */
+export function credentialFromNotification(m: GsiNotification): string | null {
+  if (typeof m.credential === "string" && m.credential) return m.credential;
+  if (typeof m.getCredentialResponse === "function") {
+    try {
+      const r = m.getCredentialResponse();
+      if (r && typeof r.credential === "string" && r.credential) return r.credential;
+    } catch {
+      /* Notification war nicht (mehr) abholbar */
+    }
+  }
+  return null;
+}
+
+/**
  * Initialisiert GIS einmalig inkl. Silent-Refresh.
  *
- * auto_select: Google erneuert das ID-Token im Hintergrund, solange die
- * Google-Session im Browser noch gilt - der Nutzer bleibt also angemeldet,
- * ohne sich nach Ablauf des Tokens (~1 h) neu anmelden zu muessen. Der
- * gemeinsame Callback liefert frische Tokens (auch ohne sichtbaren Button).
+ * auto_select erneuert das ID-Token im Hintergrund, solange die Google-Session
+ * im Browser noch gilt - der Nutzer bleibt also angemeldet, ohne sich nach
+ * Ablauf des Tokens (~1 h) neu anmelden zu muessen.
+ *
+ * Wichtig: `auto_select` OHNE `moment_callback` ist wirkungslos. Google schaltet
+ * den stillen Pfad dann ab; der Button rendert zwar, ein Klick loest aber nichts
+ * aus (genau das war der Fehler: "ich muss mich jedes Mal neu anmelden"). Der
+ * moment_callback traegt den stillen Refresh UND den Klickpfad des FedCM-Buttons.
+ *
+ * use_fedcm_for_button: true statt des abgekuendigten One-Tap-Iframes - Chromium
+ * 14x behandelt den alten Pfad zunehmend als Legacy und liefert dort nichts mehr
+ * aus. itp_support gibt dem stillen Refresh zusaetzliche Chancen.
  *
  * Grenze: Das klappt nur, wenn der Browser Cookies fuer accounts.google.com
  * zulaesst (3rd-Party-Cookie-Blockade kann es verhindern). Dann greift der
  * normale Anmelde-Button.
  */
+/**
+ * Die GIS-Konfiguration an einer Stelle - damit sie testbar und nachvollziehbar
+ * bleibt. Wird von initGsi() an Googles initialize() uebergeben.
+ *
+ * `moment_callback` ist hier kein Extra, sondern Pflicht: zusammen mit
+ * `auto_select` traegt er den stillen Token-Refresh UND den Klickpfad des
+ * FedCM-Buttons. Ohne ihn liefert GIS nichts aus.
+ */
+export function gsiConfig(onCredential?: (credential: string) => void): Record<string, unknown> {
+  const handle = (credential: string | null | undefined): void => {
+    if (!credential) return;
+    if (onCredential) onCredential(credential);
+    else acceptCredential(credential);
+  };
+  return {
+    client_id: GOOGLE_CLIENT_ID,
+    auto_select: true,
+    use_fedcm_for_button: true,
+    itp_support: true,
+    cancel_on_tap_outside: true,
+    // Pflicht neben auto_select - traegt stillen Refresh und Button-Klick.
+    moment_callback: (m: GsiNotification) => handle(credentialFromNotification(m)),
+    callback: (res: { credential?: string }) => handle(res.credential),
+  };
+}
+
 export async function initGsi(onSession: (s: Session) => void): Promise<GsiId | null> {
   // Registrierung sofort (falls der Init bereits laeuft und das Token schon da ist).
   loginListeners.add(onSession);
@@ -158,22 +253,7 @@ export async function initGsi(onSession: (s: Session) => void): Promise<GsiId | 
   gsiInit = (async () => {
     try {
       const id = await loadScript();
-      id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        use_fedcm_for_button: false,
-        auto_select: true,
-        callback: (res) => {
-          if (!res.credential) return;
-          const s = toSession(res.credential);
-          if (!s) return;
-          const isRefresh = !!session;
-          setSession(s);
-          // Stiller Refresh -> nur benachrichtigen. Echter Login -> Aufrufer
-          // (z. B. UI neu zeichnen + synchronisieren).
-          if (isRefresh) for (const cb of refreshListeners) cb(s);
-          else for (const cb of loginListeners) cb(s);
-        },
-      });
+      id.initialize(gsiConfig() as unknown as Parameters<GsiId["initialize"]>[0]);
       return id;
     } catch {
       gsiInit = null; // beim naechsten Versuch erneut probieren
