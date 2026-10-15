@@ -16,7 +16,19 @@ export interface SaveStore {
   delete(key: string): Promise<void>;
 }
 
-export const recordKey = (sub: string): string => `save:${sub}`;
+/**
+ * KV-Schluessel eines Spielstands.
+ *
+ * P1 behaelt den alten Schluessel `save:<sub>` — so verliert kein Bestandsnutzer
+ * seinen Stand. P2 und alles Weitere bekommen einen eigenen Eintrag daneben.
+ */
+export const recordKey = (sub: string, device: string): string =>
+  device === "p1" ? `save:${sub}` : `save:${sub}:${device}`;
+
+/** Unbekannte oder fehlende Geraeteangaben fallen auf P1 zurueck. */
+export function normalizeDevice(raw: string | null): string {
+  return raw === "p2" ? "p2" : "p1";
+}
 
 export function parseRecord(raw: string | null): SaveRecord | null {
   if (!raw) return null;

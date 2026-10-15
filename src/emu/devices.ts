@@ -17,3 +17,12 @@ export const DEVICES: Record<Device, DeviceSpec> = {
 };
 
 export const DEVICE_IDS: Device[] = ["p1", "p2"];
+
+/** Startgeraet aus dem gespeicherten Wert; P2 nur, wenn sein ROM geladen ist. */
+export function pickInitialDevice(
+  saved: string | null,
+  opts: { p2Available?: boolean } = {},
+): Device {
+  if (saved !== "p2") return "p1";
+  return opts.p2Available === false ? "p1" : "p2";
+}

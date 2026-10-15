@@ -1,7 +1,7 @@
 // Cloudflare Worker: /api/save für den Spielstand pro Google-Konto.
 // Same-origin unter tamagotchi.fugjoo.com/api/* → kein CORS nötig.
 import { verifyIdToken, type TokenClaims } from "./auth";
-import { isNewer, parseRecord, recordKey, type SaveRecord, type SaveStore } from "./store";
+import { isNewer, normalizeDevice, parseRecord, recordKey, type SaveRecord, type SaveStore } from "./store";
 
 export interface Env {
   /** KV-Binding (siehe worker/wrangler.toml). */
@@ -44,7 +44,8 @@ export async function handle(req: Request, env: Env, deps: HandleDeps = {}): Pro
     return json({ error: "unauthorized" }, 401);
   }
 
-  const key = recordKey(claims.sub);
+  const device = normalizeDevice(url.searchParams.get("device"));
+  const key = recordKey(claims.sub, device);
 
   if (req.method === "GET") {
     const rec = parseRecord(await env.SAVES.get(key));

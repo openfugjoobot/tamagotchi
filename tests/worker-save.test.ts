@@ -3,6 +3,7 @@ import { handle, type Env } from "@/worker/index";
 import { resetJwksCache } from "@/worker/auth";
 import { makeTestKey, signJwt, jwksFetch } from "./helpers/jwt";
 import type { SaveStore } from "@/worker/store";
+import { recordKey, normalizeDevice } from "@/worker/store";
 
 const CLIENT = "cid-test";
 const BEARER = "Bearer ";
@@ -130,5 +131,42 @@ describe("worker: /api/save", () => {
     // Und der Schreibvorgang muss tatsaechlich im gemeinsamen Store gelandet
     // sein - sonst prueft der 404 oben nichts.
     expect([...shared.map.keys()]).toEqual(["save:user-a"]);
+  });
+});
+
+describe("worker: Geraete-Slot", () => {
+  beforeEach(() => resetJwksCache());
+
+  it("behaelt den alten Schluessel fuer P1", () => {
+    expect(recordKey("u1", "p1")).toBe("save:u1");
+  });
+
+  it("gibt P2 einen eigenen Schluessel", () => {
+    expect(recordKey("u1", "p2")).toBe("save:u1:p2");
+  });
+
+  it("normalisiert unbekannte Geraete auf p1", () => {
+    expect(normalizeDevice(null)).toBe("p1");
+    expect(normalizeDevice("")).toBe("p1");
+    expect(normalizeDevice("p3")).toBe("p1");
+    expect(normalizeDevice("p2")).toBe("p2");
+  });
+
+  it("schreibt P2 getrennt von P1", async () => {
+    const shared = fakeKv();
+    const c = await ctx("user-slot", shared.store);
+    await handle(req("PUT", c.token, record("2026-01-01T10:00:00.000Z", "P1-STAND")), c.env, c.deps);
+    await handle(req("PUT", c.token, record("2026-01-01T11:00:00.000Z", "P2-STAND"), URL_SAVE + "?device=p2"), c.env, c.deps);
+    expect(shared.map.get("save:user-slot")).toContain("P1-STAND");
+    expect(shared.map.get("save:user-slot:p2")).toContain("P2-STAND");
+  });
+
+  it("liest P2 nicht aus dem P1-Slot", async () => {
+    const shared = fakeKv();
+    const c = await ctx("user-read", shared.store);
+    await handle(req("PUT", c.token, record("2026-01-01T10:00:00.000Z", "NUR-P1")), c.env, c.deps);
+    // P2 hat noch nichts gespeichert -> 404, nicht der P1-Stand.
+    const res = await handle(req("GET", c.token, undefined, URL_SAVE + "?device=p2"), c.env, c.deps);
+    expect(res.status).toBe(404);
   });
 });

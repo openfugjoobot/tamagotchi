@@ -52,7 +52,10 @@
     <div class="container">
       <div class="header-left">
         <button class="hamburger" id="btn-menu" aria-label="Menu" aria-expanded="false" aria-controls="menu" aria-haspopup="dialog">☰</button>
-        <a class="brand" href="#top">Tamagotchi<span>P1</span></a>
+        <a class="brand" href="#top">Tamagotchi<span class="device-switch" id="device-switch">
+          <button class="dev-btn" type="button" data-device="p1" aria-pressed="true">P1</button>
+          <button class="dev-btn" type="button" data-device="p2" aria-pressed="false">P2</button>
+        </span></a>
       </div>
       <div class="header-actions">
         <button class="icon-link" id="btn-guide" aria-haspopup="dialog" aria-expanded="false" data-i18n-aria="guide" data-i18n-title="guide">

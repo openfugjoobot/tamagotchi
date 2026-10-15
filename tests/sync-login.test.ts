@@ -24,29 +24,29 @@ const withFetch = (status: number, body?: unknown) => ({
 
 describe("readSave: unterscheidet 'keine Cloud' von 'Abruf gescheitert'", () => {
   it("404 = absent (die Cloud hat wirklich keinen Stand)", async () => {
-    const r = await readSave("tok", withFetch(404));
+    const r = await readSave("tok", "p1", withFetch(404));
     expect(r.kind).toBe("absent");
   });
 
   it("200 mit Snapshot = found", async () => {
-    const r = await readSave("tok", withFetch(200, { snapshot: "S", updatedAt: "2026-01-01T10:00:00.000Z" }));
+    const r = await readSave("tok", "p1", withFetch(200, { snapshot: "S", updatedAt: "2026-01-01T10:00:00.000Z" }));
     expect(r.kind).toBe("found");
     if (r.kind === "found") expect(r.save.snapshot).toBe("S");
   });
 
   it("Netzfehler = error (NICHT absent)", async () => {
     const boom = (async () => { throw new Error("offline"); }) as unknown as typeof fetch;
-    const r = await readSave("tok", { fetchImpl: boom, api: "/api/save" });
+    const r = await readSave("tok", "p1", { fetchImpl: boom, api: "/api/save" });
     expect(r.kind).toBe("error");
   });
 
   it("500 = error (NICHT absent)", async () => {
-    const r = await readSave("tok", withFetch(500));
+    const r = await readSave("tok", "p1", withFetch(500));
     expect(r.kind).toBe("error");
   });
 
   it("200 mit kaputtem Body = error (NICHT absent)", async () => {
-    const r = await readSave("tok", withFetch(200, { nothing: true }));
+    const r = await readSave("tok", "p1", withFetch(200, { nothing: true }));
     expect(r.kind).toBe("error");
   });
 
@@ -54,7 +54,7 @@ describe("readSave: unterscheidet 'keine Cloud' von 'Abruf gescheitert'", () => 
     // Ein Fetch, der nie antwortet, muss in den Timeout laufen und darf
     // nicht als 'absent' durchgehen.
     const never = (() => new Promise<Response>(() => {})) as unknown as typeof fetch;
-    const r = await readSave("tok", { fetchImpl: never, api: "/api/save", timeoutMs: 30 });
+    const r = await readSave("tok", "p1", { fetchImpl: never, api: "/api/save", timeoutMs: 30 });
     expect(r.kind).toBe("error");
   });
 });

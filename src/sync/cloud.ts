@@ -1,5 +1,21 @@
 // Cloud-Spielstand: dünne Hülle um /api/save plus die Sync-Entscheidung.
 import { SAVE_API } from "../auth/config";
+import type { Device } from "../emu/devices";
+
+/**
+ * Query-Anhang fuer den Geraete-Slot.
+ *
+ * P1 bleibt am alten Endpunkt ohne Parameter - der Worker bildet daraus den
+ * gewohnten Schluessel und kein Bestandsnutzer verliert seinen Stand. Nur P2
+ * bekommt einen eigenen Slot daneben.
+ */
+export function deviceQuery(device: Device): string {
+  return device === "p2" ? "?device=p2" : "";
+}
+
+function apiFor(device: Device, deps: CloudDeps): string {
+  return (deps.api ?? SAVE_API) + deviceQuery(device);
+}
 
 export interface CloudSave {
   snapshot: string;
@@ -38,7 +54,7 @@ function headers(token: string): Record<string, string> {
  * kaputter Body) darf NICHT wie „keine Cloud vorhanden" behandelt werden.
  * Sonst wird ein lokaler Stand hochgeladen, weil man nicht nachsehen konnte.
  */
-export async function readSave(token: string, deps: CloudDeps = {}): Promise<ReadResult> {
+export async function readSave(token: string, device: Device, deps: CloudDeps = {}): Promise<ReadResult> {
   const f = deps.fetchImpl ?? fetch;
   const timeoutMs = deps.timeoutMs ?? 4000;
   let timer = 0;
@@ -47,7 +63,7 @@ export async function readSave(token: string, deps: CloudDeps = {}): Promise<Rea
   });
   try {
     const res = await Promise.race([
-      f(deps.api ?? SAVE_API, { headers: headers(token), cache: "no-store" }),
+      f(apiFor(device, deps), { headers: headers(token), cache: "no-store" }),
       limit,
     ]);
     if (res.status === 404) return { kind: "absent" };
@@ -95,10 +111,10 @@ export function planSync(cloud: ReadResult, localAt: number | null, opts: { forc
 }
 
 /** Cloud-Stand hochladen. true = angenommen (oder serverseitig als älter verworfen). */
-export async function pushSave(token: string, rec: CloudSave, deps: CloudDeps = {}): Promise<boolean> {
+export async function pushSave(token: string, device: Device, rec: CloudSave, deps: CloudDeps = {}): Promise<boolean> {
   const f = deps.fetchImpl ?? fetch;
   try {
-    const res = await f(deps.api ?? SAVE_API, { method: "PUT", headers: headers(token), body: JSON.stringify(rec) });
+    const res = await f(apiFor(device, deps), { method: "PUT", headers: headers(token), body: JSON.stringify(rec) });
     return res.ok;
   } catch {
     return false;
@@ -106,10 +122,10 @@ export async function pushSave(token: string, rec: CloudSave, deps: CloudDeps = 
 }
 
 /** Serverstand löschen (Datenschutz). */
-export async function deleteRemote(token: string, deps: CloudDeps = {}): Promise<boolean> {
+export async function deleteRemote(token: string, device: Device, deps: CloudDeps = {}): Promise<boolean> {
   const f = deps.fetchImpl ?? fetch;
   try {
-    const res = await f(deps.api ?? SAVE_API, { method: "DELETE", headers: headers(token) });
+    const res = await f(apiFor(device, deps), { method: "DELETE", headers: headers(token) });
     return res.ok;
   } catch {
     return false;

@@ -3,5 +3,6 @@ dist/
 *.local
 .vite/
 
-# Copyright-Firmware – nicht ins öffentliche Repo (siehe docs/README.md).
+# Copyright-Firmware – nicht ins öffentliche Repo (siehe emu/README.md).
 public/emu/rom0.bin
+public/emu/rom2.bin

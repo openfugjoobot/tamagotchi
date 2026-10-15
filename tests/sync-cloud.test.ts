@@ -72,7 +72,7 @@ describe("sync: Nachfrage nur wenn die Cloud neuer ist", () => {
 describe("sync: API-Aufrufe", () => {
   it("PUT schickt Methode, Header und Body", async () => {
     const seen = emptySeen();
-    const ok = await pushSave("tok123", { snapshot: "SNAP", updatedAt: "2026-01-01T10:00:00.000Z" }, {
+    const ok = await pushSave("tok123", "p1", { snapshot: "SNAP", updatedAt: "2026-01-01T10:00:00.000Z" }, {
       fetchImpl: stubFetch(() => new Response(JSON.stringify({ ok: true }), { status: 200 }), seen),
       api: "/api/save",
     });
@@ -84,27 +84,27 @@ describe("sync: API-Aufrufe", () => {
   });
 
   it("GET liefert found oder absent", async () => {
-    const rec = await readSave("t", {
+    const rec = await readSave("t", "p1", {
       fetchImpl: stubFetch(() => new Response(JSON.stringify({ snapshot: "X", updatedAt: "2026-01-01T10:00:00.000Z" }), { status: 200 }), emptySeen()),
       api: "/api/save",
     });
     expect(rec.kind).toBe("found");
     if (rec.kind === "found") expect(rec.save.snapshot).toBe("X");
 
-    const empty = await readSave("t", { fetchImpl: stubFetch(() => new Response(null, { status: 404 }), emptySeen()) });
+    const empty = await readSave("t", "p1", { fetchImpl: stubFetch(() => new Response(null, { status: 404 }), emptySeen()) });
     expect(empty.kind).toBe("absent");
   });
 
   it("Netzfehler sind kein Absturz", async () => {
     const boom = (async () => { throw new Error("offline"); }) as unknown as typeof fetch;
-    expect((await readSave("t", { fetchImpl: boom })).kind).toBe("error");
-    expect(await pushSave("t", { snapshot: "x", updatedAt: "2026-01-01T00:00:00.000Z" }, { fetchImpl: boom })).toBe(false);
-    expect(await deleteRemote("t", { fetchImpl: boom })).toBe(false);
+    expect((await readSave("t", "p1", { fetchImpl: boom })).kind).toBe("error");
+    expect(await pushSave("t", "p1", { snapshot: "x", updatedAt: "2026-01-01T00:00:00.000Z" }, { fetchImpl: boom })).toBe(false);
+    expect(await deleteRemote("t", "p1", { fetchImpl: boom })).toBe(false);
   });
 
   it("DELETE ruft die richtige Methode", async () => {
     const seen = emptySeen();
-    const ok = await deleteRemote("t", { fetchImpl: stubFetch(() => new Response(null, { status: 200 }), seen) });
+    const ok = await deleteRemote("t", "p1", { fetchImpl: stubFetch(() => new Response(null, { status: 200 }), seen) });
     expect(ok).toBe(true);
     expect(seen.method).toBe("DELETE");
   });
