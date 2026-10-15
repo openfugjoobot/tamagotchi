@@ -9,6 +9,12 @@ export const SOUND_KEY = "tamagotchi.sound";
 export const SHELL_KEY = "tamagotchi.shell";
 export const BG_KEY = "tamagotchi.bg";
 export const NOTIFY_KEY = "tamagotchi.notify";
+/** App-Badge am Icon anzeigen ("Braucht Aufmerksamkeit"). */
+export const BADGE_KEY = "tamagotchi.badge";
+/** Bildschirm wach halten, solange der Tab offen ist. */
+export const WAKELOCK_KEY = "tamagotchi.wakelock";
+/** Einmaliger Install-Hinweis wurde weggeklickt. */
+export const DISMISS_KEY = "tamagotchi.install.dismissed";
 /** Google-ID-Token. localStorage, damit die Anmeldung das Schliessen des Tabs
  *  ueberlebt; die Gueltigkeit wird ueber die exp-Claim geprueft. */
 export const IDTOKEN_KEY = "tamagotchi.idtoken.v1";

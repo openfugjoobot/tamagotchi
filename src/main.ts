@@ -14,7 +14,22 @@ import { SHELLS, applyShell, savedShell, starPolygon, type Shell } from "./shell
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, iconNames, t } from "./i18n";
 import { THEMES, BG_KEY, AUTO, savedBg, resolveTheme } from "./theme";
-import { SOUND_KEY, NOTIFY_KEY, DEVICE_KEY } from "./storage/keys";
+import { SOUND_KEY, NOTIFY_KEY, DEVICE_KEY, BADGE_KEY, WAKELOCK_KEY } from "./storage/keys";
+import {
+  initPwa,
+  registerServiceWorker,
+  checkForUpdate,
+  fetchVersion,
+  setAppBadge,
+  clearAppBadge,
+  badgeRequested,
+  enableWakeLock,
+  disableWakeLock,
+  storageInfo,
+  requestBackgroundSync,
+  onBackgroundSync,
+  showInstallHelp,
+} from "./pwa";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
@@ -56,17 +71,17 @@ const loadingEl = document.getElementById("loading");
 const menuEl = document.getElementById("menu");
 
 // Service Worker registrieren (ausgelagert, damit kein Inline-Script nötig ist → strikte CSP).
-// Der SW ist network-first, Inhalte kommen also ohnehin frisch. Kein Auto-Reload bei
-// Updates: der erzeugte beim SW-Wechsel (controllerchange) einen zweiten Lade-Spinner.
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js?v=5", { updateViaCache: "none" }).then((r) => r.update()).catch(() => { /* ignore */ });
-}
+// Updates werden nicht mehr still uebernommen: der neue SW wartet, die Seite
+// bietet einen Reload an (siehe src/pwa.ts).
+void registerServiceWorker();
 
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
 // Testmodus: feste Schrittzahl, ein Frame, dann Stopp (kein rAF-Loop).
 const STATIC = Number(params.get("static") ?? "0") || 0;
 const shellParam = params.get("shell");
+/** Manifest-Shortcut "How to play" oeffnet direkt die Anleitung. */
+const openGuideOnBoot = params.get("guide") === "1";
 
 // ---- Hintergrund-Themes (Definition in src/theme.ts) ----
 // "auto" wählt nach Tageszeit; gespeichert wird die Auswahl, angezeigt das Theme.
@@ -122,6 +137,61 @@ function updateSoundLabel(): void {
   const el = document.getElementById("sound-state");
   if (el) el.textContent = t(soundOn ? "on" : "off");
   document.getElementById("btn-sound")?.setAttribute("aria-pressed", String(soundOn));
+}
+
+// ---- Toast: kurze Einblendungen (Update-Hinweis, Installations-Feedback) ----
+let toastTimer = 0;
+function showToast(msg: string, actionLabel?: string, onAction?: () => void): void {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  const msgEl = document.getElementById("toast-msg");
+  const actionEl = document.getElementById("toast-action") as HTMLButtonElement | null;
+  if (msgEl) msgEl.textContent = msg;
+  if (actionEl) {
+    if (actionLabel && onAction) {
+      actionEl.hidden = false;
+      actionEl.textContent = actionLabel;
+      actionEl.onclick = () => { hideToast(); onAction(); };
+    } else {
+      actionEl.hidden = true;
+      actionEl.onclick = null;
+    }
+  }
+  el.hidden = false;
+  window.clearTimeout(toastTimer);
+  // Mit Aktion bleibt er laenger stehen - der Nutzer soll reagieren koennen.
+  toastTimer = window.setTimeout(hideToast, actionLabel ? 12_000 : 5_000);
+}
+function hideToast(): void {
+  const el = document.getElementById("toast");
+  if (el) el.hidden = true;
+  window.clearTimeout(toastTimer);
+}
+document.getElementById("toast-close")?.addEventListener("click", hideToast);
+
+// ---- App-Badge ("Braucht Aufmerksamkeit") ----
+/** Setzt das Icon-Badge, wenn der Nutzer das will und das Tier Aufmerksamkeit braucht. */
+function refreshBadge(needsAttention = false): void {
+  if (!badgeRequested()) return;
+  setAppBadge(needsAttention ? 1 : 0);
+}
+
+function updateBadgeLabel(): void {
+  const el = document.getElementById("badge-state");
+  const on = badgeRequested();
+  if (el) el.textContent = t(on ? "on" : "off");
+  document.getElementById("btn-badge")?.setAttribute("aria-pressed", String(on));
+}
+
+// ---- Wake Lock ----
+function wakeLockRequested(): boolean {
+  try { return localStorage.getItem(WAKELOCK_KEY) === "1"; } catch { return false; }
+}
+function updateWakeLockLabel(): void {
+  const el = document.getElementById("wakelock-state");
+  const on = wakeLockRequested();
+  if (el) el.textContent = t(on ? "on" : "off");
+  document.getElementById("btn-wakelock")?.setAttribute("aria-pressed", String(on));
 }
 
 function updateNotifyLabel(): void {
@@ -512,6 +582,7 @@ function initUI(): void {
       notifyEnabled = false;
       try { localStorage.setItem(NOTIFY_KEY, "0"); } catch { /* ignore */ }
       updateNotifyLabel();
+      clearAppBadge();
       return;
     }
     if (!("Notification" in window)) return;
@@ -528,25 +599,68 @@ function initUI(): void {
   document.documentElement.lang = currentLang();
 
   // ---- Install-Hinweis (PWA) ----
+  // Der Prompt selbst wird in src/pwa.ts verwaltet; hier nur der Knopf im Menue.
   const installBtn = document.getElementById("btn-install");
-  window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();
-    (window as unknown as { __installPrompt?: unknown }).__installPrompt = e;
-    if (installBtn) installBtn.hidden = false;
+  installBtn?.addEventListener("click", () => { showInstallHelp(); closeMenu(); });
+
+  // ---- App-Badge ----
+  updateBadgeLabel();
+  document.getElementById("btn-badge")?.addEventListener("click", () => {
+    const on = !badgeRequested();
+    try { localStorage.setItem(BADGE_KEY, on ? "1" : "0"); } catch { /* ignore */ }
+    if (!on) clearAppBadge(); else void refreshBadge();
+    updateBadgeLabel();
   });
-  installBtn?.addEventListener("click", () => {
-    const p = (window as unknown as { __installPrompt?: { prompt(): void; userChoice: Promise<unknown> } }).__installPrompt;
-    if (!p) return;
-    p.prompt();
-    void p.userChoice.finally(() => { (window as unknown as { __installPrompt?: unknown }).__installPrompt = undefined; installBtn.hidden = true; });
+
+  // ---- Wake Lock ----
+  updateWakeLockLabel();
+  document.getElementById("btn-wakelock")?.addEventListener("click", async () => {
+    const on = !wakeLockRequested();
+    try { localStorage.setItem(WAKELOCK_KEY, on ? "1" : "0"); } catch { /* ignore */ }
+    if (on) {
+      const ok = await enableWakeLock();
+      if (!ok) {
+        // API fehlt oder verweigert - Zustand nicht faelschlich als "an" anzeigen.
+        try { localStorage.setItem(WAKELOCK_KEY, "0"); } catch { /* ignore */ }
+      }
+    } else {
+      void disableWakeLock();
+    }
+    updateWakeLockLabel();
+  });
+
+  // ---- Update-Suche ----
+  document.getElementById("btn-update")?.addEventListener("click", async () => {
+    const state = document.getElementById("update-state");
+    if (state) state.textContent = "…";
+    const result = await checkForUpdate();
+    if (state) state.textContent = "";
+    if (result === "current") showToast(t("updateNone"));
+    else if (result === "unsupported") showToast(t("updateNone"));
+    else showToast(t("updateFound"));
     closeMenu();
   });
+
+  // ---- Version im Footer ----
+  // Nicht appVersion() abfragen: das Register des Service Workers laeuft parallel,
+  // die Versionsdatei waere hier oft noch nicht gelesen. Direkt holen.
+  const verEl = document.getElementById("footer-version");
+  const verDot = document.getElementById("footer-version-dot");
+  void fetchVersion().then((ver) => {
+    if (!verEl || !ver) return;
+    verEl.textContent = `${t("version")} ${ver}`;
+    verEl.hidden = false;
+    if (verDot) verDot.hidden = false;
+  });
+
   window.addEventListener("appinstalled", () => { if (installBtn) installBtn.hidden = true; });
 
   // Konto (nur wenn eine Client-ID hinterlegt ist)
   initAccount();
   initGuideDialog();
   initDeviceSwitch();
+  // Manifest-Shortcut: ?guide=1 oeffnet die Anleitung direkt.
+  if (openGuideOnBoot) window.setTimeout(() => document.getElementById("btn-guide")?.click(), 300);
 
   // Gras am Boden
   const grassEl = document.getElementById("grass");
@@ -690,6 +804,8 @@ async function flushCloud(): Promise<void> {
     if (!ok) allOk = false;
   }
   if (allOk) cloudDirty = false;
+  // Ohne Netz: der Service Worker holt den Push nach, sobald wieder Verbindung besteht.
+  else void requestBackgroundSync();
 }
 
 /** Fragt, welcher Spielstand gelten soll (Cloud oder dieses Gerät). */
@@ -922,13 +1038,29 @@ function initAccount(): void {
       p.textContent = t("privacyBody");
       return p;
     };
+    // Speicherzustand: schuetzt der Browser den Spielstand vor Raeumung?
+    const storageLine = (): HTMLElement => {
+      const wrap = document.createElement("div");
+      wrap.className = "account-storage";
+      const line = document.createElement("p");
+      line.className = "account-line account-meta";
+      line.textContent = `${t("storage")}: …`;
+      wrap.append(line);
+      void storageInfo().then((info) => {
+        if (!info) { line.textContent = t("storage"); return; }
+        const mb = (n: number) => (n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0);
+        const state = info.persisted ? t("storagePersisted") : t("storageVolatile");
+        line.textContent = `${t("storage")}: ${mb(info.usage)} / ${mb(info.quota)} MB · ${state}`;
+      });
+      return wrap;
+    };
     if (!s) {
       const hint = document.createElement("p");
       hint.className = "account-line";
       hint.textContent = t("accountHint");
       const slot = document.createElement("div");
       slot.className = "gsi-slot";
-      bodyEl.append(hint, slot, privacy());
+      bodyEl.append(hint, slot, storageLine(), privacy());
     } else {
       const idRow = document.createElement("div");
       idRow.className = "account-id";
@@ -959,7 +1091,7 @@ function initAccount(): void {
         close();
         if (accountModal) accountModal.hidden = false;
       });
-      bodyEl.append(idRow, sync, out, delAcc, privacy());
+      bodyEl.append(idRow, sync, out, delAcc, storageLine(), privacy());
     }
     renderFace();
     ensureButton();
@@ -1045,6 +1177,12 @@ function saveNow(): void {
 }
 
 async function boot(): Promise<void> {
+  // PWA-Lifecycle zuerst: Update-Prompt und Offline-Banner sollen früh stehen,
+  // auch wenn der Emulator noch laedt.
+  initPwa({ toast: showToast });
+  // Sync-Anforderung aus dem Service Worker (Background/Periodic Sync).
+  onBackgroundSync(() => { void flushCloud(); });
+
   const wasm = await fetch("/emu/tamalib.wasm").then((r) => r.arrayBuffer());
   // Bestandsstand von vor dem Umbau auf den P1-Slot heben, bevor irgendwer liest.
   migrateLegacyEmu(localStorage);
@@ -1150,7 +1288,11 @@ function bindButtons(): void {
   (["pointerup", "pointercancel", "mouseup", "touchend", "blur"] as const).forEach((ev) =>
     window.addEventListener(ev, releaseAll),
   );
-  document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) releaseAll();
+    // Zurueck im Tab: Badge weg, der Nutzer kuemmert sich ja gerade.
+    else clearAppBadge();
+  });
 
   // Pet-Buttons nur, solange kein Dialog offen ist (sonst würde z. B. Escape im
   // Menü gleichzeitig Button C auslösen).
@@ -1201,6 +1343,7 @@ function frame(ts: number): void {
   piezo.update(b.freq, b.on);
   if (e.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
     void notify(t("notifyTitle"), t("notifyBody"));
+    refreshBadge(true);
   }
 
   // periodisch speichern (alle ~5s)
@@ -1226,6 +1369,7 @@ setInterval(() => {
   pump(MAX_STEPS_PER_FRAME);
   if (e.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
     void notify(t("notifyTitle"), t("notifyBody"));
+    refreshBadge(true);
   }
 }, 5000);
 

@@ -532,6 +532,54 @@ code { background: color-mix(in srgb, var(--ink) 10%, transparent); padding: 1px
 .footer-dot { opacity: .5; }
 .site-footer a { color: inherit; text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--ink) 30%, transparent); }
 .site-footer a:hover { color: var(--ink); }
+#footer-version { opacity: .7; font-variant-numeric: tabular-nums; }
+
+/* ================= Offline-Banner ================= */
+.offline-banner {
+  position: sticky; top: 0; z-index: 31;
+  padding: 7px 14px; text-align: center;
+  font-size: 12.5px; font-weight: 600;
+  background: color-mix(in srgb, #e0a020 22%, var(--surface));
+  color: var(--ink);
+  border-bottom: 1px solid color-mix(in srgb, #e0a020 40%, transparent);
+}
+.offline-banner[hidden] { display: none; }
+
+/* ================= Toast ================= */
+.toast {
+  position: fixed; z-index: 70;
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  display: flex; align-items: center; gap: 10px;
+  max-width: min(92vw, 420px); padding: 11px 12px 11px 16px;
+  border-radius: 14px; border: 1px solid var(--border-strong);
+  background: var(--surface-2); color: var(--ink);
+  box-shadow: var(--shadow); font-size: 13.5px;
+}
+.toast[hidden] { display: none; }
+.toast-action {
+  flex: none; min-height: 30px; padding: 0 12px; border-radius: 9px; cursor: pointer;
+  border: 1px solid color-mix(in srgb, var(--accent-text) 45%, transparent);
+  background: color-mix(in srgb, var(--accent-text) 14%, transparent);
+  color: var(--accent-text); font: inherit; font-weight: 700; font-size: 12.5px;
+}
+.toast-action[hidden] { display: none; }
+.toast-close {
+  flex: none; width: 26px; height: 26px; border: 0; border-radius: 8px; cursor: pointer;
+  background: transparent; color: var(--ink-dim); font: inherit; font-size: 12px; line-height: 1;
+}
+.toast-close:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+
+/* ================= Install-Anleitung ================= */
+.install-help { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; background: rgba(10,20,35,.45); backdrop-filter: blur(6px); }
+.install-help[hidden] { display: none; }
+.install-help-body { padding: 18px 20px 20px; text-align: center; }
+.install-help-icon { width: 72px; height: 72px; border-radius: 18px; display: block; margin: 0 auto 14px; }
+.install-help-body p { margin: 0 0 6px; font-size: 13.5px; line-height: 1.6; color: var(--ink-dim); }
+.install-help-body p[hidden] { display: none; }
+.install-help-body .btn { margin-top: 16px; }
+.btn-ghost { min-height: 40px; padding: 0 16px; border-radius: 11px; cursor: pointer; font: inherit; font-weight: 600; font-size: 13px; border: 1px solid var(--border); background: transparent; color: var(--ink-dim); }
+.btn-ghost:hover { color: var(--ink); border-color: var(--border-strong); }
 
 /* ================= Modal ================= */
 .modal { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 20px; background: rgba(10,20,35,.45); backdrop-filter: blur(6px); }

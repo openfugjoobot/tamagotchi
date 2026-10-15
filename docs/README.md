@@ -50,7 +50,29 @@ src/storage/ Emulator-Snapshot + localStorage-Keys
 src/theme.ts Hintergrund-Themes (Start + Guide)
 src/ui/      Geräte-Gehäuse
 src/main.ts  Verdrahtung (Frame-Loop, Buttons, Sound, Save, Nachhol-Logik)
+src/pwa.ts   PWA-Lifecycle: SW-Updates, Offline-Status, Installation, Badge, Wake Lock
 ```
+
+## PWA
+
+Die App ist installierbar und offline lauffähig. Was sie mitbringt:
+
+| Thema | Umsetzung |
+| --- | --- |
+| Offline-Start | `sw.js` precached beim Install alle Build-Artefakte (`precache.json`) |
+| Caching | Netz-zuerst für HTML, Cache-zuerst für gehashte Assets/ROM/WASM, Stale-while-revalidate für den Rest |
+| Offline-Fallback | `/offline.html` bei fehlgeschlagener Navigation |
+| Updates | Neue Version **wartet** auf Freigabe; die Seite bietet einen Reload an. Kein Auto-Reload mitten im Spiel. |
+| Version | Build-Hash über alle Artefakte, beim Build in `sw.js` gestempelt und im Footer sichtbar |
+| Installation | `beforeinstallprompt` + eigener Dialog mit Anleitung (iOS-Variante für Safari) |
+| Speicher | `navigator.storage.persist()` schützt den Spielstand vor Räumung; Belegung im Konto-Panel |
+| Badge | `setAppBadge()`, wenn das Tier Aufmerksamkeit braucht (zuschaltbar) |
+| Wake Lock | Bildschirm bleibt wach, solange der Tab offen ist (zuschaltbar) |
+| Sync | Background Sync / Periodic Sync holen den Cloud-Push nach |
+
+Die Version wird **nicht** von Hand gepflegt: `scripts/gen-precache.mjs` hasht nach
+dem Build alle Dateien und ersetzt `__SW_VERSION__` in `dist/sw.js`. Ändert sich
+nichts, bleibt der Hash gleich.
 
 Weiter: [ARCHITECTURE.md](./ARCHITECTURE.md) · [DECISIONS.md](./DECISIONS.md) ·
 [GAMEPLAY.md](./GAMEPLAY.md)

@@ -25,6 +25,9 @@
   <meta name="twitter:image" content="https://tamagotchi.fugjoo.com/icons/og.png" />
 
   <link rel="manifest" href="/manifest.webmanifest" />
+  <!-- Emulator-Kern und ROM früh holen: ohne die startet nichts. -->
+  <link rel="preload" href="/emu/tamalib.wasm" as="fetch" type="application/wasm" crossorigin />
+  <link rel="preload" href="/emu/rom0.bin" as="fetch" type="application/octet-stream" crossorigin />
   <link rel="icon" href="/icons/favicon.ico" sizes="any" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192-v2.png" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512-v2.png" />
@@ -72,6 +75,7 @@
       </div>
     </div>
   </header>
+  <div id="offline-banner" class="offline-banner" role="status" hidden data-i18n="offline">Offline — your pet keeps running.</div>
 
   <main id="top">
     <h1 class="sr-only">Tamagotchi P1 — play the original 1996 firmware in your browser</h1>
@@ -117,6 +121,8 @@
       <a href="https://github.com/openfugjoobot/tamagotchi" target="_blank" rel="noopener">GitHub</a>
       <span class="footer-dot">·</span>
       <a href="https://fugjoo.com" target="_blank" rel="noopener">fugjoo.com</a>
+      <span class="footer-dot" id="footer-version-dot" hidden>·</span>
+      <span id="footer-version" hidden></span>
     </div>
   </footer>
 
@@ -154,6 +160,11 @@
   </div>
 
   <div id="loading" role="status" aria-live="polite"><div class="spin"></div><div class="loadtxt" data-i18n="loading">loading …</div><div id="loadbar" hidden><i id="loadbar-fill"></i></div></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-msg"></span>
+    <button id="toast-action" class="toast-action" type="button" hidden></button>
+    <button id="toast-close" class="toast-close" type="button" aria-label="Close">✕</button>
+  </div>
 
   <div class="menu" id="menu" hidden role="dialog" aria-modal="true" aria-labelledby="menu-title">
     <div class="menu-head"><b id="menu-title" data-i18n="menu">Menu</b><button class="menu-x" id="menu-close" aria-label="Close">✕</button></div>
@@ -200,6 +211,36 @@
         </span>
         <span class="chev">›</span>
       </button>
+      <button class="menu-row" id="btn-badge" aria-pressed="false">
+        <span class="menu-row-main">
+          <svg class="mi" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3.8" y="3.8" width="16.4" height="16.4" rx="4.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+            <circle cx="16.2" cy="7.8" r="2.6" fill="currentColor"/>
+          </svg>
+          <span data-i18n="badge">Badge on app icon</span>
+        </span>
+        <span class="chev" id="badge-state">off</span>
+      </button>
+      <button class="menu-row" id="btn-wakelock" aria-pressed="false">
+        <span class="menu-row-main">
+          <svg class="mi" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 3.6v3.2M12 17.2v3.2M3.6 12h3.2M17.2 12h3.2M6.1 6.1l2.3 2.3M15.6 15.6l2.3 2.3M17.9 6.1l-2.3 2.3M8.4 15.6l-2.3 2.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            <circle cx="12" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+          </svg>
+          <span data-i18n="wakelock">Keep screen awake</span>
+        </span>
+        <span class="chev" id="wakelock-state">off</span>
+      </button>
+      <button class="menu-row" id="btn-update">
+        <span class="menu-row-main">
+          <svg class="mi" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 4.6v10.2M8.4 11.2 12 14.8l3.6-3.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5.4 18.6h13.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+          </svg>
+          <span data-i18n="updateCheck">Check for updates</span>
+        </span>
+        <span class="chev" id="update-state"></span>
+      </button>
       <button class="menu-row danger" id="btn-reset">
         <span class="menu-row-main">
           <svg class="mi" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -216,6 +257,16 @@
     <div class="menu-head"><b id="account-title" data-i18n="account">Account</b><button class="menu-x" id="account-close" aria-label="Close">✕</button></div>
     <div class="account-body" id="account-body"></div>
   </div>
+  <div id="install-help" class="win install-help" hidden role="dialog" aria-modal="true" aria-labelledby="install-help-title">
+    <div class="menu-head"><b id="install-help-title" data-i18n="installHelpTitle">Install as app</b><button class="menu-x" id="install-help-close" aria-label="Close">✕</button></div>
+    <div class="install-help-body">
+      <img class="install-help-icon" src="/icons/icon-192-v2.png" srcset="/icons/icon-192-v2.png 1x, /icons/icon-512-v2.png 2x" width="72" height="72" alt="" decoding="async" />
+      <p class="install-help-ios" id="install-help-ios" data-i18n="installHelpIos"></p>
+      <p class="install-help-other" id="install-help-other" data-i18n="installHelpOther"></p>
+      <button class="btn btn-ghost" id="install-help-dismiss" type="button" data-i18n="installHelpDismiss">Don't show again</button>
+    </div>
+  </div>
+
   <div id="guide-modal" class="win guide-pop" hidden role="dialog" aria-modal="true" aria-labelledby="guide-title">
     <div class="menu-head"><b id="guide-title" data-i18n="guide">Guide</b><button class="menu-x" id="guide-close" aria-label="Close">✕</button></div>
     <div class="guide-body">

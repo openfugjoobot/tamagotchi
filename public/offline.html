@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Offline — Tamagotchi P1</title>
+  <meta name="theme-color" content="#0a1a2e" />
+  <link rel="icon" href="/icons/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192-v2.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: grid; place-items: center; padding: 24px;
+      background: #0a1a2e; color: #e8eef7;
+      font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      text-align: center;
+    }
+    .card { max-width: 26rem; }
+    img { width: 96px; height: 96px; border-radius: 22px; display: block; margin: 0 auto 20px; }
+    h1 { margin: 0 0 10px; font-size: 1.375rem; }
+    p { margin: 0 0 8px; color: #a9b6c9; }
+    button {
+      margin-top: 18px; padding: 11px 20px; border: 0; border-radius: 11px;
+      background: #2ad3c8; color: #06212b; font: inherit; font-weight: 700; cursor: pointer;
+    }
+    button:hover { filter: brightness(1.08); }
+    .hint { font-size: .875rem; margin-top: 16px; color: #7d8ba0; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <img src="/icons/icon-192-v2.png" alt="" width="96" height="96" />
+    <h1 id="title">You're offline</h1>
+    <p id="body">The app couldn't reach the server. Once you've opened it at least once, it starts without a connection.</p>
+    <button id="retry" type="button">Try again</button>
+    <p class="hint" id="hint">Your pet keeps running locally either way.</p>
+  </main>
+  <script>
+    // Sprache aus der Browsersprache – die Offline-Seite soll kein Bundel laden.
+    var L = {
+      de: ["Du bist offline", "Die App erreicht den Server nicht. Nach dem ersten Öffnen startet sie auch ohne Verbindung.", "Erneut versuchen", "Dein Tier läuft lokal ohnehin weiter."],
+      it: ["Sei offline", "L'app non raggiunge il server. Dopo la prima apertura si avvia anche senza connessione.", "Riprova", "Il tuo animale continua comunque in locale."],
+      en: ["You're offline", "The app couldn't reach the server. Once you've opened it at least once, it starts without a connection.", "Try again", "Your pet keeps running locally either way."]
+    };
+    var k = (navigator.language || "en").slice(0, 2).toLowerCase();
+    var s = L[k] || L.en;
+    document.documentElement.lang = L[k] ? k : "en";
+    document.title = s[0] + " — Tamagotchi P1";
+    document.getElementById("title").textContent = s[0];
+    document.getElementById("body").textContent = s[1];
+    document.getElementById("retry").textContent = s[2];
+    document.getElementById("hint").textContent = s[3];
+    document.getElementById("retry").addEventListener("click", function () { location.href = "/"; });
+    // Automatisch zurueck, sobald wieder Netz da ist.
+    window.addEventListener("online", function () { location.href = "/"; });
+  </script>
+</body>
+</html>

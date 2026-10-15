@@ -4,13 +4,18 @@
   "short_name": "Tamagotchi",
   "description": "Play the original 1996 Tamagotchi P1 firmware in your browser. Feed, play and raise your pet — progress saves automatically.",
   "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui", "browser"],
   "orientation": "any",
   "background_color": "#0a1a2e",
   "theme_color": "#0a1a2e",
   "categories": ["games", "entertainment"],
+  "prefer_related_applications": false,
+  "launch_handler": { "client_mode": ["navigate-existing", "auto"] },
+  "handle_links": "preferred",
   "icons": [
     {
       "src": "/icons/favicon.ico",
@@ -34,15 +39,44 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "monochrome"
     }
   ],
   "screenshots": [
     {
-      "src": "/icons/og.png",
-      "sizes": "1200x630",
+      "src": "/icons/shot-wide.png",
+      "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "Tamagotchi P1 in the browser"
+      "label": "Tamagotchi P1 running in a desktop browser"
+    },
+    {
+      "src": "/icons/shot-narrow.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Tamagotchi P1 on a phone"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Play",
+      "short_name": "Play",
+      "description": "Open your Tamagotchi",
+      "url": "/",
+      "icons": [{ "src": "/icons/icon-192-v2.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "How to play",
+      "short_name": "Guide",
+      "description": "The manual: feeding, cleaning, discipline",
+      "url": "/?guide=1",
+      "icons": [{ "src": "/icons/icon-192-v2.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }
