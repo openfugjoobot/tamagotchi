@@ -131,14 +131,14 @@ main, .site-footer { position: relative; z-index: 1; }
 .site-header .container { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 60px; }
 .brand { color: inherit; text-decoration: none; font-weight: 800; letter-spacing: .3px; font-size: 17px; white-space: nowrap; }
 .brand span { color: var(--accent-text); margin-left: 3px; }
-/* Umschalter P1/P2 im Titel */
+/* Umschalter P1/P2 im Titel: zeigt das aktive Geraet, Klick wechselt */
 .device-switch { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; }
 .dev-btn {
   font: inherit; font-size: 13px; font-weight: 700; letter-spacing: .3px;
   padding: 1px 6px; border-radius: 6px; cursor: pointer; line-height: 1.4;
-  border: 1px solid var(--border-strong); background: transparent; color: var(--ink);
+  color: var(--accent-text); border: 1px solid var(--accent-text); background: transparent;
 }
-.dev-btn[aria-pressed="true"] { color: var(--accent-text); border-color: var(--accent-text); }
+.dev-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-text) 12%, transparent); }
 .dev-btn:disabled { opacity: .4; cursor: not-allowed; }
 .dev-btn:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 1px; }
 .hamburger {

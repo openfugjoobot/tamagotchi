@@ -1,5 +1,5 @@
 import { createEmulator, LCD_WIDTH, LCD_HEIGHT } from "./emu/emulator";
-import { DEVICES, DEVICE_IDS, pickInitialDevice, type Device } from "./emu/devices";
+import { DEVICES, DEVICE_IDS, pickInitialDevice, nextDevice, switchLabel, type Device } from "./emu/devices";
 import { STEPS_PER_SECOND, unitsForMs, Pacer } from "./emu/clock";
 import type { Emulator } from "./emu/emulator";
 import { drawLcd } from "./render/lcd";
@@ -574,6 +574,9 @@ function pump(maxSteps: number): void {
   for (const id of DEVICE_IDS) emus[id]?.step(steps);
 }
 
+/** Ist der P2-ROM geladen? Steuert, ob der Schalter umschalten darf. */
+let p2Available = true;
+
 /** Laufende Emulatoren je Geraet. Beide laufen; gezeichnet wird nur `active`. */
 const emus: Partial<Record<Device, Emulator>> = {};
 /** Welches Geraet der Nutzer gerade bedient. */
@@ -581,16 +584,20 @@ let active: Device = "p1";
 /** Aktive Instanz oder null, solange noch nichts geladen ist. */
 const cur = (): Emulator | null => emus[active] ?? null;
 
-/** Schalter-Optik an das aktive Geraet angleichen. */
+/** Schalter-Beschriftung an das aktive Geraet angleichen. */
 function syncDeviceButtons(): void {
-  for (const el of document.querySelectorAll<HTMLElement>(".dev-btn")) {
-    el.setAttribute("aria-pressed", el.dataset.device === active ? "true" : "false");
-  }
+  const btn = document.getElementById("dev-toggle");
+  if (!btn) return;
+  btn.textContent = switchLabel(active);
+  // aria-pressed beschreibt hier "ist P2 aktiv" - als Umschalter, nicht als Auswahl.
+  btn.setAttribute("aria-pressed", active === "p2" ? "true" : "false");
+  btn.setAttribute("aria-label", t("switchTo").replace("{device}", DEVICES[nextDevice(active)].label));
 }
 
 /** P2 ist nicht ladbar (ROM fehlt): Schalter sperren statt still scheitern. */
 function disableP2(): void {
-  const b = document.querySelector<HTMLButtonElement>('.dev-btn[data-device="p2"]');
+  p2Available = false;
+  const b = document.getElementById("dev-toggle") as HTMLButtonElement | null;
   if (!b) return;
   b.disabled = true;
   b.title = t("p2Unavailable");
@@ -607,16 +614,14 @@ function setActive(device: Device): void {
   lastTs = performance.now();
 }
 
-/** Klicks auf den Titel-Umschalter. Der Titel ist ein Link - Klicks abfangen. */
+/** Klick auf den Titel-Schalter: auf das andere Geraet wechseln. Der Titel ist
+ *  ein Link - Klicks abfangen, sonst springt die Seite nach #top. */
 function initDeviceSwitch(): void {
-  const box = document.getElementById("device-switch");
-  if (!box) return;
-  box.addEventListener("click", (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLElement>(".dev-btn");
-    const id = btn?.dataset.device;
-    if (id !== "p1" && id !== "p2") return;
-    e.preventDefault(); // sonst springt der Link nach #top
-    setActive(id);
+  const btn = document.getElementById("dev-toggle");
+  if (!btn) return;
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    setActive(nextDevice(active, { p2Available }));
   });
 }
 let iconImgs: IconImages = [];
@@ -1044,7 +1049,6 @@ async function boot(): Promise<void> {
   // Bestandsstand von vor dem Umbau auf den P1-Slot heben, bevor irgendwer liest.
   migrateLegacyEmu(localStorage);
 
-  let p2Available = true;
   for (const id of DEVICE_IDS) {
     const spec = DEVICES[id];
     try {
@@ -1055,7 +1059,7 @@ async function boot(): Promise<void> {
       emus[id] = await createEmulator({ wasm, rom: new Uint8Array(romBuf) });
     } catch {
       // P2 kann fehlen (ROM nicht vorhanden) - P1 allein laeuft weiter.
-      if (id === "p2") { p2Available = false; disableP2(); continue; }
+      if (id === "p2") { disableP2(); continue; }
       throw new Error(`ROM fuer ${id} konnte nicht geladen werden`);
     }
   }
