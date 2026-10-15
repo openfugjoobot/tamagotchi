@@ -111,14 +111,29 @@ function loadScript(): Promise<GsiId> {
   return loader;
 }
 
+export interface RestoreOptions {
+  /**
+   * Nur setzen, wenn der stille Refresh tatsaechlich ein neues Token geliefert hat.
+   *
+   * Ein abgelaufenes Token ist der einzige Hinweis fuer GIS, dass ein Konto
+   * hinterlegt war. Es darf erst weichen, wenn ein Ersatz da ist - sonst meldet
+   * sich GIS nie und der Nutzer muss sich neu anmelden, obwohl die Google-Session
+   * im Browser noch gilt.
+   */
+  replaceExpired?: boolean;
+}
+
 /**
  * Session wiederherstellen (nur wenn noch gueltig).
  *
  * Liegt in localStorage, damit die Anmeldung das Schliessen des Tabs ueberlebt.
  * (sessionStorage starb mit dem Tab - man musste sich jedes Mal neu anmelden.)
  * Die Gueltigkeit kommt aus der exp-Claim des ID-Tokens.
+ *
+ * Ein abgelaufenes Token bleibt liegen, bis ein Refresh-Ergebnis es ersetzt
+ * (siehe RestoreOptions.replaceExpired).
  */
-export function restoreSession(): Session | null {
+export function restoreSession(opts: RestoreOptions = {}): Session | null {
   if (session) return session;
   try {
     let raw = localStorage.getItem(IDTOKEN_KEY);
@@ -134,13 +149,35 @@ export function restoreSession(): Session | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as Session;
     if (!s.token || s.exp - SKEW_MS <= Date.now()) {
-      localStorage.removeItem(IDTOKEN_KEY);
+      // Abgelaufen: liegen lassen, solange kein Ersatz da ist. GIS braucht den
+      // Eintrag, um ueberhaupt zu wissen, dass ein Konto hinterlegt war.
+      if (opts.replaceExpired) localStorage.removeItem(IDTOKEN_KEY);
       return null;
     }
     session = s;
     return s;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Nur raeumen, wenn inzwischen wirklich ein gueltiges Token vorliegt.
+ *
+ * Wird aufgerufen, nachdem GIS ein Credential gemeldet hat (Silent-Refresh):
+ * erst dann darf ein abgelaufener Eintrag fallen. Ein bloss initialisiertes GIS
+ * ist noch kein Ersatz - genau daran scheiterte der Refresh vorher.
+ */
+export function discardExpiredIfReplaced(): void {
+  if (session) return;
+  const raw = localStorage.getItem(IDTOKEN_KEY);
+  if (!raw) return;
+  try {
+    const s = JSON.parse(raw) as Session;
+    if (s.exp - SKEW_MS <= Date.now()) return; // immer noch abgelaufen: behalten
+    localStorage.removeItem(IDTOKEN_KEY);
+  } catch {
+    /* unlesbar: liegen lassen */
   }
 }
 
@@ -173,8 +210,11 @@ export function signOut(): void {
 function acceptCredential(credential: string): void {
   const s = toSession(credential);
   if (!s) return;
+  // Ersatz ist da: ein bis dahin liegen gelassenes, abgelaufenes Token darf weg.
+  // (Reihenfolge zaehlt - erst setSession, sonst haelt discard das alte fuer aktuell.)
   const isRefresh = !!session;
   setSession(s);
+  discardExpiredIfReplaced();
   if (isRefresh) for (const cb of refreshListeners) cb(s);
   else for (const cb of loginListeners) cb(s);
 }

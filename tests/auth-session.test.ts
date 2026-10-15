@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { setSession, restoreSession, currentSession, signOut, onSessionRefresh, type Session } from "@/auth/google";
+import { setSession, restoreSession, currentSession, signOut, onSessionRefresh, discardExpiredIfReplaced, type Session } from "@/auth/google";
 import { IDTOKEN_KEY } from "@/storage/keys";
 
 // Minimal-Storage-Stubs, damit der Test ohne jsdom laeuft.
@@ -50,10 +50,37 @@ describe("google-Session", () => {
     expect(got?.token).toBe("tok");
   });
 
-  it("verwirft abgelaufene Tokens", () => {
+  it("verwirft abgelaufene Tokens nur, wenn ein Ersatz vorliegt", () => {
     local.setItem(IDTOKEN_KEY, JSON.stringify({ token: "old", exp: Date.now() - 1000 }));
-    expect(restoreSession()).toBeNull();
+    expect(restoreSession({ replaceExpired: true })).toBeNull();
     expect(local.getItem(IDTOKEN_KEY)).toBeNull();
+  });
+
+  // Regression: der stille GIS-Refresh braucht das abgelaufene Token, um daran zu
+  // erkennen, dass ueberhaupt ein Konto hinterlegt war. Wird es beim Laden sofort
+  // geloescht, findet GIS kein Konto mehr und schweigt - der Nutzer muss sich neu
+  // anmelden, obwohl die Google-Session im Browser noch gilt.
+  it("behaelt das abgelaufene Token, solange kein Ersatz da ist", () => {
+    const stale = { token: "old", exp: Date.now() - 1000 };
+    local.setItem(IDTOKEN_KEY, JSON.stringify(stale));
+    expect(restoreSession()).toBeNull();
+    // Token bleibt liegen - erst ein gelieferter Refresh darf es ersetzen.
+    expect(local.getItem(IDTOKEN_KEY)).toBeTruthy();
+  });
+
+  it("raeumt ein abgelaufenes Token weg, sobald ein gueltiges vorliegt", () => {
+    local.setItem(IDTOKEN_KEY, JSON.stringify({ token: "old", exp: Date.now() - 1000 }));
+    setSession(future());
+    discardExpiredIfReplaced();
+    const raw = local.getItem(IDTOKEN_KEY);
+    expect(raw).toBeTruthy();
+    expect(JSON.parse(raw as string).token).toBe("tok");
+  });
+
+  it("laesst ein abgelaufenes Token liegen, wenn immer noch keins gueltig ist", () => {
+    local.setItem(IDTOKEN_KEY, JSON.stringify({ token: "old", exp: Date.now() - 1000 }));
+    discardExpiredIfReplaced();
+    expect(local.getItem(IDTOKEN_KEY)).toBeTruthy();
   });
 
   it("migriert einen alten sessionStorage-Eintrag einmalig", () => {

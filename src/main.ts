@@ -933,15 +933,21 @@ function initAccount(): void {
   scrimEl?.addEventListener("click", () => { if (!popEl.hidden) close(); });
   window.addEventListener("keydown", (e) => { if (e.key === "Escape" && !popEl.hidden) close(); });
 
+  // Silent-Refresh: GIS im Hintergrund initialisieren, damit ein abgelaufenes
+  // ID-Token ohne manuellen Login erneuert wird. Der Callback laeuft auch ohne
+  // sichtbaren Button. Bei einem stillen Refresh nur die UI aktualisieren.
+  //
+  // Reihenfolge ist wichtig: das abgelaufene Token in localStorage ist der einzige
+  // Hinweis fuer GIS, dass ueberhaupt ein Konto hinterlegt war. Es darf erst
+  // geloescht werden, wenn der stille Refresh laufen kann - sonst meldet sich
+  // GIS nie und der Nutzer muss sich neu anmelden.
   restoreSession();
   renderFace();
   render();
 
-  // Silent-Refresh: GIS im Hintergrund initialisieren, damit ein abgelaufenes
-  // ID-Token ohne manuellen Login erneuert wird. Der Callback laeuft auch ohne
-  // sichtbaren Button. Bei einem stillen Refresh nur die UI aktualisieren.
   void initGsi(() => {}).then((id) => {
     if (!id) return;
+    renderFace();
     onSessionRefresh(() => {
       render();
       void syncAfterSignIn();
