@@ -28,7 +28,6 @@ import {
   storageInfo,
   requestBackgroundSync,
   onBackgroundSync,
-  showInstallHelp,
 } from "./pwa";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
@@ -599,9 +598,11 @@ function initUI(): void {
   document.documentElement.lang = currentLang();
 
   // ---- Install-Hinweis (PWA) ----
-  // Der Prompt selbst wird in src/pwa.ts verwaltet; hier nur der Knopf im Menue.
+  // Den Install-Knopf verdrahtet ausschliesslich src/pwa.ts (initInstall).
+  // Hier nur das Menue schliessen – ein zweiter Handler auf demselben Knopf
+  // liesse Prompt und Anleitung gleichzeitig feuern (Bug: 2x Installation).
   const installBtn = document.getElementById("btn-install");
-  installBtn?.addEventListener("click", () => { showInstallHelp(); closeMenu(); });
+  installBtn?.addEventListener("click", closeMenu);
 
   // ---- App-Badge ----
   updateBadgeLabel();
