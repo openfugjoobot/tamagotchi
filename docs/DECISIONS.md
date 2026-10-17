@@ -182,11 +182,30 @@ später nicht versehentlich zurückgedreht wird.
 - **Der Transport:** `{t:"tones", ev:[{at,freq,play},…]}` pro Abtastung, gesendet
   nur wenn der Ring Events liefert. Der bestehende `{t:"buzzer"}`-Pegel bleibt als
   **Rückfall** (Alt-Server ohne Ring) und für die Offline-Stille.
-- **Der Replay** (`src/emu/tone-replay.ts`) plant jede Transition mit ihrer
-  µs-Delta-Verzögerung in Wanduhr-Zeit ein und treibt denselben Piezo. Ein neuer
-  Batch bricht den alten Plan ab; offline stoppt der Replayer und erzwingt Stille.
-  Gemessen am echten ROM: kein Batch endet hörbar, wenn der nächste beginnt (0 von
-  53), ein abgebrochener Plan hinterlässt also nie einen hängenden Ton.
+- **Der Replay** (`src/emu/tone-replay.ts`) legt jede Transition auf die
+  **AudioContext-Uhr** und treibt denselben Piezo. Ein neuer Batch bricht den
+  alten Plan ab; offline stoppt der Replayer und erzwingt Stille. Gemessen am
+  echten ROM: kein Batch endet hörbar, wenn der nächste beginnt (0 von 53), ein
+  abgebrochener Plan hinterlässt also nie einen hängenden Ton.
+  - **Warum nicht `setTimeout`:** eine geplante Wanduhr-Verzögerung feuert
+    *frühestens* nach ihrer Zeit — im geladenen Event-Loop gemessen bis zu
+    **9,6 ms** zu spät (p95 7,9 ms, Mittel 4,8 ms über den ganzen Burst). Damit
+    kollabiert der 15-µs-Blitz zu einem Klick und der 10,8-ms-Burst wird auf die
+    tatsächliche Auslieferungszeit gestreckt. Der Timer ist jetzt **nur noch ein
+    Wecker**; die *hörbare* Zeit setzt WebAudio.
+  - **Absolut statt relativ:** `planTonesAt(ev, at0Sec)` rechnet
+    `at0Sec + (at - at0)/1e6` Sekunden; `at0Sec` ist `ctx.currentTime` beim
+    Eintreffen des Batches. Die absolute Position wird **nie in die Vergangenheit
+    gedrückt** (Untergrenze = der Anker): ein verspätet angekommener Batch kommt
+    sofort statt um die Ankunftslatenz verschoben, und ein Batch wird **nie
+    gestreckt** — die Spanne bleibt exakt die Emulator-Spanne.
+  - **Sample-accurate Senke** (`src/emu/audio.ts`): `update(freq, on, atSec?)`
+    startet den frischen Oszillator mit `osc.start(atSec)`,
+    `frequency.setValueAtTime(hz, atSec)` und `gain.setValueAtTime(0.05, atSec)`;
+    Abklingen auf `0.0001` zur Off-Zeit. Ohne `atSec` (Legacy-Pegelpfad) gilt
+    „jetzt". Fehlt eine Uhr noch (keine Nutzergeste → kein AudioContext), liest
+    `main.ts` `performance.now()/1000` als Ersatzanker; `state().nowSec` meldet
+    die echte Uhr.
 - **Kostenlos bei Stille:** ein stilles Tier erzeugt keine Übergänge, also keine
   `tones`-Nachricht; nur die tatsächlichen Zustandswechsel gehen über die Leitung.
 

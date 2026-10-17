@@ -72,14 +72,21 @@ const piezo = createPiezo(() => new AudioContext());
 /**
  * Replayer fuer den verlustfreien Ton-Ereignisstrom. Der Server schickt die
  * Piezo-Transitionen mit Emulator-Zeitstempel (`{t:"tones"}`); dieser Replayer
- * plant jede mit ihrer `at`-relativen Verzoegerung in Wanduhr-Zeit ein und
- * treibt damit denselben Piezo. So klingt ein Burst, der zwischen zwei
- * Abtastungen lag, vollstaendig und mit korrekter Dauer — der grobe
- * `buzzer`-Pegel bleibt nur als Rueckfall (Alt-Server) bzw. fuer die
- * Offline-Stille. Die Senke ist der Piezo, damit beide Pfade identisch klingen.
+ * legt jede auf die **AudioContext-Uhr** (`at0Sec + (at - at0)/1e6`) und treibt
+ * damit denselben Piezo, der die Rampe wiederum an genau dieser Position setzt.
+ * So sitzt jeder Chirp sample-accurate im Audiografen, statt an der
+ * `setTimeout`-Task-Queue zu haengen (die eine 15-µs-Flanke zu einem Klick
+ * kollabieren und einen Batch strecken wuerde). Der grobe `buzzer`-Pegel bleibt
+ * nur als Rueckfall (Alt-Server) bzw. fuer die Offline-Stille. Die Senke ist der
+ * Piezo, damit beide Pfade identisch klingen.
+ *
+ * `nowSec` liest die echte Uhr des im Piezo erzeugten Kontexts; vor der ersten
+ * Nutzergeste (noch kein Kontext) dient `performance.now()/1000` als monotoner
+ * Ersatzanker.
  */
 const toneReplayer = new ToneReplayer({
-  sink: { update: (freq, on) => piezo.update(freq, on) },
+  sink: { update: (freq, on, atSec) => piezo.update(freq, on, atSec) },
+  nowSec: () => piezo.state().nowSec ?? (typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000,
 });
 const menuEl = document.getElementById("menu");
 

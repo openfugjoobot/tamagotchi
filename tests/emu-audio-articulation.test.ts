@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { createPiezo } from "@/emu/audio";
-
 // Re-articulation: the server streams the piezo *level* (freq/on) and only on
 // change. Two identical chirps (same freq) separated by a brief off arrive as
 //   on(f=23406) → off → on(f=23406)
@@ -8,13 +7,24 @@ import { createPiezo } from "@/emu/audio";
 // "a fresh identical chirp", so the second chirp is not heard as a separate
 // articulation — it blurs into a single tone. The piezo must re-attack on every
 // fresh on-edge (including an identical repeated tone after an off/on).
+//
+// Since the replay moved onto the AudioContext clock (see `tone-replay.ts`),
+// every audible event is *scheduled* on `ctx.currentTime`: the oscillator is
+// started at an absolute time and the frequency/gain use `setValueAtTime`. The
+// fake context therefore models the WebAudio AudioParam API (`setValueAtTime`,
+// `.value`) and records the scheduled times.
 
 function fakeCtx() {
-  const oscs: Array<{ type: string; frequency: { value: number }; connect: any; start: any; stop: any; disconnect: any }> = [];
+  const oscs: Array<{ type: string; frequency: any; connect: any; start: any; stop: any; disconnect: any }> = [];
   const makeOsc = () => {
     const o = {
       type: "",
-      frequency: { value: 0 },
+      frequency: {
+        value: 0,
+        setValueAtTime: vi.fn(function (this: { value: number }, v: number) {
+          this.value = v;
+        }),
+      },
       connect: vi.fn(),
       start: vi.fn(),
       stop: vi.fn(),
@@ -23,8 +33,18 @@ function fakeCtx() {
     oscs.push(o);
     return o;
   };
-  const gain = { gain: { setValueAtTime: vi.fn(), value: 0.0001 }, connect: vi.fn() };
+  const gain = {
+    gain: {
+      value: 0.0001,
+      setValueAtTime: vi.fn(function (this: { value: number }, v: number) {
+        this.value = v;
+      }),
+    },
+    connect: vi.fn(),
+  };
   const ctx = {
+    // `currentTime` is modelled as a mutable property of the fake AudioContext
+    // (the real one is read-only); tests advance it to drive the scheduled times.
     currentTime: 0,
     state: "running",
     createOscillator: () => makeOsc(),
@@ -33,7 +53,7 @@ function fakeCtx() {
     resume: vi.fn(),
     gain,
     oscs,
-  } as unknown as AudioContext & { gain: any; oscs: typeof oscs };
+  } as unknown as { currentTime: number } & AudioContext & { gain: any; oscs: typeof oscs };
   // `osc` getter mirrors the *first* oscillator (compat with older assertions).
   Object.defineProperty(ctx, "osc", { get: () => oscs[0] });
   return ctx;
@@ -42,6 +62,11 @@ function fakeCtx() {
 /** Audible gain values the piezo wrote to the gain node, in call order. */
 function gainValues(ctx: AudioContext & { gain: any }): number[] {
   return ctx.gain.gain.setValueAtTime.mock.calls.map((c: number[]) => c[0]);
+}
+
+/** Scheduled gain times, in call order. */
+function gainTimes(ctx: AudioContext & { gain: any }): number[] {
+  return ctx.gain.gain.setValueAtTime.mock.calls.map((c: number[]) => c[1]);
 }
 
 const AUDIBLE = 0.05;
@@ -150,5 +175,81 @@ describe("piezo: re-articulation of repeated tones", () => {
     // No oscillator may be left at its 440 Hz default once it is driving a tone.
     expect(freqs).not.toContain(440);
     expect(oscs[oscs.length - 1].frequency.value).toBeCloseTo(2340.6, 1);
+  });
+});
+
+describe("piezo: sample-accurate scheduling on the AudioContext clock", () => {
+  it("starts a fresh attack exactly at the requested audio-clock time", () => {
+    const ctx = fakeCtx();
+    ctx.currentTime = 12.5;
+    const p = createPiezo(() => ctx);
+    p.unlock();
+
+    p.update(23406, true, 12.534);
+    const fresh = (ctx as any).oscs[(ctx as any).oscs.length - 1];
+    expect(fresh.start).toHaveBeenCalledWith(12.534);
+    expect(fresh.frequency.setValueAtTime).toHaveBeenCalledWith(2340.6, 12.534);
+    // The audible gain is scheduled at the same absolute position.
+    expect((ctx as any).gain.gain.setValueAtTime).toHaveBeenCalledWith(AUDIBLE, 12.534);
+  });
+
+  it("defaults to 'now' when no absolute time is given (legacy level path)", () => {
+    const ctx = fakeCtx();
+    ctx.currentTime = 3.25;
+    const p = createPiezo(() => ctx);
+    p.unlock();
+
+    p.update(23406, true);
+    const fresh = (ctx as any).oscs[(ctx as any).oscs.length - 1];
+    expect(fresh.start).toHaveBeenCalledWith(3.25);
+    expect((ctx as any).gain.gain.setValueAtTime).toHaveBeenCalledWith(AUDIBLE, 3.25);
+  });
+
+  it("never schedules in the past: a late event lands on 'now'", () => {
+    const ctx = fakeCtx();
+    ctx.currentTime = 5.0;
+    const p = createPiezo(() => ctx);
+    p.unlock();
+
+    // The event was meant for 4.9 s, but the clock has moved past it.
+    p.update(23406, true, 4.9);
+    const fresh = (ctx as any).oscs[(ctx as any).oscs.length - 1];
+    expect(fresh.start).toHaveBeenCalledWith(5.0);
+    expect((ctx as any).gain.gain.setValueAtTime).toHaveBeenCalledWith(AUDIBLE, 5.0);
+  });
+
+  it("writes a mid-tone frequency change at the requested time", () => {
+    const ctx = fakeCtx();
+    ctx.currentTime = 1.0;
+    const p = createPiezo(() => ctx);
+    p.unlock();
+
+    p.update(23406, true, 1.0);
+    const live = (ctx as any).oscs[(ctx as any).oscs.length - 1];
+    p.update(32768, true, 1.01); // same articulation, new pitch
+    expect(live.frequency.setValueAtTime).toHaveBeenCalledWith(3276.8, 1.01);
+  });
+
+  it("schedules an off transition (silence) at its absolute time", () => {
+    const ctx = fakeCtx();
+    ctx.currentTime = 2.0;
+    const p = createPiezo(() => ctx);
+    p.unlock();
+
+    p.update(23406, true, 2.0);
+    p.update(23406, false, 2.005);
+    const times = gainTimes(ctx);
+    // The last gain write is the silence, at the off's own position.
+    expect(times[times.length - 1]).toBe(2.005);
+    expect(gainValues(ctx)[gainValues(ctx).length - 1]).toBe(0.0001);
+  });
+
+  it("reports the live audio clock via state().nowSec", () => {
+    const ctx = fakeCtx();
+    ctx.currentTime = 7.75;
+    const p = createPiezo(() => ctx);
+    expect(p.state().nowSec).toBeNull(); // no context yet
+    p.unlock();
+    expect(p.state().nowSec).toBe(7.75);
   });
 });

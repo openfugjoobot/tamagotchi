@@ -175,14 +175,20 @@ describe("lossless tone stream end-to-end (ROM → glue ring → hub → WS → 
     }
     expect(batch.length).toBeGreaterThan(0);
 
-    const { planTones } = await import("../src/emu/tone-replay");
-    const plan = planTones(batch);
+    const { planTonesAt } = await import("../src/emu/tone-replay");
+    // The anchor is the moment the batch arrived on the audio clock; every event
+    // then lands at that anchor plus its emulator-µs delta. The last assertion
+    // below is the regression guard for the old behaviour: a late batch must NOT
+    // be stretched, so the span equals the emulator span exactly.
+    const ANCHOR = 4.2;
+    const plan = planTonesAt(batch, ANCHOR);
     expect(plan.length).toBe(batch.length);
-    // The first event anchors at 0; each following delay equals its µs delta/1000.
-    expect(plan[0].delayMs).toBe(0);
+    expect(plan[0].atSec).toBe(ANCHOR);
     for (let i = 1; i < plan.length; i++) {
-      expect(plan[i].delayMs).toBeCloseTo((batch[i].at - batch[0].at) / 1000, 6);
-      expect(plan[i].delayMs).toBeGreaterThanOrEqual(plan[i - 1].delayMs);
+      expect(plan[i].atSec).toBeCloseTo(ANCHOR + (batch[i].at - batch[0].at) / 1e6, 9);
+      expect(plan[i].atSec).toBeGreaterThanOrEqual(plan[i - 1].atSec);
     }
+    const emuSpanSec = (batch[batch.length - 1].at - batch[0].at) / 1e6;
+    expect(plan[plan.length - 1].atSec - plan[0].atSec).toBeCloseTo(emuSpanSec, 9);
   }, 20000);
 });
