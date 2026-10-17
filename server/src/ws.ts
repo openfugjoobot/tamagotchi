@@ -9,18 +9,26 @@
  *                 JWKS, same code path as the HTTP API); the pet is loaded and
  *                 checked to belong to that user. Only then is the socket bound
  *                 to a `(userId, petId)` pair and registered as "live".
- *   3. streaming — the hub pushes `{t:"frame", lcd, icons}` whenever the pet's
- *                 LCD **or** its 8 icon segments changed,
+ *   3. streaming — the hub pushes `{t:"frame", lcd}` whenever the pet's LCD
+ *                 changed, plus an optional `{t:"frame", lcd, icons}` when
+ *                 icon segments also changed,
  *                 `{t:"buzzer", freq, on}` whenever the pet's piezo state
  *                 changed (so a watching tab can drive its local audio — the
  *                 browser no longer runs the emulator, only renders its output), and
  *                 `{t:"state", alive, ageYears}` on bind *and* whenever the
  *                 life-state (alive) flips — so a pet dying with the tab open
- *                 emits `state{alive:false}` (Task-6 Finding B). The `icons`
- *                 array carries the 8 P1 menu/status LCD segments (see
+ *                 emits `state{alive:false}` (Task-6 Finding B). The `lcd`
+ *                 field is the 512-bit monochrome frame **bit-packed and
+ *                 base64-encoded** (64 bytes → 88 chars; see
+ *                 src/net/lcd-codec.ts) instead of a 512-number JSON array.
+ *                 The optional `icons` field carries the 8 P1 menu/status LCD
+ *                 segments bit-packed into one base64 byte (see
  *                 docs/DECISIONS.md) so the client can draw the top/bottom icon
- *                 rows from real state rather than a hardcoded blank. A pet
- *                 without `icons()` (legacy stub) degrades to an all-zero row.
+ *                 rows from real state rather than a hardcoded blank. It is
+ *                 **omitted while all 8 bits are zero** (the state the shipped
+ *                 P1 ROM leaves them in), so an all-dim row costs nothing on the
+ *                 wire. A pet without `icons()` (legacy stub) degrades to an
+ *                 all-zero row, exactly as if the field were absent.
  *                 Similarly a legacy `LivePet` without `buzzer()` degrades to
  *                 "always silent": no buzzer message is ever streamed.
  *                 `{t:"press", btn}` from the client is forwarded to the bound
@@ -38,6 +46,7 @@ import type { Server as HttpServer } from "node:http";
 import type { Server as HttpsServer } from "node:https";
 import { WebSocketServer, WebSocket } from "ws";
 import { verifyIdToken, type TokenClaims } from "./auth.js";
+import { encodeLcd, encodeIcons, iconsAreZero } from "../../src/net/lcd-codec.js";
 
 export type Btn = "left" | "middle" | "right";
 const BTNS: readonly Btn[] = ["left", "middle", "right"];
@@ -107,6 +116,8 @@ interface Binding {
   lastLcd: Uint8Array | null;
   /** Last icon-segment state sent, so an icon-only change also emits. */
   lastIcons: Uint8Array | null;
+  /** Whether the last frame carried an `icons` field (false while all-zero). */
+  lastIconsOnWire: boolean;
   /** Last piezo state sent, so a buzzer change emits exactly once. */
   lastBuzzer: { freq: number; on: boolean } | null;
 }
@@ -239,6 +250,7 @@ export class WsHub {
       ageYears: loaded.ageYears,
       lastLcd: null,
       lastIcons: null,
+      lastIconsOnWire: false,
       lastBuzzer: null,
     };
     this.bindings.set(ws, binding);
@@ -271,6 +283,12 @@ export class WsHub {
    * one sent. The icons are read defensively: a legacy `LivePet` without
    * `icons()` (or one that throws) degrades to an all-zero row instead of
    * breaking the frame stream.
+   *
+   * The wire form is compact: `lcd` is the 512-bit frame bit-packed and
+   * base64-encoded (64 bytes → 88 chars), and `icons` is the same treatment for
+   * the 8 segments (1 byte). The `icons` field is **omitted while all 8 bits are
+   * zero** — the state the shipped P1 ROM leaves them in — so an unlit icon row
+   * costs nothing; it appears only on the frames that actually light a segment.
    */
   private pushFrame(ws: WebSocket, binding: Binding): void {
     if (ws.readyState !== WebSocket.OPEN) return;
@@ -280,17 +298,18 @@ export class WsHub {
       binding.lastLcd &&
       binding.lastIcons &&
       buffersEqual(binding.lastLcd, lcd) &&
-      buffersEqual(binding.lastIcons, icons)
+      buffersEqual(binding.lastIcons, icons) &&
+      binding.lastIconsOnWire === !iconsAreZero(icons)
     ) {
       return;
     }
     binding.lastLcd = new Uint8Array(lcd); // copy: WASM memory can move
     binding.lastIcons = icons;
-    this.send(ws, {
-      t: "frame",
-      lcd: Array.from(binding.lastLcd),
-      icons: Array.from(binding.lastIcons),
-    });
+    const sendIcons = !iconsAreZero(icons);
+    binding.lastIconsOnWire = sendIcons;
+    const msg: Record<string, unknown> = { t: "frame", lcd: encodeLcd(binding.lastLcd) };
+    if (sendIcons) msg.icons = encodeIcons(binding.lastIcons);
+    this.send(ws, msg);
   }
 
   /**
@@ -359,9 +378,10 @@ function readBuzzer(pet: LivePet): { freq: number; on: boolean } | null {
 }
 
 /**
- * Read the pet's icon bits as a fresh 8-length 0/1 array. Never throws: a
+ * Read the pet's icon bits as a fresh 8-length 0/1 buffer. Never throws: a
  * missing `icons()` or a throwing one yields all-zero, so the frame path stays
- * total (the old hub streamed LCD-only for exactly this reason).
+ * total (the old hub streamed LCD-only for exactly this reason) — and an
+ * all-zero buffer is not even put on the wire (see `pushFrame`).
  */
 function readIcons(pet: LivePet): Uint8Array {
   const out = new Uint8Array(ICON_COUNT);

@@ -435,7 +435,7 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
 /* Vorschau spiegelt den Screen-Stack des echten Geraets: Zacken + LCD, mit
    demselben gelben Rahmen (.screen-stack). Die Icon-Reihen oben/unten werden
    jetzt wieder gezeichnet und mit den echten Segment-Bits aus dem Live-Frame
-   gespeist ({t:"frame", lcd, icons}); die Vorschau zeigt sie ohne laufenden
+   gespeist ({t:"frame", lcd, icons}, kompakt); die Vorschau zeigt sie ohne laufenden
    Emulator dezent (leerer Icon-Zustand). */
 .shell-card .mini-screen-wrap { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); width: 64%; z-index: 2; }
 .shell-card .mini-star { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 140%; aspect-ratio: 1; }

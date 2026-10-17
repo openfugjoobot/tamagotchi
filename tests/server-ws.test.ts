@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import { WebSocket } from "ws";
 import { WsHub } from "../server/src/ws";
 import { verifyIdToken, resetJwksCache, type TokenClaims } from "../server/src/auth";
+import { decodeIcons, decodeLcd } from "../src/net/lcd-codec";
 import { makeTestKey, signJwt, jwksFetch, type TestKey } from "./helpers/jwt";
 
 const CLIENT = "1234.apps.googleusercontent.com";
@@ -69,6 +70,11 @@ function goodToken(key: TestKey): Promise<string> {
     exp: Math.floor(NOW / 1000) + 3600,
     email: "a@example.com",
   });
+}
+
+/** Decode a wire `frame` message back into the 512-bit LCD + icon bits. */
+function decodeFrame(frame: any): { lcd: Uint8Array; icons: Uint8Array } {
+  return { lcd: decodeLcd(frame.lcd)!, icons: decodeIcons(frame.icons) };
 }
 
 function waitForMessage(ws: WebSocket, predicate: (m: any) => boolean, timeoutMs = 2000): Promise<any> {
@@ -145,16 +151,17 @@ describe("WsHub", () => {
     const frameP = waitForMessage(ws, (m) => m.t === "frame");
     ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
     const frame = await frameP;
-    expect(frame.lcd).toHaveLength(512);
+    expect(typeof frame.lcd).toBe("string");
+    expect(decodeFrame(frame).lcd).toHaveLength(512);
     // The gate is keyed by the internal id the loader returned, not the token sub.
     expect(hub.hasLiveConnection("uuid-user-1")).toBe(true);
 
     // A second frame arrives only after the LCD actually changes.
     pet.setPixel(0, 1);
-    const frame2P = waitForMessage(ws, (m) => m.t === "frame" && m.lcd[0] === 1);
+    const frame2P = waitForMessage(ws, (m) => m.t === "frame" && decodeLcd(m.lcd)![0] === 1);
     hub.notifyChanged();
     const frame2 = await frame2P;
-    expect(frame2.lcd[0]).toBe(1);
+    expect(decodeFrame(frame2).lcd[0]).toBe(1);
   });
 
   it("carries the 8 icon-segment bits in every frame message", async () => {
@@ -168,7 +175,21 @@ describe("WsHub", () => {
     const frameP = waitForMessage(ws, (m) => m.t === "frame");
     ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
     const frame = await frameP;
-    expect(frame.icons).toEqual([0, 0, 1, 0, 0, 1, 0, 0]);
+    expect(Array.from(decodeFrame(frame).icons)).toEqual([0, 0, 1, 0, 0, 1, 0, 0]);
+  });
+
+  it("omits the icons field entirely while all 8 segments are zero", async () => {
+    // The shipped P1 ROM never drives the segments, so an all-dim row must cost
+    // nothing on the wire: no `icons` key at all, and the client degrades to 0.
+    const pet = new FakePet();
+    await startHub(pet);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise<void>((r) => ws.on("open", () => r()));
+    const frameP = waitForMessage(ws, (m) => m.t === "frame");
+    ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
+    const frame = await frameP;
+    expect("icons" in frame).toBe(false);
+    expect(Array.from(decodeFrame(frame).icons)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
   });
 
   it("re-sends a frame when only the icons change, not just the LCD", async () => {
@@ -180,13 +201,14 @@ describe("WsHub", () => {
     await waitForMessage(ws, (m) => m.t === "frame");
 
     // LCD untouched; only an icon segment lights up. The change detector must
-    // treat the icons as part of the frame state, or the row would freeze.
+    // treat the icons as part of the frame state, or the row would freeze. The
+    // frame now carries an `icons` field that the previous (all-zero) one omitted.
     pet.setIcon(7, 1);
-    const frameP = waitForMessage(ws, (m) => m.t === "frame" && m.icons?.[7] === 1);
+    const frameP = waitForMessage(ws, (m) => m.t === "frame" && m.icons !== undefined);
     hub.notifyChanged();
     const frame = await frameP;
-    expect(frame.icons[7]).toBe(1);
-    expect(frame.lcd.every((b: number) => b === 0)).toBe(true);
+    expect(decodeFrame(frame).icons[7]).toBe(1);
+    expect(decodeFrame(frame).lcd.every((b: number) => b === 0)).toBe(true);
   });
 
   it("sends a state message with alive and age", async () => {
@@ -297,8 +319,9 @@ describe("WsHub", () => {
     const frameP = waitForMessage(ws, (m) => m.t === "frame");
     ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
     const frame = await frameP;
-    expect(frame.lcd).toHaveLength(512);
-    expect(frame.icons).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(decodeFrame(frame).lcd).toHaveLength(512);
+    expect(Array.from(decodeFrame(frame).icons)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+    expect("icons" in frame).toBe(false);
   });
 
   it("streams the piezo state as a buzzer message on bind", async () => {
@@ -358,7 +381,7 @@ describe("WsHub", () => {
     const frameP = waitForMessage(ws, (m) => m.t === "frame");
     ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
     const frame = await frameP;
-    expect(frame.lcd).toHaveLength(512);
+    expect(decodeFrame(frame).lcd).toHaveLength(512);
     // No buzzer message ever arrives, even after a notify.
     let sawBuzzer = false;
     ws.on("message", (d) => {
@@ -380,12 +403,12 @@ describe("WsHub", () => {
     const frameP = waitForMessage(ws, (m) => m.t === "frame");
     ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
     const frame = await frameP;
-    expect(frame.lcd).toHaveLength(512);
+    expect(decodeFrame(frame).lcd).toHaveLength(512);
     // The throwing piezo read is swallowed: no buzzer, no crash.
     pet.setPixel(0, 1);
-    const frame2P = waitForMessage(ws, (m) => m.t === "frame" && m.lcd[0] === 1);
+    const frame2P = waitForMessage(ws, (m) => m.t === "frame" && decodeLcd(m.lcd)![0] === 1);
     hub.notifyChanged();
-    expect((await frame2P).lcd[0]).toBe(1);
+    expect(decodeLcd((await frame2P).lcd)![0]).toBe(1);
   });
 
   it("ignores presses before a successful hello", async () => {

@@ -65,7 +65,7 @@ Body, `404/405` sonst.
 | Richtung | Nachricht | Bedeutung |
 |---|---|---|
 | → | `{t:"hello", token, petId}` | anmelden und an ein Tier binden |
-| ← | `{t:"frame", lcd:number[], icons:number[]}` | aktueller 32×16-LCD + 8 Icon-Segmente (nur bei Änderung) |
+| ← | `{t:"frame", lcd:string, icons?:string}` | aktueller 32×16-LCD **bit-gepackt + base64** (64 B → 88 Zeichen, LSB-first; s. `src/net/lcd-codec.ts`) + optional die 8 Icon-Segmente als **ein** base64-Byte. `icons` fehlt, solange alle 8 Bits 0 sind; nur bei Änderung |
 | ← | `{t:"buzzer", freq, on}` | Piezo-Zustand des serverseitigen Tiers (nur bei Änderung; der Tab speist damit sein Audio) |
 | ← | `{t:"state", alive, ageYears}` | beim Binden und bei jedem Lebenszustands-Wechsel |
 | → | `{t:"press", btn:"left"\|"middle"\|"right"}` | in sich geschlossener Tastendruck (Legacy-Tap, sequenziell) |

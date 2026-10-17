@@ -3,6 +3,33 @@
 Chronologisch, neueste zuerst. Jede Entscheidung nennt den Grund — damit sie
 später nicht versehentlich zurückgedreht wird.
 
+## Frame-Transport kompakt: bit-gepackt statt 512-Zahlen-Array (2026-10-17)
+
+- **Problem:** Der Frame trug den 32×16-LCD als JSON-Array aus 512 `0`/`1`
+  (`{t:"frame", lcd:[0,1,…]}`) — ~1 KB Text für 512 Bit Nutzdaten, und der
+  Client parste 512 Zahlen. Zusätzlich trug **jeder** Frame die 8 Icon-Bits
+  (8-Zahlen-Array), obwohl das ausgelieferte P1-ROM die Segmente nie treibt —
+  also konstant `[0,…]`, 100 % totes Gewicht.
+- **Fix (LCD):** Der Frame-`lcd` ist jetzt **bit-gepackt + base64**: 512 Bit →
+  64 Bytes → 88 Zeichen. Bit-Order LSB-first im Byte, Index `i = y*32+x` →
+  Byte `i>>3`, Bit `i&7`. Beide Seiten nutzen **denselben** Codec
+  (`src/net/lcd-codec.ts`, importiert von `server/src/ws.ts` **und**
+  `src/net/live.ts`), damit Pack/Unpack nicht auseinanderlaufen.
+- **Fix (Icons):** Die 8 Segment-Bits werden zu **einem** Byte gepackt, und das
+  `icons`-Feld wird **weggelassen, solange alle 8 Bits 0 sind** (der
+  Normalfall). Es erscheint nur auf Frames, die wirklich ein Segment anzünden.
+  Der Change-Detector vergleicht weiter LCD **und** Icons plus „war `icons` auf
+  der Leitung?", damit ein reiner Icon-Wechsel (0 → 1) ein Frame auslöst und ein
+  später auf 0 zurückfallender Stand das Feld wieder weglässt.
+- **Back-Compat:** Der Client akzeptiert weiterhin das alte 512-Zahlen-`lcd`
+  und das 8-Zahlen-`icons` (Fallback in `readLcd`/`readIcons`), damit ein
+  Client gegen einen Server läuft, der den Codec noch nicht hat.
+- **Verifikation:** `tests/lcd-codec.test.ts` (Round-Trip Bit für Bit, jede
+  Einzelbit-Position, Truncation, ungültige base64), `tests/live-client.test.ts`
+  (kompakte base64 dekodieren, Legacy-Array, fehlendes `icons` → dezente Reihe),
+  `tests/server-ws.test.ts` (base64-`lcd`, `icons` fehlt bei 0-Bits, Icon-Wechsel
+  löst aus). Volle Suite grün.
+
 ## Gleichzeitige Tastenkombis (SELECT+NEXT = A+C) erreichen das ROM (2026-10-17)
 
 - **Fehler:** Die Server-Ownership (s. unten) reduzierte Tasten auf **diskrete**
@@ -156,10 +183,13 @@ Die 8 P1-Menü-Icons sind feste LCD-Segmente, keine Bitmap im ROM (`icons()` ble
 leer). Die Grafiken stammen aus `GMMan/flipperzero-tamagotch-p1` (Lizenz dort unklar,
 privater Gebrauch).
 
-**Live-Ansicht (2026-10-17):** Das Gerät zeichnet die 8 Icons wieder. Das
-Task-6-Protokoll wurde um die Icon-Segmente erweitert:
-`{t:"frame", lcd, icons}` — `icons` ist ein Array aus 8 Bits (0/1), die aus
-`emu_icons()` (HAL `h_set_lcd_icon`) stammen. Der Client zeichnet daraus die
+**Live-Ansicht (2026-10-17, Transport kompakt seit 2026-10-17):** Das Gerät
+zeichnet die 8 Icons. Das Task-6-Protokoll trägt sie als **optionales**
+`icons`-Feld: `{t:"frame", lcd:<base64>, icons?:<base64>}` — `lcd` ist der
+bit-gepackte LCD (s. o.), `icons` ein einzelnes base64-Byte mit den 8 aus
+`emu_icons()` (HAL `h_set_lcd_icon`) stammenden Bits. Das Feld wird
+**weggelassen, solange alle Bits 0 sind** (der Normalfall beim ausgelieferten
+ROM), sodass eine dezente Reihe nichts kostet. Der Client zeichnet daraus die
 Reihen oben/unten (`src/render/icons.ts`, `drawIconRow`); aktive Segmente voll,
 inaktive dezent. Der Change-Detector des Hubs vergleicht **LCD und Icons**, damit
 auch ein reiner Icon-Wechsel ein Frame ausloest.

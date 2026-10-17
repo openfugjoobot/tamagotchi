@@ -68,7 +68,9 @@ export function renderIconGrid(container: HTMLElement, names: string[]): void {
  * Zeichnet eine Icon-Reihe (4 Slots). Alle Icons sichtbar;
  * aktive Segmente (ROM-Bit = 1) voll, inaktive dezent.
  *
- * Die `bits` stammen jetzt aus dem Live-Frame (`{t:"frame", lcd, icons}`), nicht
+ * Die `bits` stammen jetzt aus dem Live-Frame (`{t:"frame", lcd, icons}`; `lcd`
+ * bit-gepackt + base64, `icons` optional und nur präsent wenn ein Segment leuchtet),
+ * nicht
  * mehr aus einem hartkodierten leeren Puffer: die Reihe spiegelt einen echten,
  * übertragenen Zustand. Beim ausgelieferten P1-ROM treibt das ROM die
  * Segmente derzeit nicht (die gedruckten Menü-Icons sind keine ROM-Segmente),

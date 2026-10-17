@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { createServer, type Server } from "node:http";
 import { WebSocketServer, WebSocket as NodeWs } from "ws";
 import { LiveClient } from "@/net/live";
+import { encodeIcons, encodeLcd } from "@/net/lcd-codec";
 
 /**
  * A fake live server: accepts `/ws`, records every message it receives, and
@@ -121,6 +122,51 @@ describe("LiveClient", () => {
     expect(frames[1][511]).toBe(1);
   });
 
+  it("decodes the compact base64 lcd into a full 512-bit buffer", async () => {
+    // The wire form the server actually sends: the 512 LCD bits bit-packed into
+    // 64 bytes and base64'd (88 chars), never a 512-number array.
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    const frames: Uint8Array[] = [];
+    client.onFrame((f) => frames.push(f));
+    client.connect("pet-1", "tok");
+    await waitUntil(() => server!.received.some((m) => m.t === "hello"));
+
+    const lcd = new Uint8Array(512);
+    lcd[0] = 1;
+    lcd[7] = 1;
+    lcd[8] = 1;
+    lcd[511] = 1;
+    const b64 = encodeLcd(lcd);
+    expect(b64).toHaveLength(88);
+    server.broadcast({ t: "frame", lcd: b64 });
+    await waitUntil(() => frames.length === 1);
+    expect(frames[0].length).toBe(512);
+    expect(frames[0][0]).toBe(1);
+    expect(frames[0][7]).toBe(1);
+    expect(frames[0][8]).toBe(1);
+    expect(frames[0][511]).toBe(1);
+    expect(Array.from(frames[0]).filter((x) => x).length).toBe(4);
+  });
+
+  it("ignores a frame whose lcd payload is unusable instead of drawing empty", async () => {
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    const frames: Uint8Array[] = [];
+    client.onFrame((f) => frames.push(f));
+    client.connect("pet-1", "tok");
+    await waitUntil(() => server!.received.some((m) => m.t === "hello"));
+
+    // No lcd / wrong type / invalid base64 -> no frame delivered at all.
+    server.broadcast({ t: "frame" });
+    server.broadcast({ t: "frame", lcd: 42 });
+    server.broadcast({ t: "frame", lcd: "!!!" });
+    await new Promise((r) => setTimeout(r, 60));
+    expect(frames.length).toBe(0);
+  });
+
   it("delivers the icon bits alongside the LCD, coercing them to 0/1", async () => {
     server = new FakeLiveServer();
     const url = await server.listen();
@@ -130,14 +176,15 @@ describe("LiveClient", () => {
     client.connect("pet-1", "tok");
     await waitUntil(() => server!.received.some((m) => m.t === "hello"));
 
-    server.broadcast({ t: "frame", lcd: new Array(512).fill(0), icons: [0, 1, 0, 1, 0, 0, 0, 1] });
+    const bits = new Uint8Array([0, 1, 0, 1, 0, 0, 0, 1]);
+    server.broadcast({ t: "frame", lcd: encodeLcd(new Uint8Array(512)), icons: encodeIcons(bits) });
     await waitUntil(() => frames.length === 1);
     expect(frames[0].icons.length).toBe(8);
     expect(Array.from(frames[0].icons)).toEqual([0, 1, 0, 1, 0, 0, 0, 1]);
   });
 
-  it("degrades to an all-zero icon row when a frame carries no icons", async () => {
-    // A server that predates the icon extension must not break rendering.
+  it("still decodes a legacy 512-number lcd array and 8-number icons array", async () => {
+    // Back-compat: a server that predates the codec streams the old arrays.
     server = new FakeLiveServer();
     const url = await server.listen();
     client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
@@ -146,7 +193,27 @@ describe("LiveClient", () => {
     client.connect("pet-1", "tok");
     await waitUntil(() => server!.received.some((m) => m.t === "hello"));
 
-    server.broadcast({ t: "frame", lcd: new Array(512).fill(0) });
+    const a = new Array(512).fill(0);
+    a[0] = 1;
+    server.broadcast({ t: "frame", lcd: a, icons: [0, 1, 0, 1, 0, 0, 0, 1] });
+    await waitUntil(() => frames.length === 1);
+    expect(frames[0].lcd[0]).toBe(1);
+    expect(frames[0].lcd).toHaveLength(512);
+    expect(Array.from(frames[0].icons)).toEqual([0, 1, 0, 1, 0, 0, 0, 1]);
+  });
+
+  it("degrades to an all-zero icon row when a frame carries no icons", async () => {
+    // A server that predates the icon extension must not break rendering; a
+    // server that simply omits an all-zero icon byte must too (the common case).
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    const frames: Array<{ lcd: Uint8Array; icons: Uint8Array }> = [];
+    client.onFrame((lcd, icons) => frames.push({ lcd, icons }));
+    client.connect("pet-1", "tok");
+    await waitUntil(() => server!.received.some((m) => m.t === "hello"));
+
+    server.broadcast({ t: "frame", lcd: encodeLcd(new Uint8Array(512)) });
     await waitUntil(() => frames.length === 1);
     expect(frames[0].icons.length).toBe(8);
     expect(Array.from(frames[0].icons)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
@@ -162,11 +229,13 @@ describe("LiveClient", () => {
     await waitUntil(() => server!.received.some((m) => m.t === "hello"));
 
     // Short: only 3 bits -> rest zero-filled. Long: extra bits ignored.
-    server.broadcast({ t: "frame", lcd: new Array(512).fill(0), icons: [1, 1, 1] });
+    const base = encodeLcd(new Uint8Array(512));
+    server.broadcast({ t: "frame", lcd: base, icons: [1, 1, 1] });
     await waitUntil(() => frames.length === 1);
     expect(Array.from(frames[0].icons)).toEqual([1, 1, 1, 0, 0, 0, 0, 0]);
 
-    server.broadcast({ t: "frame", lcd: new Array(512).fill(1), icons: [1, 0, 1, 0, 1, 0, 1, 0, 1, 1] });
+    const full = encodeLcd(new Uint8Array(512).fill(1));
+    server.broadcast({ t: "frame", lcd: full, icons: [1, 0, 1, 0, 1, 0, 1, 0, 1, 1] });
     await waitUntil(() => frames.length === 2);
     expect(Array.from(frames[1].icons)).toEqual([1, 0, 1, 0, 1, 0, 1, 0]);
   });

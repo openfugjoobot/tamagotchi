@@ -5,9 +5,14 @@
  * only relays. It speaks the Task-6 protocol:
  *
  *   →  {t:"hello", token, petId}   on (re)connect, to authenticate + bind
- *   ←  {t:"frame", lcd:number[], icons:number[]}  the 32×16 LCD plus the 8
- *                              icon-segment bits, drawn with render/lcd.ts and
- *                              render/icons.ts
+ *   ←  {t:"frame", lcd:string, icons?:string}  the 32×16 LCD plus (optionally)
+ *                              the 8 icon-segment bits, both **bit-packed and
+ *                              base64-encoded** (see net/lcd-codec.ts). The
+ *                              `lcd` string is 64 bytes → 88 chars; `icons` is
+ *                              one byte and is **omitted while all 8 segments
+ *                              are zero** (the shipped P1 ROM leaves them there),
+ *                              so a blank icon row costs nothing on the wire.
+ *                              Drawn with render/lcd.ts and render/icons.ts.
  *   ←  {t:"buzzer", freq, on}  the pet's piezo state in the ROM's raw units;
  *                              consumed by emu/audio.ts on the frame loop
  *   ←  {t:"state", alive, ageYears}
@@ -24,6 +29,7 @@
  */
 
 import { LCD_WIDTH, LCD_HEIGHT, ICON_COUNT, type Btn } from "../emu/constants";
+import { decodeIcons, decodeLcd } from "./lcd-codec";
 
 export type LiveStatus = "live" | "offline";
 
@@ -227,21 +233,24 @@ export class LiveClient {
   }
 
   private onMessage(data: unknown): void {
-    let msg: { t?: unknown; lcd?: unknown; icons?: unknown; alive?: unknown; ageYears?: unknown; freq?: unknown; on?: unknown };
+    let msg: {
+      t?: unknown;
+      lcd?: unknown;
+      icons?: unknown;
+      alive?: unknown;
+      ageYears?: unknown;
+      freq?: unknown;
+      on?: unknown;
+    };
     try {
       msg = JSON.parse(typeof data === "string" ? data : String(data));
     } catch {
       return; // ignore garbage
     }
-    if (msg.t === "frame" && Array.isArray(msg.lcd)) {
-      const lcd = new Uint8Array(LCD_WIDTH * LCD_HEIGHT);
-      for (let i = 0; i < lcd.length && i < msg.lcd.length; i++) lcd[i] = msg.lcd[i] ? 1 : 0;
-      // Icons are optional: an older server sends none, and a short/long array
-      // must still yield exactly ICON_COUNT 0/1 bits, so the row always draws.
-      const icons = new Uint8Array(ICON_COUNT);
-      if (Array.isArray(msg.icons)) {
-        for (let i = 0; i < icons.length && i < msg.icons.length; i++) icons[i] = msg.icons[i] ? 1 : 0;
-      }
+    if (msg.t === "frame") {
+      const lcd = readLcd(msg.lcd);
+      if (!lcd) return; // no usable LCD payload: nothing to draw
+      const icons = readIcons(msg.icons);
       for (const cb of this.frameCbs) cb(lcd, icons);
       return;
     }
@@ -267,4 +276,35 @@ export class LiveClient {
   private send(obj: Record<string, unknown>): void {
     if (this.ws && this.ws.readyState === 1 /* OPEN */) this.ws.send(JSON.stringify(obj));
   }
+}
+
+/**
+ * Decode the wire `lcd` field into a full 32×16 0/1 buffer, or `null` when the
+ * frame carries no usable LCD (so the handler ignores it rather than drawing an
+ * empty screen). Prefers the compact base64 form; still accepts the legacy
+ * 512-number array so a client can talk to a server that predates the codec.
+ */
+function readLcd(value: unknown): Uint8Array | null {
+  const packed = decodeLcd(value);
+  if (packed) return packed;
+  if (Array.isArray(value)) {
+    const out = new Uint8Array(LCD_WIDTH * LCD_HEIGHT);
+    for (let i = 0; i < out.length && i < value.length; i++) out[i] = value[i] ? 1 : 0;
+    return out;
+  }
+  return null;
+}
+
+/**
+ * Decode the wire `icons` field into an `ICON_COUNT` 0/1 buffer. Absent or
+ * malformed payloads degrade to the all-dim row; the legacy 8-number array is
+ * accepted for the same back-compat reason as `readLcd`.
+ */
+function readIcons(value: unknown): Uint8Array {
+  if (typeof value === "string") return decodeIcons(value);
+  const out = new Uint8Array(ICON_COUNT);
+  if (Array.isArray(value)) {
+    for (let i = 0; i < out.length && i < value.length; i++) out[i] = value[i] ? 1 : 0;
+  }
+  return out;
 }

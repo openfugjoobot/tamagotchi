@@ -1317,7 +1317,8 @@ function bindButtons(): void {
 
 /**
  * Zeichnet den zuletzt empfangenen Frame. Der Server liefert die LCD-Bits **und**
- * die 8 P1-Icon-Segment-Bits (`{t:"frame", lcd, icons}`). Die Icons sind echte
+ * die 8 P1-Icon-Segment-Bits (`{t:"frame", lcd, icons}`, lcd bit-gepackt +
+ * base64; `icons` optional, fehlt solange alle Bits 0 sind). Die Icons sind echte
  * LCD-Segmente des Treibers (`hw_set_lcd_pin`, seg 8/28); die Reihe oben/unten
  * spiegelt jetzt diesen uebertragenen Zustand statt eines hartkodierten leeren
  * Puffers. Beim ausgelieferten P1-ROM treibt das ROM die Segmente derzeit nicht,
