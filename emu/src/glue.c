@@ -62,3 +62,8 @@ u32_t emu_freq(void) { return buzzer_freq; }
 u32_t emu_en(void) { return buzzer_en; }
 u32_t emu_take_buzzer(void) { u32_t v = buzzer_latch; buzzer_latch = 0; return v; }
 u32_t emu_now(void) { return now_us; }
+u32_t emu_lcd_pixels(void) {
+  u32_t n = 0;
+  for (u32_t i = 0; i < LCD_WIDTH * LCD_HEIGHT; i++) n += lcd_buf[i] ? 1u : 0u;
+  return n;
+}

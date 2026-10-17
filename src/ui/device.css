@@ -432,8 +432,9 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   width: 16px; height: 16px; border: 3px solid var(--shell-top); border-radius: 50%; margin-bottom: -5px; flex: none;
 }
 .shell-card .device { width: 84px; margin: 0; flex: none; position: relative; }
-/* Vorschau spiegelt den Screen-Stack des echten Geraets: Zacken + Icons oben/
-   unten + LCD, mit demselben gelben Rahmen (.screen-stack). */
+/* Vorschau spiegelt den Screen-Stack des echten Geraets: Zacken + LCD, mit
+   demselben gelben Rahmen (.screen-stack). Die Icon-Reihe oben/unten gibt es
+   nicht mehr (Task-10 Fix B1: das Task-6-Protokoll traegt keinen Icon-Zustand). */
 .shell-card .mini-screen-wrap { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); width: 64%; z-index: 2; }
 .shell-card .mini-star { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 140%; aspect-ratio: 1; }
 .shell-card .mini-screen-stack {
@@ -442,7 +443,6 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   box-shadow: inset 0 0 0 1px #f2dd7e, inset 0 1px 3px rgba(0,0,0,.28);
   overflow: hidden;
 }
-.shell-card .mini-icons { width: 100%; height: auto; display: block; image-rendering: pixelated; }
 .shell-card .mini-screen { position: relative; width: 100%; aspect-ratio: 2 / 1; background: var(--lcd-bg); display: block; }
 .shell-card .shell-name { font-size: 11px; font-weight: 700; color: var(--ink-dim); text-align: center; }
 .shell-card[aria-selected="true"] .shell-name { color: var(--ink); }
@@ -456,7 +456,6 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   box-shadow: inset 0 0 0 2px #f2dd7e, inset 0 2px 8px rgba(0,0,0,.28), inset 0 -2px 5px rgba(255,255,255,.5);
   overflow: hidden;
 }
-.icons { width: 100%; height: auto; display: block; image-rendering: pixelated; }
 .screen-well { position: relative; width: 100%; aspect-ratio: 2 / 1; background: var(--lcd-bg); display: grid; place-items: center; overflow: hidden; }
 .lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
 .controls { position: absolute; left: 50%; top: 78%; transform: translateX(-50%); display: flex; gap: clamp(14px, 5vw, 26px); align-items: flex-start; z-index: 2; }
@@ -670,7 +669,56 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
   .theme-fade { display: none; }
 }
 
-/* ---- A11y ---- */
+/* ---- Task 11: Tier-Liste, Speicherstände, Beep-Verlauf, Verbindungsstatus ---- */
+.win.pets-pop { width: min(94vw, 420px); }
+.win.slots-pop { width: min(94vw, 420px); }
+.pets-body, .slots-body { display: grid; gap: 10px; }
+.pets-list, .slots-list, .beeps-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pet-row, .slot-row, .beep-row {
+  display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 10px;
+  border: 1px solid var(--border-strong); border-radius: 11px; background: transparent; color: var(--ink);
+}
+.pet-pick {
+  all: unset; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; cursor: pointer; font: inherit;
+}
+.pet-pick:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; border-radius: 8px; }
+.pet-row.current { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.pet-row[data-alive="false"] { opacity: .72; }
+.pet-title { font-weight: 800; }
+.pet-meta, .slot-meta, .beep-meta { color: var(--ink-dim); font-size: 12px; }
+.beep-row { flex-direction: column; align-items: flex-start; gap: 2px; }
+.beep-text { font-weight: 600; }
+.slots-empty, .beeps-empty { margin: 0; font-size: 12.5px; color: var(--ink-dim); }
+.slot-label { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot-del, .slot-load, .slot-create {
+  border: 1px solid var(--border-strong); background: transparent; color: var(--ink);
+  border-radius: 9px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer;
+}
+.slot-del:hover, .slot-load:hover, .slot-create:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.slot-create { width: 100%; min-height: 34px; }
+.slot-form { display: flex; gap: 6px; }
+.slot-form input {
+  flex: 1; min-width: 0; border: 1px solid var(--border-strong); border-radius: 9px; padding: 6px 9px;
+  font: inherit; font-size: 13px; background: transparent; color: var(--ink);
+}
+.pet-new-row { display: flex; gap: 6px; }
+.pet-new-row button {
+  flex: 1; min-height: 34px; border: 1px solid var(--border-strong); background: transparent; color: var(--ink);
+  border-radius: 9px; font: inherit; font-weight: 700; font-size: 13px; cursor: pointer;
+}
+.pet-new-row button:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+/* Verbindungsstatus: diskreter Indikator in der Kopfzeile. */
+.conn-badge {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+  color: var(--ink-dim); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border-strong);
+}
+.conn-badge[hidden] { display: none; }
+.conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-dim); }
+.conn-badge[data-state="live"] .conn-dot { background: #2fbf71; }
+.conn-badge[data-state="offline"] .conn-dot { background: #cf3f3f; }
+
+/* ================= A11y ================= */
 .skip {
   position: absolute; left: -9999px; top: 0; z-index: 100;
   background: var(--surface-2); color: var(--ink); padding: 10px 14px; border-radius: 0 0 10px 0;

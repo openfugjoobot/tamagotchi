@@ -167,14 +167,10 @@ self.addEventListener("periodicsync", (event) => {
   })());
 });
 
-// ---- Notification-Klick: App fokussieren oder oeffnen ----
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  event.waitUntil((async () => {
-    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const client of all) {
-      if ("focus" in client) return client.focus();
-    }
-    if (self.clients.openWindow) return self.clients.openWindow("/");
-  })());
-});
+// ---- Web Push: Beep-Benachrichtigungen empfangen (Task 12) ----
+// Die Push-Logik liegt in `public/sw-push.js` (klassisches Skript, testbar mit
+// einer Fake-`self`) und wird hier hereingezogen. Sie registriert `push` (zeigt
+// die Notification mit `tag = pet:<id>`, damit Folge-Beeps sich ersetzen) und
+// `notificationclick` (fokussiert einen offenen Tab, sonst oeffnet er `/`).
+// Die Precache-/Fetch-Logik oben bleibt davon unberuehrt.
+importScripts("sw-push.js");

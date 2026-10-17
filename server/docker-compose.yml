@@ -1,0 +1,78 @@
+# Postgres + tamagotchi server.
+#
+# Secrets are never inlined here: the password and the server's DATABASE_URL
+# live in `.secrets/tamagotchi.env` (gitignored), one `KEY=value` per line, e.g.
+#
+#   POSTGRES_PASSWORD=<long-random-string>
+#   DATABASE_URL=postgres://tamagotchi:<the-same-password>@postgres:5432/tamagotchi
+#   GOOGLE_CLIENT_ID=<...>
+#   VAPID_SUBJECT=mailto:<...>
+#   VAPID_PUBLIC_KEY=<...>
+#   VAPID_PRIVATE_KEY=<...>
+#
+# Generate the password with: openssl rand -base64 32
+# Generate the VAPID pair with: npx web-push generate-vapid-keys
+#
+# The env_file path is resolved relative to this compose file, i.e.
+# `server/.secrets/tamagotchi.env`. Both services read it, and it is the single
+# source of the server's runtime config — Compose does NOT interpolate `env_file`
+# values here, so DATABASE_URL must be spelled out in full in that file (not
+# built from ${POSTGRES_PASSWORD}).
+#
+# Start:  docker compose -f server/docker-compose.yml up -d --build
+# Connect: docker compose -f server/docker-compose.yml exec postgres \
+#            psql -U tamagotchi -d tamagotchi
+#
+# `server` builds from the repo root (context `..`), listens on 8080 internally
+# and joins the external `proxy` network for the reverse proxy. No host port.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tamagotchi-postgres
+    restart: unless-stopped
+    env_file:
+      - .secrets/tamagotchi.env
+    environment:
+      POSTGRES_USER: tamagotchi
+      POSTGRES_DB: tamagotchi
+    ports:
+      - "127.0.0.1:5432:5432"  # localhost only — the DB is not exposed publicly
+    volumes:
+      - tamagotchi-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tamagotchi -d tamagotchi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    image: tamagotchi-server
+    container_name: tamagotchi-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .secrets/tamagotchi.env
+    environment:
+      PORT: "8080"
+      # ROM/WASM live at /app/public/emu in the image (Dockerfile
+      # `COPY public/emu ./public/emu`). The compiled entrypoint derives this
+      # default itself, but pinning it here makes the container self-sufficient
+      # even if a blank PUBLIC_DIR is present in the env_file (Task-9 N1).
+      PUBLIC_DIR: "/app/public"
+    networks:
+      - default
+      - proxy
+    # No host port: the reverse proxy (NPM) reaches tamagotchi-server:8080 on
+    # the `proxy` network, mapping tamagotchi.fugjoo.com here.
+
+networks:
+  proxy:
+    external: true
+
+volumes:
+  tamagotchi-pgdata:

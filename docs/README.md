@@ -1,28 +1,78 @@
-# Tamagotchi P1 (Emulator)
+# Tamagotchi — Full-Stack
 
-Originalgetreue P1-Emulation im Browser: Die **echte Firmware** läuft in einer
-WASM-Emulation ([TamaLIB](https://github.com/jcrona/tamalib)) — Logik, Menü, Icons,
-Animation und Timing sind damit 1:1 das Original. Geräte-Optik, Buttons, Sound und
-PWA drumherum.
+Full-Stack-Plattform: das Tamagotchi läuft **auf dem Server** in einer
+WebAssembly-Emulation der echten P1-Firmware ([TamaLIB](https://github.com/jcrona/tamalib));
+der Browser ist Fenster und Fernbedienung. Geräte-Optik, Buttons, Sound und PWA
+drumherum.
 
 Live: <https://tamagotchi.fugjoo.com> · Quellcode, aber **ohne** Firmware (siehe unten).
 
-## Start
+## Überblick
+
+- **Server** (`server/`): Node/TypeScript, `fastify` + `ws`, Postgres. Treibt alle
+  Tiere in einem Tick-Loop (125 ms), erkennt Tod am LCD-Bild, verschickt generische
+  Beeps per Web Push.
+- **Client** (`src/`): statischer Build (`dist/`), verbindet sich per WebSocket
+  (`/ws`) und REST (`/api/*`) mit demselben Host.
+- Architektur-Details: [ARCHITECTURE.md](./ARCHITECTURE.md) ·
+  Entscheidungen [DECISIONS.md](./DECISIONS.md) · Spielregeln [GAMEPLAY.md](./GAMEPLAY.md) ·
+  Konto/Auth [AUTH-SYNC.md](./AUTH-SYNC.md) · Beeps [BEEPS.md](./BEEPS.md).
+
+## Client (Frontend) starten
 
 ```bash
 npm install
-npm run dev      # Dev-Server
+npm run dev      # Dev-Server (vite)
 npm run build    # Produktions-Build (dist/) + Precache-Liste für den Service Worker
 npm run verify   # tsc + Tests + Build
 ```
 
-## Firmware (nicht im Repo)
+## Server starten
 
-`public/emu/rom0.bin` ist ein gedumptes Original-P1-ROM und **urheberrechtlich
-geschützt** — es liegt deshalb nicht im Repo und muss selbst bereitgestellt werden.
-Erwartet wird ein 12 KiB ROM mit MD5 `3fce172403c27274e59723bbb9f6d8e9`
-(z. B. `tama.bin` aus dem MAME-Set `tama.zip`) als `public/emu/rom0.bin`.
-Nur für privaten Gebrauch.
+```bash
+npm run server:build   # tsc -p tsconfig.server.json → dist-server/ (+ schema.sql)
+npm run server:dev     # build + node dist-server/server/src/main.js (lokal)
+npm run server:test    # nur die Server-Tests
+```
+
+Postgres + Server im Container (empfohlen für den Betrieb):
+
+```bash
+docker compose -f server/docker-compose.yml up -d --build
+```
+
+Der Server kompiliert nach **`dist-server/`** (nicht `dist/`), damit ein
+`vite build` — das sein `outDir` leert — den Server-Einstiegspunkt nicht löscht.
+
+### Umgebung (`server/.env.example` → `.env`)
+
+| Variable | Zweck |
+|---|---|
+| `DATABASE_URL` | Postgres-Connection-String (Pflicht) |
+| `GOOGLE_CLIENT_ID` | Audience, gegen die ID-Token geprüft werden (Pflicht) |
+| `VAPID_SUBJECT` / `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web Push (Pflicht) |
+| `PORT` | HTTP-Port, Default `8080` |
+| `PUBLIC_DIR` | Ordner mit `emu/rom0.bin`, `emu/rom2.bin`, `emu/tamalib.wasm` (Default: `<root>/public`) |
+
+Secrets nie committen: lokal `.env` (gitignored), im Container
+`server/.secrets/tamagotchi.env` (gitignored, `env_file` der Compose-Datei). Das
+Schema (`server/src/db/schema.sql`) läuft bei jedem Boot idempotent.
+
+### Reverse Proxy (Betrieb)
+
+`tamagotchi.fugjoo.com` bleibt die App; der Server muss unter demselben Host
+`/api/*` **und** `/ws` bedienen, wobei `/ws` **Upgrade-Support** braucht
+(Standard bei Nginx Proxy Manager, im Host-Config prüfen). Der Container lauscht
+intern auf `8080`, kein Host-Port.
+
+## Firmware & WASM (nicht im Repo)
+
+`public/emu/rom0.bin` (P1) und `rom2.bin` (P2) sind gedumpte Original-ROMs und
+**urheberrechtlich geschützt** — sie liegen nicht im Repo. Erwartet werden 12 KiB
+mit MD5 `3fce172403c27274e59723bbb9f6d8e9` (P1, `tama.bin` aus dem MAME-Set
+`tama.zip`) bzw. `42932a81ed40be09e27c8aa1670495fc` (P2). Ohne diese Dateien und
+`tamalib.wasm` **bricht der Server beim Start ab** (`missing emulator asset: …`).
+Provisioning-Anleitung: [emu/README.md](../emu/README.md). Nur für privaten Gebrauch.
 
 ## Emulator bauen
 
@@ -32,56 +82,57 @@ Nur nötig, wenn `emu/` geändert wird (braucht Zig, kein Emscripten/Docker):
 ZIG=/pfad/zu/zig bash emu/build.sh   # → public/emu/tamalib.wasm
 ```
 
-## Bedienung
+## Tests
+
+```bash
+npm test            # vitest (alle)
+npm run server:test # nur server-*.test.ts
+npm run verify      # tsc --noEmit + vitest + vite build (+ precache)
+```
+
+Die Server-Tests laufen gegen **pg-mem** (kein Postgres nötig) und injizieren
+Fake-ROM/WASM/Push-Sender. Der `emu-beep-probe`-Test simuliert zwei Tage und ist
+deshalb langsam (~2 min).
+
+### End-to-End-Probe (manuell)
+
+`scripts/e2e-check.mjs` fährt den echten Server gegen ein echtes Postgres hoch und
+treibt ihn über echtes HTTP + WebSocket: Tier anlegen → `hello` → LCD-Frames →
+Beep → Push. Nur die Google-Prüfung (selbst signiertes JWKS) und der Push-Sender
+(Aufzeichnungs-Stub) sind injiziert.
+
+```bash
+npm run server:build
+docker run -d --name tama-e2e-pg -e POSTGRES_PASSWORD=e2epass \
+  -e POSTGRES_USER=tamagotchi -e POSTGRES_DB=tamagotchi -p 127.0.0.1:55433:5432 postgres:16-alpine
+DATABASE_URL='postgres://tamagotchi:e2epass@127.0.0.1:55433/tamagotchi' node scripts/e2e-check.mjs
+```
+
+## Bedienung (Client)
 
 - **A / B / C** = linke / mittlere / rechte Taste (Klick, Touch oder Tastatur:
-  `A`/`←`, `Enter`/`Space`, `→`; `Esc` schließt nur Dialoge).
-- **`?speed=N`** — Emulation N× schneller (z. B. `?speed=600`).
-- **`?shell=pink`** — pinkes Gehäuse (Default blau).
+  `A`/`←`, `Enter`/`Space`, `→`; `Esc` schließt nur Dialoge). Die Drücke gehen als
+  `{t:"press"}` an den Server.
+- **`?shell=pink`** — pinkes Gehäuse (Default blau). Der frühere `?speed=`-Parameter
+  entfällt: die Zeit kommt jetzt vom Server.
 
-## Aufbau
+## Bekannte Lücken
 
-```
-emu/         C→WASM-Build (TamaLIB + HAL-Glue, Zig)
-public/emu/  tamalib.wasm (+ rom0.bin, selbst bereitstellen)
-src/emu/     TS-Wrapper, Input-Map, Piezo-Audio, Zeitmodell (clock.ts)
-src/render/  LCD-Canvas, Icon-Leiste
-src/storage/ Emulator-Snapshot + localStorage-Keys
-src/theme.ts Hintergrund-Themes (Start + Guide)
-src/ui/      Geräte-Gehäuse
-src/main.ts  Verdrahtung (Frame-Loop, Buttons, Sound, Save, Nachhol-Logik)
-src/pwa.ts   PWA-Lifecycle: SW-Updates, Offline-Status, Installation, Badge, Wake Lock
-```
-
-## PWA
-
-Die App ist installierbar und offline lauffähig. Was sie mitbringt:
-
-| Thema | Umsetzung |
-| --- | --- |
-| Offline-Start | `sw.js` precached beim Install alle Build-Artefakte (`precache.json`) |
-| Caching | Netz-zuerst für HTML, Cache-zuerst für gehashte Assets/ROM/WASM, Stale-while-revalidate für den Rest |
-| Offline-Fallback | `/offline.html` bei fehlgeschlagener Navigation |
-| Updates | Neue Version **wartet** auf Freigabe; die Seite bietet einen Reload an. Kein Auto-Reload mitten im Spiel. |
-| Version | Build-Hash über alle Artefakte, beim Build in `sw.js` gestempelt und im Footer sichtbar |
-| Installation | `beforeinstallprompt` + eigener Dialog mit Anleitung (iOS-Variante für Safari) |
-| Speicher | `navigator.storage.persist()` schützt den Spielstand vor Räumung; Belegung im Konto-Panel |
-| Badge | `setAppBadge()`, wenn das Tier Aufmerksamkeit braucht (zuschaltbar) |
-| Wake Lock | Bildschirm bleibt wach, solange der Tab offen ist (zuschaltbar) |
-| Sync | Background Sync / Periodic Sync holen den Cloud-Push nach |
-
-Die Version wird **nicht** von Hand gepflegt: `scripts/gen-precache.mjs` hasht nach
-dem Build alle Dateien und ersetzt `__SW_VERSION__` in `dist/sw.js`. Ändert sich
-nichts, bleibt der Hash gleich.
-
-Weiter: [ARCHITECTURE.md](./ARCHITECTURE.md) · [DECISIONS.md](./DECISIONS.md) ·
-[GAMEPLAY.md](./GAMEPLAY.md)
+- **Slot-Laden** hat keine Server-Route: Slots lassen sich anlegen/löschen, aber
+  nicht wieder in ein laufendes Tier laden.
+- **Einstellungs-IDs passen nicht zusammen**: der Server erlaubt
+  `theme ∈ {light,dark}` und `shell ∈ {green,blue,pink,dino}`, die UI nutzt aber
+  `blossom/day/dusk/night/midnight` bzw. `teal/blue/pink/…`. Dadurch round-trippen
+  nur `sound` und `push`; Theme/Shell werden nicht persistiert.
+- **Kein Ton im Tab**: das WS-Protokoll hat keine Buzzer-Nachricht; der
+  Sound-Schalter existiert, aber ohne Live-Feed.
+- **Kein Timeout, wenn kein Frame kommt**: bleibt der WS stumm, dreht der
+  Lade-Spinner weiter (kein Fallback nach n Sekunden).
 
 ## Lizenzen
 
 - Dieses Projekt steht unter **GPLv2** (siehe [`../LICENSE`](../LICENSE)) — weil
-  [TamaLIB](https://github.com/jcrona/tamalib), auf dem die Emulation basiert,
-  GPLv2 ist. Copyright (C) 2026 fugjoo.
-- Das P1-ROM ist nicht enthalten (siehe oben), die Icon-Grafiken stammen aus
+  TamaLIB, auf dem die Emulation basiert, GPLv2 ist. Copyright (C) 2026 fugjoo.
+- Die P1/P2-ROMs sind nicht enthalten; die Icon-Grafiken stammen aus
   [`GMMan/flipperzero-tamagotch-p1`](https://github.com/GMMan/flipperzero-tamagotch-p1)
   (Lizenz dort unklar).

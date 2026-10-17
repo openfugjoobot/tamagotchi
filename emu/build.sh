@@ -23,6 +23,7 @@ EXPORTS=(
   -Wl,--export=emu_en
   -Wl,--export=emu_take_buzzer
   -Wl,--export=emu_now
+  -Wl,--export=emu_lcd_pixels
   -Wl,--export-memory
 )
 

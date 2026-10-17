@@ -1,20 +1,24 @@
-import { createEmulator, LCD_WIDTH, LCD_HEIGHT } from "./emu/emulator";
-import { DEVICES, DEVICE_IDS, pickInitialDevice, nextDevice, switchLabel, type Device } from "./emu/devices";
-import { STEPS_PER_SECOND, unitsForMs, Pacer } from "./emu/clock";
-import type { Emulator } from "./emu/emulator";
+import { DEVICES, pickInitialDevice, nextDevice, switchLabel, type Device } from "./emu/devices";
+import { LCD_WIDTH, LCD_HEIGHT, type Btn } from "./emu/constants";
 import { drawLcd } from "./render/lcd";
-import { drawIconRow, loadIcons, renderIconGrid, type IconImages } from "./render/icons";
+import { renderIconGrid } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
-import { saveEmu, loadEmu, readSaveRecord, migrateLegacyEmu, emuKey } from "./storage/persist";
+import { LiveClient } from "./net/live";
 import { AUTH_ENABLED } from "./auth/config";
 import { currentSession, restoreSession, renderSignInButton, signOut, initGsi, onSessionRefresh, type Session } from "./auth/google";
-import { deleteRemote, readSave, planSync, pushSave, type CloudSave, type SyncAction } from "./sync/cloud";
 import { SHELLS, applyShell, savedShell, starPolygon, type Shell } from "./shell";
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, iconNames, t } from "./i18n";
 import { THEMES, BG_KEY, AUTO, savedBg, resolveTheme } from "./theme";
 import { SOUND_KEY, NOTIFY_KEY, DEVICE_KEY, BADGE_KEY, WAKELOCK_KEY } from "./storage/keys";
+import { createPetsView, type PetSummary } from "./ui/pets";
+import { createBootOverlay } from "./ui/boot";
+import { createSlotsView } from "./ui/slots";
+import { createSettingsView, type Settings } from "./ui/settings";
+import { createAppearanceHandlers } from "./ui/appearance";
+import { createBeepsView, type BeepSummary } from "./ui/beeps";
+import { api } from "./ui/api";
 import {
   initPwa,
   registerServiceWorker,
@@ -26,47 +30,18 @@ import {
   enableWakeLock,
   disableWakeLock,
   storageInfo,
-  requestBackgroundSync,
-  onBackgroundSync,
 } from "./pwa";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
-const iconsTop = document.getElementById("icons-top") as HTMLCanvasElement;
-const iconsBottom = document.getElementById("icons-bottom") as HTMLCanvasElement;
-const ctxTop = iconsTop.getContext("2d")!;
-const ctxBottom = iconsBottom.getContext("2d")!;
 
 // Mini-Vorschau im Menü
 let miniDevice: HTMLElement | null = null;
 let miniWrapEl: HTMLElement | null = null;
-let miniTop: HTMLCanvasElement | null = null;
-/** Icon-Canvas der Vorschau-Karten: [oben, unten] je Karte (nach loadIcons befuellt). */
-const miniIconCanvases: { top: HTMLCanvasElement; bottom: HTMLCanvasElement }[] = [];
 let miniLcd: HTMLCanvasElement | null = null;
-let miniBottom: HTMLCanvasElement | null = null;
-let miniTopCtx: CanvasRenderingContext2D | null = null;
 let miniLcdCtx: CanvasRenderingContext2D | null = null;
-let miniBottomCtx: CanvasRenderingContext2D | null = null;
 
-/** Zeichnet die P1-Icon-Reihen in alle Vorschau-Karten (nach loadIcons).
- *  Die Vorschau zeigt keinen laufenden Emulator, daher leere Icon-Zustaende -
- *  die Icons selbst stammen aus den echten P1-Sprites. */
-function paintMiniIcons(): void {
-  const ms = 2; // 32x8 logisch -> 64x16 px
-  const blank = new Uint8Array(8);
-  for (const { top, bottom } of miniIconCanvases) {
-    for (const [cv, row] of [[top, 0], [bottom, 1]] as const) {
-      const ctx = cv.getContext("2d");
-      if (!ctx) continue;
-      cv.width = LCD_WIDTH * ms;
-      cv.height = 8 * ms;
-      drawIconRow(ctx, blank, row, ms, iconImgs);
-    }
-  }
-}
 const piezo = createPiezo(() => new AudioContext());
-const loadingEl = document.getElementById("loading");
 const menuEl = document.getElementById("menu");
 
 // Service Worker registrieren (ausgelagert, damit kein Inline-Script nötig ist → strikte CSP).
@@ -75,9 +50,6 @@ const menuEl = document.getElementById("menu");
 void registerServiceWorker();
 
 const params = new URLSearchParams(location.search);
-const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
-// Testmodus: feste Schrittzahl, ein Frame, dann Stopp (kein rAF-Loop).
-const STATIC = Number(params.get("static") ?? "0") || 0;
 const shellParam = params.get("shell");
 /** Manifest-Shortcut "How to play" oeffnet direkt die Anleitung. */
 const openGuideOnBoot = params.get("guide") === "1";
@@ -85,6 +57,26 @@ const openGuideOnBoot = params.get("guide") === "1";
 // ---- Hintergrund-Themes (Definition in src/theme.ts) ----
 // "auto" wählt nach Tageszeit; gespeichert wird die Auswahl, angezeigt das Theme.
 let selectedBg = "day";
+
+/**
+ * True, solange `applyServerSettings()` geladene Werte in die UI schreibt. In
+ * diesem Fenster stammen Theme-/Shell-Wechsel vom Server, nicht vom Nutzer, und
+ * dürfen nicht zurückgeschrieben werden (sonst Schleife bzw. Überschreiben der
+ * Wahl eines anderen Geräts).
+ */
+let applyingFromServer = false;
+
+/**
+ * Theme/Shell-Auswahl persistieren (Fix A2b, Task-11 D2). Die Handler werden vom
+ * Theme-Grid, dem Shell-Grid und dem Shell-Karussell gerufen. `isApplying`
+ * entschärft den Rückweg: Werte, die `applyServerSettings` gerade in die UI
+ * schreibt, werden nicht erneut gespeichert. `persistSetting` ist eine gehoistete
+ * Funktionsdeklaration weiter unten, daher hier bereits sicher referenzierbar.
+ */
+const appearance = createAppearanceHandlers({
+  persist: (patch) => persistSetting(patch),
+  isApplying: () => applyingFromServer,
+});
 
 // Kurzes Crossfade beim Umschalten: den alten Hintergrund als Layer darüberlegen
 // und ausblenden, sobald das neue Theme steht. Bei reduced motion: kein Fade.
@@ -225,7 +217,7 @@ function initUI(): void {
       b.title = t.id;
       b.style.background = t.c;
       b.setAttribute("aria-label", "Background: " + t.id);
-      b.addEventListener("click", () => applyBg(t.id));
+      b.addEventListener("click", () => { applyBg(t.id); appearance.selectTheme(t.id); });
       if (t.id === AUTO) {
         const mark = document.createElement("span");
         mark.className = "bgbtn-a";
@@ -265,11 +257,8 @@ function initUI(): void {
     shellStage.appendChild(wrap);
     miniDevice = clone;
     miniWrapEl = wrap;
-    const cvs = clone.querySelectorAll("canvas");
-    miniTop = cvs[0] ?? null; miniLcd = cvs[1] ?? null; miniBottom = cvs[2] ?? null;
-    miniTopCtx = miniTop ? miniTop.getContext("2d") : null;
+    miniLcd = clone.querySelector("canvas.lcd");
     miniLcdCtx = miniLcd ? miniLcd.getContext("2d") : null;
-    miniBottomCtx = miniBottom ? miniBottom.getContext("2d") : null;
   }
   if (shellbtns && deviceEl) {
     const setShell = (id: string, animate = true) => {
@@ -296,7 +285,7 @@ function initUI(): void {
       b.title = s.id;
       b.style.background = `linear-gradient(180deg, ${s.top}, ${s.bot})`;
       b.setAttribute("aria-label", "Shell: " + s.id);
-      b.addEventListener("click", () => setShell(s.id));
+      b.addEventListener("click", () => { setShell(s.id); appearance.selectShell(s.id); });
       const label = document.createElement("span");
       label.textContent = s.id.charAt(0).toUpperCase() + s.id.slice(1);
       item.append(b, label);
@@ -338,14 +327,10 @@ function initUI(): void {
         `</linearGradient></defs>` +
         `<polygon points="${starPolygon(shell.star)}" fill="url(#sun-${shell.id})" /></svg>` +
         `<span class="mini-screen-stack">` +
-        `<canvas class="mini-icons" width="32" height="8" aria-hidden="true"></canvas>` +
         `<span class="mini-screen"></span>` +
-        `<canvas class="mini-icons" width="32" height="8" aria-hidden="true"></canvas>` +
         `</span>` +
         `</span>`;
       wrap.append(ring, dev);
-      const icons = dev.querySelectorAll<HTMLCanvasElement>(".mini-icons");
-      if (icons.length >= 2) miniIconCanvases.push({ top: icons[0], bottom: icons[1] });
       const name = document.createElement("span");
       name.className = "shell-name";
       name.textContent = shell.id.charAt(0).toUpperCase() + shell.id.slice(1);
@@ -454,8 +439,10 @@ function initUI(): void {
         i = centeredIndex();
       }
       const sel = cards[i];
-      if (sel && sel.dataset.shell && sel.dataset.shell !== current) pickShell(sel.dataset.shell);
-      else markCards();
+      if (sel && sel.dataset.shell && sel.dataset.shell !== current) {
+        pickShell(sel.dataset.shell);
+        appearance.selectShell(sel.dataset.shell);
+      } else markCards();
     };
 
     carousel.addEventListener("scroll", () => {
@@ -560,7 +547,8 @@ function initUI(): void {
     else if (menu && !menu.hidden) trap(menu, e);
   });
   document.getElementById("btn-confirm-reset")?.addEventListener("click", () => {
-    try { localStorage.removeItem(emuKey("p1")); localStorage.removeItem(emuKey("p2")); } catch { /* ignore */ }
+    // Der Spielstand liegt auf dem Server; ein lokaler Reset raeumt nur noch die
+    // Geraetewahl und startet die Ansicht neu.
     location.reload();
   });
 
@@ -574,6 +562,7 @@ function initUI(): void {
     try { localStorage.setItem(SOUND_KEY, soundOn ? "1" : "0"); } catch { /* ignore */ }
     piezo.setMuted(!soundOn);
     updateSoundLabel();
+    persistSetting({ sound: soundOn });
   });
 
   document.getElementById("btn-notify")?.addEventListener("click", async () => {
@@ -582,6 +571,7 @@ function initUI(): void {
       try { localStorage.setItem(NOTIFY_KEY, "0"); } catch { /* ignore */ }
       updateNotifyLabel();
       clearAppBadge();
+      persistSetting({ push: false });
       return;
     }
     if (!("Notification" in window)) return;
@@ -591,6 +581,7 @@ function initUI(): void {
       try { localStorage.setItem(NOTIFY_KEY, notifyEnabled ? "1" : "0"); } catch { /* ignore */ }
     } catch { notifyEnabled = false; }
     updateNotifyLabel();
+    persistSetting({ push: notifyEnabled });
   });
 
   // ---- i18n (Sprache folgt der Browsersprache) ----
@@ -676,28 +667,19 @@ function initUI(): void {
 }
 initUI();
 
-// Zeitmodell siehe src/emu/clock.ts: alles relativ, kein Zeitlimit mehr.
-const MAX_STEPS_PER_FRAME = 120 * STEPS_PER_SECOND;
-const MAX_FRAME_CATCHUP_MS = 120 * 1000; // pro Frame höchstens 120 s reales Delta annehmen
-const CATCHUP_CHUNK_STEPS = 4 * 1000 * 1000; // Nachhol-Modus: alle ~4 Mio. Schritte kurz freigeben
+// ---- Live-Kanal: das Tier laeuft auf dem Server, der Tab ist Fenster + Fernbedienung ----
+//
+// Der in-tab-Emulator ist weg. Der Browser haengt an einem WebSocket (`/ws`),
+// empfaengt LCD-Frames und schickt Tastendruecke zurueck. Faellt die Verbindung
+// aus, laeuft das Tier serverseitig weiter - der Tab zeigt es nur nicht.
+const live = new LiveClient();
 
-const pacer = new Pacer();
-
-function pump(maxSteps: number): void {
-  const steps = pacer.take(maxSteps);
-  if (steps <= 0) return;
-  for (const id of DEVICE_IDS) emus[id]?.step(steps);
-}
-
-/** Ist der P2-ROM geladen? Steuert, ob der Schalter umschalten darf. */
+/** Ist der P1/P2-Schalter bedienbar? (ROM-/Tier-Verfuegbarkeit serverseitig.) */
 let p2Available = true;
-
-/** Laufende Emulatoren je Geraet. Beide laufen; gezeichnet wird nur `active`. */
-const emus: Partial<Record<Device, Emulator>> = {};
 /** Welches Geraet der Nutzer gerade bedient. */
 let active: Device = "p1";
-/** Aktive Instanz oder null, solange noch nichts geladen ist. */
-const cur = (): Emulator | null => emus[active] ?? null;
+/** Letzter empfangener LCD-Frame (oder null, solange nichts kam). */
+let lastFrame: Uint8Array | null = null;
 
 /** Schalter-Beschriftung an das aktive Geraet angleichen. */
 function syncDeviceButtons(): void {
@@ -709,7 +691,7 @@ function syncDeviceButtons(): void {
   btn.setAttribute("aria-label", t("switchTo").replace("{device}", DEVICES[nextDevice(active)].label));
 }
 
-/** P2 ist nicht ladbar (ROM fehlt): Schalter sperren statt still scheitern. */
+/** P2 ist nicht verfuegbar: Schalter sperren statt still scheitern. */
 function disableP2(): void {
   p2Available = false;
   const b = document.getElementById("dev-toggle") as HTMLButtonElement | null;
@@ -718,15 +700,17 @@ function disableP2(): void {
   b.title = t("p2Unavailable");
 }
 
-/** Umschalten: Auswahl merken, Schalter nachziehen, LCD sofort neu zeichnen. */
+/**
+ * Umschalten auf ein anderes Geraet: Auswahl merken, Schalter nachziehen und
+ * den Live-Stream des neuen Tiers starten. Ein Wechsel ist hier nur eine andere
+ * Ansicht - der Server haelt das jeweilige Tier weiter.
+ */
 function setActive(device: Device): void {
-  if (!emus[device]) return;
-  // Buttons des verlassenen Geraets freigeben, sonst bleibt dort eine Taste haengen.
-  for (const b of ["left", "middle", "right"] as const) emus[active]?.setButton(b, false);
   active = device;
   try { localStorage.setItem(DEVICE_KEY, device); } catch { /* Quota */ }
   syncDeviceButtons();
-  lastTs = performance.now();
+  live.disconnect();
+  void startStream();
 }
 
 /** Klick auf den Titel-Schalter: auf das andere Geraet wechseln. Der Titel ist
@@ -739,197 +723,272 @@ function initDeviceSwitch(): void {
     setActive(nextDevice(active, { p2Available }));
   });
 }
-let iconImgs: IconImages = [];
-let lastTs = 0;let saveTick = 0;
-let booted = false;
 
 const loadtxtEl = document.querySelector<HTMLElement>("#loading .loadtxt");
 const loadbarEl = document.getElementById("loadbar");
-const loadbarFill = document.getElementById("loadbar-fill");
 
-function showCatchup(frac: number): void {
-  const pct = Math.round(Math.min(1, Math.max(0, frac)) * 100);
-  const label = t("loading").replace(/…/g, "").trim();
-  if (loadtxtEl) loadtxtEl.textContent = `${label} ${pct}%`;
-  if (loadbarEl) loadbarEl.hidden = false;
-  if (loadbarFill) loadbarFill.style.width = pct + "%";
+// Das Lade-Overlay als eigener, DOM-injizierbarer Controller (src/ui/boot.ts).
+// Grund fuer die Auslagerung: der signed-out-Pfad muss die `#loading`-Gardine
+// zuverlaessig schliessen (z-index 50 > Konto-Popover 32), sonst ist der
+// Google-Anmeldeknopf unerreichbar. Das ist im Node-Test nur pruefbar, wenn die
+// Entscheidung nicht an das import-zeitliche DOM von main.ts gebunden ist.
+const bootOverlay = createBootOverlay({ loading: document.getElementById("loading"), loadtext: loadtxtEl, loadbar: loadbarEl });
+
+/** Ersten Frame abwarten, dann das Lade-Overlay ausblenden. */
+function markBooted(): void {
+  bootOverlay.markBooted();
 }
 
-const nextTick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+/** Lade-Overlay: kurzer Hinweis, solange der erste Frame aussteht. */
+function showConnecting(): void {
+  bootOverlay.showConnecting(t("loading"));
+}
 
-// Holt beliebig viel Emulator-Zeit nach – in Chunks mit Fortschritt, statt den
-// Tab minutenlang einzufrieren. Ohne Limit: auch Tage/Wochen Abwesenheit.
+// ---- Pet-Aufloesung: welches Tier zeigt der aktive Slot? ----
+// Die Tier-Liste hat jetzt eine eigene Ansicht (src/ui/pets.ts); hier bleibt nur
+// die Zuordnung Slot -> petId ueber die API, damit der Stream das richtige Tier zeigt.
+
+/** Neuestes lebendes Tier des Geraets, sonst das neueste ueberhaupt, sonst nichts. */
+function pickPet(pets: PetSummary[], device: Device): PetSummary | null {
+  const ofDevice = pets.filter((p) => p.device === device);
+  return ofDevice.find((p) => p.alive) ?? ofDevice[0] ?? null;
+}
+
+/**
+ * Den Live-Stream fuer das aktive Geraet starten.
+ *
+ * Ohne Anmeldung oder ohne passendes Tier bleibt der Tab offline - das Tier
+ * laeuft serverseitig weiter, es gibt nur nichts zu zeigen.
+ */
+async function startStream(): Promise<void> {
+  const s = currentSession();
+  showConnecting();
+  if (!AUTH_ENABLED || !s) {
+    // Ohne Konto gibt es nichts zu streamen: das Lade-Overlay darf nicht ewig
+    // stehen bleiben (Task-10-Mandat c). Stattdessen ein klarer Hinweis.
+    showSignedOut();
+    return;
+  }
+  const pets = await fetchPets(s.token);
+  const pet = pickPet(pets, active);
+  if (!pet) {
+    if (active === "p2") disableP2();
+    // Kein passendes Tier: der Nutzer kann in der Tier-Liste eines anlegen.
+    noPetAvailable();
+    return;
+  }
+  currentPetId = pet.id;
+  live.connect(pet.id, s.token);
+}
+
+// ---- Task 11: Tier-Liste, Speicherstände, Einstellungen, Beep-Verlauf ----
 //
-// Laeuft pro Geraet getrennt (siehe boot): beide koennen unterschiedlich lange
-// weg gewesen sein, und ein gemeinsamer Pacer wuerde ihre Zeiten vermischen.
-async function catchUpAllFor(device: Device, units: number): Promise<void> {
-  if (!emus[device] || units <= 0) return;
-  const scratch = new Pacer();
-  scratch.add(units);
-  const total = units;
-  let lastPaint = 0;
-  while (scratch.owedUnits > 0) {
-    const steps = scratch.take(CATCHUP_CHUNK_STEPS);
-    if (steps > 0) emus[device]!.step(steps);
-    const now = performance.now();
-    if (now - lastPaint > 100) { lastPaint = now; showCatchup(1 - scratch.owedUnits / total); }
-    await nextTick();
-  }
-  showCatchup(1);
-  if (loadtxtEl) loadtxtEl.textContent = t("loading");
-  if (loadbarEl) loadbarEl.hidden = true;
+// Diese Ansichten haengen an der Task-8-HTTP-API. Sie sind bewusst duenn: die
+// Logik steckt in src/ui/*, hier wird nur verdrahtet (oeffnen/schliessen,
+// Token, Toast). Ohne Anmeldung bleiben sie leer statt zu scheitern.
+
+/** Aktuell gestreamte petId (fuer die Tier-Liste). */
+let currentPetId: string | null = null;
+
+/**
+ * Alle Tiere des Nutzers laden.
+ *
+ * Nutzt den zentralen API-Helper statt eigenem fetch (Task-11-Konsolidierung);
+ * liefert eine leere Liste statt zu werfen, damit die UI nie blockiert.
+ */
+async function fetchPets(token: string): Promise<PetSummary[]> {
+  const res = await api.get<PetSummary[]>("/api/pets", token);
+  if (!res.ok || !Array.isArray(res.data)) return [];
+  return res.data.filter((p) => p && typeof p.id === "string" && (p.device === "p1" || p.device === "p2"));
 }
 
-// ---- Konto & Cloud-Speicher (siehe docs/AUTH-SYNC.md) ----
-let cloudDirty = false;
-let cloudTimer: number | null = null;
+const petsView = createPetsView({
+  live,
+  token: () => currentSession()?.token ?? null,
+  host: document.getElementById("pets-list") ?? undefined,
+  onSelect: (petId) => {
+    currentPetId = petId;
+    // Auswahl uebernimmt das Tier in den Stream; das Menue schliesst.
+    const pet = lastPets.find((p) => p.id === petId);
+    if (pet) setActive(pet.device);
+    closeTask11Windows();
+  },
+});
 
-// Nach jedem lokalen Speichern den Cloud-Push entprellt nachziehen (max. alle 30 s).
-function markCloudDirty(): void {
-  if (!AUTH_ENABLED) return;
-  cloudDirty = true;
-  if (cloudTimer !== null) return;
-  cloudTimer = window.setTimeout(() => { cloudTimer = null; void flushCloud(); }, 30_000);
+let lastPets: PetSummary[] = [];
+
+const slotsView = createSlotsView({
+  token: () => currentSession()?.token ?? null,
+  host: document.getElementById("slots-list") ?? undefined,
+  notify: (msg) => { if (msg) showToast(msg); },
+  onChange: () => void refreshSlots(),
+});
+
+const settingsView = createSettingsView({
+  token: () => currentSession()?.token ?? null,
+  onApply: (s) => applyServerSettings(s),
+  notify: (msg) => { if (msg) showToast(msg); },
+  failMessage: () => t("settingsFailed"),
+});
+
+const beepsView = createBeepsView({ host: document.getElementById("beeps-list") ?? undefined });
+
+/**
+ * Eine Einstellung serverseitig sichern, wenn ein Konto da ist.
+ *
+ * Ohne Anmeldung passiert nichts: die lokalen Schalter gelten weiter. So bleibt
+ * das Verhalten offline unveraendert und der Server ist die Quelle, sobald man
+ * angemeldet ist (Spec §3).
+ */
+function persistSetting(patch: Partial<Settings>): void {
+  if (!currentSession()) return;
+  void settingsView.save(patch);
 }
 
-async function flushCloud(): Promise<void> {
-  const s = currentSession();
-  if (!s || !cloudDirty) return;
-  // Je Geraet ein eigener Slot. Getrennte Versuche: scheitert P2, darf P1s
-  // Push nicht ausfallen.
-  let allOk = true;
-  for (const id of DEVICE_IDS) {
-    const rec = readSaveRecord(localStorage, id);
-    if (!rec) continue;
-    const ok = await pushSave(s.token, id, { snapshot: rec.d, updatedAt: new Date(rec.t).toISOString(), saveVer: 1 });
-    if (!ok) allOk = false;
-  }
-  if (allOk) cloudDirty = false;
-  // Ohne Netz: der Service Worker holt den Push nach, sobald wieder Verbindung besteht.
-  else void requestBackgroundSync();
-}
-
-/** Fragt, welcher Spielstand gelten soll (Cloud oder dieses Gerät). */
-function askWhichSave(localAt: number, cloudAt: string): Promise<"push" | "pull"> {
-  return new Promise((resolve) => {
-    const panel = document.getElementById("save-modal");
-    const hint = document.getElementById("save-hint");
-    const keepBtn = document.getElementById("save-keep");
-    const cloudBtn = document.getElementById("save-cloud");
-    if (!panel || !hint || !keepBtn || !cloudBtn) {
-      resolve("pull");
-      return;
+/** Ein geladenes Settings-Objekt auf die vorhandene UI anwenden. */
+function applyServerSettings(s: Settings): void {
+  // Der Server fuehrt dieselben UI-IDs wie die Oberflaeche (theme: blossom/day/
+  // …/auto, shell: teal/pink/…); die Pruefung unten ist nur ein Guertel, falls
+  // ein unbekannter Wert aus einer alten Zeile kommt. Klang und Push sind boolesch.
+  // `applyingFromServer` verhindert, dass die hier angewandten Werte über die
+  // Auswahl-Handler wieder zurückgeschrieben werden (Fix A2b).
+  applyingFromServer = true;
+  try {
+    if (SHELLS.some((x) => x.id === s.shell)) {
+      const el = document.querySelector(".device-wrap") as HTMLElement | null;
+      if (el) applyShell(el, s.shell, localStorage);
+      if (miniDevice) miniDevice.dataset.shell = s.shell;
+      if (miniWrapEl) miniWrapEl.dataset.shell = s.shell;
+      document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === s.shell));
     }
-    const fmt = (v: number | string): string =>
-      new Date(v).toLocaleString(currentLang(), { dateStyle: "short", timeStyle: "short" });
-    hint.textContent = t("saveBody").replace("{cloud}", fmt(cloudAt)).replace("{local}", fmt(localAt));
-    const finish = (choice: "push" | "pull"): void => {
-      panel.hidden = true;
-      keepBtn.removeEventListener("click", onKeep);
-      cloudBtn.removeEventListener("click", onCloud);
-      resolve(choice);
-    };
-    const onKeep = (): void => finish("push");
-    const onCloud = (): void => finish("pull");
-    keepBtn.addEventListener("click", onKeep);
-    cloudBtn.addEventListener("click", onCloud);
-    panel.hidden = false;
+    if (THEMES.some((x) => x.id === s.theme)) applyBg(s.theme, false);
+    soundOn = s.sound !== false;
+    piezo.setMuted(!soundOn);
+    updateSoundLabel();
+    notifyEnabled = s.push;
+    updateNotifyLabel();
+  } finally {
+    applyingFromServer = false;
+  }
+}
+
+/** Speicherstände des aktuellen Tiers neu laden und rendern. */
+async function refreshSlots(): Promise<void> {
+  if (!currentPetId) { slotsView.render([], ""); return; }
+  const slots = await slotsView.list(currentPetId);
+  slotsView.render(slots, currentPetId);
+}
+
+/** Beep-Verlauf laden und rendern. */
+async function refreshBeeps(): Promise<void> {
+  const token = currentSession()?.token ?? null;
+  const res = await api.get<BeepSummary[]>("/api/beeps", token);
+  beepsView.render(res.ok && Array.isArray(res.data) ? res.data : []);
+}
+
+/** Tier-Liste neu laden und rendern. */
+async function refreshPets(): Promise<void> {
+  const token = currentSession()?.token ?? null;
+  lastPets = token ? await fetchPets(token) : [];
+  petsView.render(lastPets, currentPetId);
+}
+
+/** Ein neues Tier anlegen und direkt streamen. */
+async function createPet(device: Device): Promise<void> {
+  const token = currentSession()?.token ?? null;
+  if (!token) return;
+  await api.post("/api/pets", token, { device });
+  await refreshPets();
+  const pet = pickPet(lastPets, device);
+  if (pet) { currentPetId = pet.id; setActive(device); }
+}
+
+/** Lade-Hinweis fuer abgemeldete Nutzer (kein ewiges Spinner, Mandat c). */
+function showSignedOut(): void {
+  // Der Nachrichtentext allein genuegt nicht: die Gardine muss zu (sonst liegt
+  // sie ueber dem Anmeldeknopf). boot.ts schliesst sie und latched `booted`.
+  bootOverlay.showSignedOut(t("signInToPlay"));
+}
+
+/**
+ * Angemeldet, aber kein passendes Tier: das Overlay aufloesen statt ewig zu
+ * spinnen. Der Nutzer legt das Tier in der Tier-Liste an (Menue > Tiere).
+ */
+function noPetAvailable(): void {
+  bootOverlay.noPetAvailable(t("loading"));
+}
+
+/** Alle Task-11-Fenster schliessen (Menue + Scrim mitnehmen). */
+function closeTask11Windows(): void {
+  for (const id of ["pets-pop", "slots-pop", "beeps-pop"]) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  }
+  const menu = document.getElementById("menu");
+  const scrim = document.getElementById("scrim");
+  if (scrim && menu && menu.hidden) scrim.hidden = true;
+}
+
+/** Ein Task-11-Fenster oeffnen (und die anderen schliessen). */
+function openWindow(id: string, onOpen: () => void): void {
+  const menu = document.getElementById("menu");
+  if (menu && !menu.hidden) {
+    menu.hidden = true;
+    document.getElementById("btn-menu")?.setAttribute("aria-expanded", "false");
+  }
+  closeTask11Windows();
+  const panel = document.getElementById(id);
+  if (panel) panel.hidden = false;
+  const scrim = document.getElementById("scrim");
+  if (scrim) scrim.hidden = false;
+  onOpen();
+}
+
+/** Verbindungsstatus als diskreter Indikator (Task-10-Mandat b). */
+function updateConnBadge(): void {
+  const badge = document.getElementById("conn-badge");
+  const text = document.getElementById("conn-text");
+  if (!badge) return;
+  const st = live.status();
+  badge.hidden = false;
+  badge.dataset.state = st;
+  if (text) text.textContent = t(st === "live" ? "connectionLive" : "connectionOffline");
+  badge.title = `${t(st === "live" ? "connectionLive" : "connectionOffline")} — ${t("connectionHint")}`;
+}
+
+/** Die drei Task-11-Menueknoepfe und ihre Fenster verdrahten. */
+function initTask11(): void {
+  document.getElementById("btn-pets")?.addEventListener("click", () => openWindow("pets-pop", () => void refreshPets()));
+  document.getElementById("btn-slots")?.addEventListener("click", () => openWindow("slots-pop", () => void refreshSlots()));
+  document.getElementById("btn-beeps")?.addEventListener("click", () => openWindow("beeps-pop", () => void refreshBeeps()));
+  document.getElementById("pets-close")?.addEventListener("click", closeTask11Windows);
+  document.getElementById("slots-close")?.addEventListener("click", closeTask11Windows);
+  document.getElementById("beeps-close")?.addEventListener("click", closeTask11Windows);
+  document.getElementById("pet-new-p1")?.addEventListener("click", () => void createPet("p1"));
+  document.getElementById("pet-new-p2")?.addEventListener("click", () => void createPet("p2"));
+  document.getElementById("slot-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = document.getElementById("slot-name") as HTMLInputElement | null;
+    if (!input || !currentPetId) return;
+    const label = input.value;
+    input.value = "";
+    void slotsView.create(currentPetId, label).then(() => refreshSlots());
   });
-}
+  // Verbindungsstatus regelmaessig nachziehen (WS-Zustand kennt keinen Event).
+  window.setInterval(updateConnBadge, 1500);
+  updateConnBadge();
 
-/**
- * Nach dem Login den geladenen Cloud-Stand in den laufenden Emulator bringen.
- *
- * Frueher rief der Login-Pfad location.reload() auf. Das war schlecht: die
- * Session lag damals in sessionStorage und starb mit dem Tab - nach dem Reload
- * war sie weg, syncBeforeBoot stieg wieder aus, und der Abgleich machte sich
- * selbst zunichte. (Die Session liegt inzwischen in localStorage und ueberlebt
- * ein Reload; der Emulator wird trotzdem neu gestartet statt die Seite zu laden -
- * schneller und ohne den uebrigen Zustand zu verwerfen.)
- */
-async function reloadAfterCloud(): Promise<void> {
-  const e = cur();
-  if (!e) { location.reload(); return; }
-  let saved: Awaited<ReturnType<typeof loadEmu>> = null;
-  try { saved = await loadEmu(localStorage, active); } catch { /* Quota/kaputt */ }
-  if (!saved) { location.reload(); return; }
-  try { e.loadState(saved.bytes); } catch { location.reload(); return; }
-  if (saved.at) await catchUpAllFor(active, unitsForMs(Math.max(0, Date.now() - saved.at)));
-  lastTs = performance.now();
-}
-
-/** Cloud-Stand lokal ablegen; mitten in der Sitzung danach neu laden. */
-function applyCloudSave(cloud: CloudSave, reload: boolean, device: Device): void {
-  const at = Date.parse(cloud.updatedAt);
-  try {
-    localStorage.setItem(emuKey(device), JSON.stringify({ t: Number.isFinite(at) ? at : Date.now(), d: cloud.snapshot }));
-  } catch { /* Quota */ }
-  if (reload && device === active) location.reload();
-}
-function asCloud(rec: { d: string; t: number }): CloudSave {
-  return { snapshot: rec.d, updatedAt: new Date(rec.t).toISOString(), saveVer: 1 };
-}
-
-/**
- * Direkt nach dem Anmelden abgleichen - ohne Neuladen: bei Konflikt fragen,
- * sonst den neueren Stand gewinnen lassen.
- *
- * Achtung: Hier laeuft der Emulator bereits. Ein Cloud-Stand kann daher nicht
- * einfach "hineingeladen" werden wie beim Boot - er wird im localStorage
- * abgelegt und der Emulator anschliessend aus dem neuen Stand neu gestartet
- * (siehe reloadAfterCloud), statt die ganze Seite neu zu laden.
- */
-async function syncAfterSignIn(): Promise<void> {
-  const s = currentSession();
-  if (!s) return;
-  for (const id of DEVICE_IDS) await syncDeviceAfterSignIn(s.token, id);
-}
-
-/** Abgleich eines einzelnen Geraets. Getrennt aufgerufen, damit ein Fehler bei
- *  P2 den P1-Abgleich nicht abbricht. */
-async function syncDeviceAfterSignIn(token: string, device: Device): Promise<void> {
-  try {
-    const local = readSaveRecord(localStorage, device);
-    // readSave unterscheidet "keine Cloud" von "Abruf gescheitert". Ein
-    // gescheiterter Abruf fuehrt zu "none" - es wird NICHT mehr still
-    // hochgeladen, nur weil man nicht nachsehen konnte.
-    const cloud = await readSave(token, device);
-    // Beim Anmelden: sobald ein Cloud-Stand da ist, die Wahl anbieten - auch wenn
-    // die lokale Session (frisch gestartet) zeitlich "neuer" ist. Ihr Stand ist
-    // wertlos, darf die Cloud also nicht still ueberschreiben.
-    let action: SyncAction = planSync(cloud, local?.t ?? null, { forceAsk: true });
-    if (action === "ask") action = await askWhichSave(local?.t ?? 0, cloud.kind === "found" ? cloud.save.updatedAt : "");
-    if (action === "pull" && cloud.kind === "found") {
-      applyCloudSave(cloud.save, false, device);
-      if (device === active) await reloadAfterCloud();
-      return;
+  // Schliessen per Escape und per Klick auf den Scrim, wie die uebrigen Fenster.
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (["pets-pop", "slots-pop", "beeps-pop"].some((id) => !document.getElementById(id)?.hidden)) {
+      closeTask11Windows();
     }
-    if (action === "push" && local) await pushSave(token, device, asCloud(local));
-  } catch {
-    /* Ein Geraet darf den Abgleich der anderen nicht verhindern. */
-  }
-}
-
-/** Vor dem Laden des Spielstands: Cloud und lokal abgleichen (neuerer gewinnt). */
-async function syncBeforeBoot(): Promise<void> {
-  const s = currentSession();
-  if (!s) return;
-  for (const id of DEVICE_IDS) {
-    try {
-      const local = readSaveRecord(localStorage, id);
-      const cloud = await readSave(s.token, id);
-      // Immer fragen, wenn beide Seiten einen Stand haben - nichts still ueberschreiben.
-      let action: SyncAction = planSync(cloud, local?.t ?? null);
-      if (action === "ask") action = await askWhichSave(local?.t ?? 0, cloud.kind === "found" ? cloud.save.updatedAt : "");
-      if (action === "pull" && cloud.kind === "found") {
-        applyCloudSave(cloud.save, false, id);
-      } else if (action === "push" && local) {
-        void pushSave(s.token, id, asCloud(local));
-      }
-    } catch {
-      /* Ein Geraet darf den Abgleich der anderen nicht verhindern. */
-    }
-  }
+  });
+  document.getElementById("scrim")?.addEventListener("click", () => {
+    const open = ["pets-pop", "slots-pop", "beeps-pop"].some((id) => !document.getElementById(id)?.hidden);
+    if (open) closeTask11Windows();
+  });
 }
 
 /** Anleitung als Fenster im Menue-Stil (Inhalt steht in index.html). */
@@ -990,7 +1049,7 @@ function initAccount(): void {
     const slot = bodyEl.querySelector<HTMLElement>(".gsi-slot");
     if (!slot) return;
     gsiAsked = true;
-    void renderSignInButton(slot, () => { render(); void syncAfterSignIn(); }).then((ok) => { if (!ok) gsiAsked = false; });
+    void renderSignInButton(slot, () => { render(); live.disconnect(); void startStream(); }).then((ok) => { if (!ok) gsiAsked = false; });
   }
 
   /** Avatar (Google-Bild, sonst Anfangsbuchstabe) – fuer Kopfzeile und Dialog. */
@@ -1111,9 +1170,8 @@ function initAccount(): void {
   accountModal?.addEventListener("click", (e) => { if (e.target === accountModal) accountModal.hidden = true; });
   document.getElementById("account-confirm")?.addEventListener("click", () => {
     void (async () => {
-      const tok = currentSession()?.token;
-      if (tok) await deleteRemote(tok, active);
-      try { localStorage.removeItem(emuKey("p1")); localStorage.removeItem(emuKey("p2")); } catch { /* ignore */ }
+      // Das Konto loeschen liegt serverseitig noch nicht an (kein DELETE /api/pets);
+      // hier wird nur lokal abgemeldet. Die Tier-Daten bleiben auf dem Server.
       signOut();
       location.reload();
     })();
@@ -1162,101 +1220,60 @@ function initAccount(): void {
     renderFace();
     onSessionRefresh(() => {
       render();
-      void syncAfterSignIn();
+      // Frisches Token: den Live-Stream (neu) aufbauen.
+      live.disconnect();
+      void startStream();
     });
   });
 }
 
 function saveNow(): void {
-  if (SPEED !== 1) return;
-  for (const id of DEVICE_IDS) {
-    const e = emus[id];
-    if (!e) continue;
-    try { void saveEmu(localStorage, id, e.saveState()).catch(() => { /* Quota */ }); } catch { /* ignore */ }
-  }
-  markCloudDirty();
+  // Der Spielstand liegt jetzt auf dem Server; der Tab hat nichts mehr zu sichern.
+  // Beim Verlassen wird nur noch die Live-Verbindung abgeraeumt (der Server
+  // laesst das Tier ohnehin weiterlaufen).
 }
 
 async function boot(): Promise<void> {
   // PWA-Lifecycle zuerst: Update-Prompt und Offline-Banner sollen früh stehen,
-  // auch wenn der Emulator noch laedt.
+  // auch wenn noch kein Frame da ist.
   initPwa({ toast: showToast });
-  // Sync-Anforderung aus dem Service Worker (Background/Periodic Sync).
-  onBackgroundSync(() => { void flushCloud(); });
-
-  const wasm = await fetch("/emu/tamalib.wasm").then((r) => r.arrayBuffer());
-  // Bestandsstand von vor dem Umbau auf den P1-Slot heben, bevor irgendwer liest.
-  migrateLegacyEmu(localStorage);
-
-  for (const id of DEVICE_IDS) {
-    const spec = DEVICES[id];
-    try {
-      const romBuf = await fetch(spec.rom).then((r) => {
-        if (!r.ok) throw new Error(`${spec.rom}: HTTP ${r.status}`);
-        return r.arrayBuffer();
-      });
-      emus[id] = await createEmulator({ wasm, rom: new Uint8Array(romBuf) });
-    } catch {
-      // P2 kann fehlen (ROM nicht vorhanden) - P1 allein laeuft weiter.
-      if (id === "p2") { disableP2(); continue; }
-      throw new Error(`ROM fuer ${id} konnte nicht geladen werden`);
-    }
-  }
 
   active = pickInitialDevice(localStorage.getItem(DEVICE_KEY), { p2Available });
   syncDeviceButtons();
-  iconImgs = await loadIcons();
-  paintMiniIcons();
+  bindButtons();
+  initTask11();
+  // Der Server schickt Frames; hier wird nur gezeichnet. Der Ton entsteht
+  // serverseitig (Beep-Latch → Push, Task 7); das Task-6-Protokoll traegt
+  // keinen Buzzer-Zustand, daher bleibt der Tab selbst stumm.
+  live.onFrame((lcd) => { lastFrame = lcd; markBooted(); });
+  // Verbindungsstatus folgt dem Live-Client statt nur navigator.onLine
+  // (Task-10-Mandat b): ein abgerissener Socket wird so sichtbar.
+  live.onState(() => updateConnBadge());
+  requestAnimationFrame(frame);
+
+  // Einstellungen vom Server laden, sobald ein Konto da ist. Ohne Konto
+  // bleiben die lokalen Schalter wie gehabt.
+  if (currentSession()) void settingsView.load();
+
   if (params.has("debug")) {
     const w = window as unknown as {
-      __emu: () => Emulator | null;
-      __emus: Partial<Record<Device, Emulator>>;
+      __live: LiveClient;
+      __frame: () => Uint8Array | null;
       __setActive: (d: Device) => void;
       __notify: (t: string, b: string) => Promise<void>;
-      __sync: () => Promise<void>;
       __audio: () => ReturnType<typeof piezo.state>;
     };
-    w.__emu = cur;
-    w.__emus = emus;
+    w.__live = live;
+    w.__frame = () => lastFrame;
     w.__setActive = setActive;
     w.__notify = notify;
-    w.__sync = syncAfterSignIn;
     w.__audio = () => piezo.state();
   }
 
-  // Jedes Geraet aus seinem eigenen Slot laden und die Abwesenheit nachholen.
-  for (const id of DEVICE_IDS) {
-    const e = emus[id];
-    if (!e || SPEED !== 1) continue;
-    let saved: Awaited<ReturnType<typeof loadEmu>> = null;
-    try { saved = await loadEmu(localStorage, id); } catch { /* Quota */ }
-    if (saved) {
-      try { e.loadState(saved.bytes); } catch { /* inkompatibler Save */ }
-    }
-    // Die komplette Abwesenheit nachholen – kein Zeitlimit. In Chunks, damit der
-    // Tab nicht einfriert; der Fortschritt läuft im Lade-Overlay.
-    if (saved?.at) {
-      await catchUpAllFor(id, unitsForMs(Math.max(0, Date.now() - saved.at)));
-    }
-  }
-
-  if (AUTH_ENABLED) await syncBeforeBoot();
-
-  bindButtons();
-  lastTs = performance.now();
-  // Robust speichern: beim Verlassen/Verstecken der Seite sofort sichern.
-  window.addEventListener("pagehide", saveNow);
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) { saveNow(); void flushCloud(); return; }
-    // Zurück im Vordergrund: verpasste Zeit nachholen (Mobile drosselt Timer im
-    // Hintergrund). Kurze Lücken frisst der Frame-Loop; lange laufen mit Fortschritt.
-    const dt = Math.min(performance.now() - lastTs, 30 * 24 * 3600 * 1000);
-    lastTs = performance.now();
-    if (dt <= 0) return;
-    if (dt > 30 * 1000) void catchUpAllFor(active, unitsForMs(dt * SPEED));
-    else pacer.add(unitsForMs(dt * SPEED));
-  });
-  requestAnimationFrame(frame);
+  // Nach dem Anmelden den Stream fuer das aktive Geraet starten. Die Anmeldung
+  // laeuft parallel (initAccount) und stoesst startStream erneut an, sobald eine
+  // Session da ist (siehe onSessionRefresh).
+  void startStream();
 }
 
 function bindButtons(): void {
@@ -1270,7 +1287,9 @@ function bindButtons(): void {
   const pressed = new Set<LogicalButton>();
   const set = (b: LogicalButton, down: boolean) => {
     if (down) pressed.add(b); else pressed.delete(b);
-    cur()?.setButton(BUTTON_MAP[b], down);
+    // Nur der Druck wird gesendet - der Server faehrt den down/up-Zyklus selbst
+    // (Task-6-Protokoll, diskretes {t:"press"}).
+    if (down) live.press(BUTTON_MAP[b] as Btn);
   };
   const releaseAll = () => { for (const b of [...pressed]) set(b, false); };
 
@@ -1306,72 +1325,37 @@ function bindButtons(): void {
   window.addEventListener("keyup", (e) => { if (dialogOpen()) return; const b = handleKey(e.key); if (b) set(b, false); });
 }
 
-function frame(ts: number): void {
-  const e = cur();
-  if (!e) return;
-  if (STATIC > 0) {
-    for (const id of DEVICE_IDS) emus[id]?.step(STATIC);
-  } else {
-    const dt = Math.min(Math.max(0, ts - lastTs), MAX_FRAME_CATCHUP_MS);
-    lastTs = ts;
-    pacer.add(unitsForMs(dt * SPEED));
-    pump(MAX_STEPS_PER_FRAME);
-  }
-
-  const scale = Math.max(1, Math.floor(canvas.clientWidth / LCD_WIDTH));
-  if (canvas.width !== LCD_WIDTH * scale) {
-    canvas.width = LCD_WIDTH * scale;
-    canvas.height = LCD_HEIGHT * scale;
-    for (const el of [iconsTop, iconsBottom]) { el.width = LCD_WIDTH * scale; el.height = 8 * scale; }
-  }
-  drawLcd(ctx, e.lcd(), scale);
-
-  const icons = e.icons();
-  drawIconRow(ctxTop, icons, 0, scale, iconImgs);
-  drawIconRow(ctxBottom, icons, 1, scale, iconImgs);
-
-  // Mini-Vorschau nur spiegeln, wenn das Menü offen ist.
-  if (miniLcd && miniLcdCtx && menuEl && !menuEl.hidden) {
-    const ms = 4;
-    miniLcd.width = LCD_WIDTH * ms; miniLcd.height = LCD_HEIGHT * ms;
-    drawLcd(miniLcdCtx, e.lcd(), ms);
-    if (miniTop && miniTopCtx) { miniTop.width = LCD_WIDTH * ms; miniTop.height = 8 * ms; drawIconRow(miniTopCtx, icons, 0, ms, iconImgs); }
-    if (miniBottom && miniBottomCtx) { miniBottom.width = LCD_WIDTH * ms; miniBottom.height = 8 * ms; drawIconRow(miniBottomCtx, icons, 1, ms, iconImgs); }
-  }
-
-  // Ton nur vom aktiven Geraet - beide Piezos gleichzeitig waere Laerm.
-  const b = e.buzzer();
-  piezo.update(b.freq, b.on);
-  if (e.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
-    void notify(t("notifyTitle"), t("notifyBody"));
-    refreshBadge(true);
-  }
-
-  // periodisch speichern (alle ~5s)
-  if (SPEED === 1 && STATIC === 0 && ++saveTick % 300 === 0) {
-    for (const id of DEVICE_IDS) {
-      const inst = emus[id];
-      if (inst) void saveEmu(localStorage, id, inst.saveState()).catch(() => { /* Quota */ });
+/**
+ * Zeichnet den zuletzt empfangenen Frame. Der Server liefert nur die LCD-Bits -
+ * die 8 P1-Menu-Icons sind eigene LCD-Segmente, die das Task-6-Protokoll nicht
+ * uebertraegt. Frueher zeichnete der Tab sie als dauerhaft inaktive Reihe
+ * (blasse Segmente, die nie aufleuchten und keinen echten Zustand zeigen); das
+ * sah wie eine kaputte Statusleiste aus. Da der Client keinerlei Icon-Zustand
+ * hat, wird hier nichts vorgetaeuscht: nur das LCD wird gezeichnet. Die echten
+ * 8 Icons stehen weiterhin als Referenz auf der Guide-Seite (renderIconGrid).
+ */
+function frame(): void {
+  const lcd = lastFrame;
+  if (lcd) {
+    const scale = Math.max(1, Math.floor(canvas.clientWidth / LCD_WIDTH));
+    if (canvas.width !== LCD_WIDTH * scale) {
+      canvas.width = LCD_WIDTH * scale;
+      canvas.height = LCD_HEIGHT * scale;
     }
-    markCloudDirty();
+    drawLcd(ctx, lcd, scale);
+
+    // Mini-Vorschau nur spiegeln, wenn das Menü offen ist.
+    if (miniLcd && miniLcdCtx && menuEl && !menuEl.hidden) {
+      const ms = 4;
+      miniLcd.width = LCD_WIDTH * ms; miniLcd.height = LCD_HEIGHT * ms;
+      drawLcd(miniLcdCtx, lcd, ms);
+    }
   }
-  if (!booted && pacer.owedUnits <= 0) { booted = true; loadingEl?.classList.add("hidden"); }
-  if (STATIC === 0) requestAnimationFrame(frame);
+  requestAnimationFrame(frame);
 }
 
-// Im Hintergrund weiterlaufen lassen und bei Rufen benachrichtigen.
-setInterval(() => {
-  const e = cur();
-  if (!document.hidden || !e || SPEED !== 1) return;
-  const now = performance.now();
-  const dt = Math.min((now - lastTs) / 1000, 3600);
-  lastTs = now;
-  pacer.add(unitsForMs(dt * 1000));
-  pump(MAX_STEPS_PER_FRAME);
-  if (e.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
-    void notify(t("notifyTitle"), t("notifyBody"));
-    refreshBadge(true);
-  }
-}, 5000);
+// Beim Verlassen/Verstecken der Seite nur noch die Verbindung abraeumen - der
+// Server laesst das Tier weiterlaufen (der Tab war nie die Quelle der Zeit).
+window.addEventListener("pagehide", saveNow);
 
 boot();

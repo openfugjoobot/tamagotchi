@@ -1,4 +1,4 @@
-import type { Btn } from "./emulator";
+import type { Btn } from "./constants.js";
 
 /** P1: linke/mittlere/rechte Taste. */
 export const BUTTON_MAP: Record<"A" | "B" | "C", Btn> = {
