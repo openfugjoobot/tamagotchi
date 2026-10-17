@@ -13,6 +13,7 @@ import { applyI18n, currentLang, iconNames, t } from "./i18n";
 import { THEMES, BG_KEY, AUTO, savedBg, resolveTheme } from "./theme";
 import { SOUND_KEY, NOTIFY_KEY, DEVICE_KEY, BADGE_KEY, WAKELOCK_KEY } from "./storage/keys";
 import { createPetsView, type PetSummary } from "./ui/pets";
+import { createBootOverlay } from "./ui/boot";
 import { createSlotsView } from "./ui/slots";
 import { createSettingsView, type Settings } from "./ui/settings";
 import { createBeepsView, type BeepSummary } from "./ui/beeps";
@@ -691,8 +692,6 @@ let active: Device = "p1";
 let lastFrame: Uint8Array | null = null;
 /** Letzter empfangener Icon-Stand (P1 liefert keine echten Icons - leere Reihe). */
 const blankIcons = new Uint8Array(8);
-/** Laeuft der Stream schon? Steuert das Lade-Overlay. */
-let booted = false;
 
 /** Schalter-Beschriftung an das aktive Geraet angleichen. */
 function syncDeviceButtons(): void {
@@ -742,20 +741,21 @@ let iconImgs: IconImages = [];
 const loadtxtEl = document.querySelector<HTMLElement>("#loading .loadtxt");
 const loadbarEl = document.getElementById("loadbar");
 
+// Das Lade-Overlay als eigener, DOM-injizierbarer Controller (src/ui/boot.ts).
+// Grund fuer die Auslagerung: der signed-out-Pfad muss die `#loading`-Gardine
+// zuverlaessig schliessen (z-index 50 > Konto-Popover 32), sonst ist der
+// Google-Anmeldeknopf unerreichbar. Das ist im Node-Test nur pruefbar, wenn die
+// Entscheidung nicht an das import-zeitliche DOM von main.ts gebunden ist.
+const bootOverlay = createBootOverlay({ loading: document.getElementById("loading"), loadtext: loadtxtEl, loadbar: loadbarEl });
+
 /** Ersten Frame abwarten, dann das Lade-Overlay ausblenden. */
 function markBooted(): void {
-  if (booted) return;
-  booted = true;
-  if (loadtxtEl) loadtxtEl.textContent = t("loading");
-  if (loadbarEl) loadbarEl.hidden = true;
-  document.getElementById("loading")?.classList.add("hidden");
+  bootOverlay.markBooted();
 }
 
 /** Lade-Overlay: kurzer Hinweis, solange der erste Frame aussteht. */
 function showConnecting(): void {
-  if (booted) return;
-  if (loadtxtEl) loadtxtEl.textContent = t("loading");
-  if (loadbarEl) loadbarEl.hidden = true;
+  bootOverlay.showConnecting(t("loading"));
 }
 
 // ---- Pet-Aufloesung: welches Tier zeigt der aktive Slot? ----
@@ -910,9 +910,9 @@ async function createPet(device: Device): Promise<void> {
 
 /** Lade-Hinweis fuer abgemeldete Nutzer (kein ewiges Spinner, Mandat c). */
 function showSignedOut(): void {
-  if (booted) return;
-  if (loadtxtEl) loadtxtEl.textContent = t("signInToPlay");
-  if (loadbarEl) loadbarEl.hidden = true;
+  // Der Nachrichtentext allein genuegt nicht: die Gardine muss zu (sonst liegt
+  // sie ueber dem Anmeldeknopf). boot.ts schliesst sie und latched `booted`.
+  bootOverlay.showSignedOut(t("signInToPlay"));
 }
 
 /**
@@ -920,7 +920,7 @@ function showSignedOut(): void {
  * spinnen. Der Nutzer legt das Tier in der Tier-Liste an (Menue > Tiere).
  */
 function noPetAvailable(): void {
-  markBooted();
+  bootOverlay.noPetAvailable(t("loading"));
 }
 
 /** Alle Task-11-Fenster schliessen (Menue + Scrim mitnehmen). */
