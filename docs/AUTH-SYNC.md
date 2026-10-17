@@ -100,9 +100,10 @@ Gespeichert werden: Google-Konto-ID (`sub`), E-Mail/Name/Avatar (in der DB,
 zur Anzeige), der Spielstand, Einstellungen und Push-Abos. Keine Telemetrie.
 „Abmelden" verwirft nur das lokale Token; das Konto in der DB bleibt gespeichert.
 Ein Löschen des Kontos ist derzeit **nicht implementiert** (kein
-`DELETE /api/account`) — der Menüpunkt „Konto löschen" meldet daher nur lokal ab
-und entfernt keine serverseitigen Daten. Bis eine Löschroute existiert, bleibt
-das Konto samt Daten bestehen.
+`DELETE /api/account`). Der Menüpunkt heißt deshalb ehrlich „Konto löschen
+(nicht verfügbar)" und der Bestätigen-Button im Dialog „Abmelden" — der Klick
+meldet nur lokal ab und entfernt keine serverseitigen Daten. Bis eine Löschroute
+existiert, bleibt das Konto samt Daten bestehen.
 
 ## Einmalig einzurichten (Betrieb)
 

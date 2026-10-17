@@ -82,8 +82,17 @@ reproduzierbar.
 - TamaLIB ist **GPLv2** → dieses Projekt ebenfalls GPLv2.
 - ROM/Firmware nur für **privaten Gebrauch**, nicht im Repo, keine Distribution.
 
-## Icons (2026-10-11, gilt weiter)
+## Icons (2026-10-11, aktualisiert 2026-10-17)
 
 Die 8 P1-Menü-Icons sind feste LCD-Segmente, keine Bitmap im ROM (`icons()` bleibt
-leer). Die sichtbare Icon-Leiste nutzt die Grafiken aus
-`GMMan/flipperzero-tamagotch-p1` (Lizenz dort unklar, privater Gebrauch).
+leer). Die Grafiken stammen aus `GMMan/flipperzero-tamagotch-p1` (Lizenz dort unklar,
+privater Gebrauch).
+
+**Live-Ansicht (2026-10-17):** Das Gerät zeichnet die 8 Icons **nicht** mehr.
+Das Task-6-Protokoll überträgt nur `{t:"frame", lcd}` (32×16), nicht die
+Icon-Segmente; der Client hat also keinen echten Icon-Zustand. Eine dauerhaft
+blasse, nie aufleuchtende Reihe hätte den Anschein erweckt, es gäbe einen
+Menüzustand, den der Tab gar nicht kennt. Stattdessen wird nur das LCD gezeigt;
+die echten 8 Icons bleiben als statische Referenz auf der Guide-Seite
+(`renderIconGrid`). Eine Live-Icon-Reihe bräuchte zuerst eine Protokoll-Erweiterung
+(`{t:"frame", lcd, icons}`) – bewusst nicht Teil dieser Runde.

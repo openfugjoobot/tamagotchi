@@ -442,7 +442,6 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   box-shadow: inset 0 0 0 1px #f2dd7e, inset 0 1px 3px rgba(0,0,0,.28);
   overflow: hidden;
 }
-.shell-card .mini-icons { width: 100%; height: auto; display: block; image-rendering: pixelated; }
 .shell-card .mini-screen { position: relative; width: 100%; aspect-ratio: 2 / 1; background: var(--lcd-bg); display: block; }
 .shell-card .shell-name { font-size: 11px; font-weight: 700; color: var(--ink-dim); text-align: center; }
 .shell-card[aria-selected="true"] .shell-name { color: var(--ink); }
@@ -456,7 +455,6 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   box-shadow: inset 0 0 0 2px #f2dd7e, inset 0 2px 8px rgba(0,0,0,.28), inset 0 -2px 5px rgba(255,255,255,.5);
   overflow: hidden;
 }
-.icons { width: 100%; height: auto; display: block; image-rendering: pixelated; }
 .screen-well { position: relative; width: 100%; aspect-ratio: 2 / 1; background: var(--lcd-bg); display: grid; place-items: center; overflow: hidden; }
 .lcd { width: 100%; height: 100%; display: block; image-rendering: pixelated; background: var(--lcd-bg); }
 .controls { position: absolute; left: 50%; top: 78%; transform: translateX(-50%); display: flex; gap: clamp(14px, 5vw, 26px); align-items: flex-start; z-index: 2; }

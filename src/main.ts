@@ -1,7 +1,7 @@
 import { DEVICES, pickInitialDevice, nextDevice, switchLabel, type Device } from "./emu/devices";
 import { LCD_WIDTH, LCD_HEIGHT, type Btn } from "./emu/constants";
 import { drawLcd } from "./render/lcd";
-import { drawIconRow, loadIcons, renderIconGrid, type IconImages } from "./render/icons";
+import { renderIconGrid } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
 import { LiveClient } from "./net/live";
@@ -33,39 +33,13 @@ import {
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
-const iconsTop = document.getElementById("icons-top") as HTMLCanvasElement;
-const iconsBottom = document.getElementById("icons-bottom") as HTMLCanvasElement;
-const ctxTop = iconsTop.getContext("2d")!;
-const ctxBottom = iconsBottom.getContext("2d")!;
 
 // Mini-Vorschau im Menü
 let miniDevice: HTMLElement | null = null;
 let miniWrapEl: HTMLElement | null = null;
-let miniTop: HTMLCanvasElement | null = null;
-/** Icon-Canvas der Vorschau-Karten: [oben, unten] je Karte (nach loadIcons befuellt). */
-const miniIconCanvases: { top: HTMLCanvasElement; bottom: HTMLCanvasElement }[] = [];
 let miniLcd: HTMLCanvasElement | null = null;
-let miniBottom: HTMLCanvasElement | null = null;
-let miniTopCtx: CanvasRenderingContext2D | null = null;
 let miniLcdCtx: CanvasRenderingContext2D | null = null;
-let miniBottomCtx: CanvasRenderingContext2D | null = null;
 
-/** Zeichnet die P1-Icon-Reihen in alle Vorschau-Karten (nach loadIcons).
- *  Die Vorschau zeigt keinen laufenden Emulator, daher leere Icon-Zustaende -
- *  die Icons selbst stammen aus den echten P1-Sprites. */
-function paintMiniIcons(): void {
-  const ms = 2; // 32x8 logisch -> 64x16 px
-  const blank = new Uint8Array(8);
-  for (const { top, bottom } of miniIconCanvases) {
-    for (const [cv, row] of [[top, 0], [bottom, 1]] as const) {
-      const ctx = cv.getContext("2d");
-      if (!ctx) continue;
-      cv.width = LCD_WIDTH * ms;
-      cv.height = 8 * ms;
-      drawIconRow(ctx, blank, row, ms, iconImgs);
-    }
-  }
-}
 const piezo = createPiezo(() => new AudioContext());
 const menuEl = document.getElementById("menu");
 
@@ -262,11 +236,8 @@ function initUI(): void {
     shellStage.appendChild(wrap);
     miniDevice = clone;
     miniWrapEl = wrap;
-    const cvs = clone.querySelectorAll("canvas");
-    miniTop = cvs[0] ?? null; miniLcd = cvs[1] ?? null; miniBottom = cvs[2] ?? null;
-    miniTopCtx = miniTop ? miniTop.getContext("2d") : null;
+    miniLcd = clone.querySelector("canvas.lcd");
     miniLcdCtx = miniLcd ? miniLcd.getContext("2d") : null;
-    miniBottomCtx = miniBottom ? miniBottom.getContext("2d") : null;
   }
   if (shellbtns && deviceEl) {
     const setShell = (id: string, animate = true) => {
@@ -335,14 +306,10 @@ function initUI(): void {
         `</linearGradient></defs>` +
         `<polygon points="${starPolygon(shell.star)}" fill="url(#sun-${shell.id})" /></svg>` +
         `<span class="mini-screen-stack">` +
-        `<canvas class="mini-icons" width="32" height="8" aria-hidden="true"></canvas>` +
         `<span class="mini-screen"></span>` +
-        `<canvas class="mini-icons" width="32" height="8" aria-hidden="true"></canvas>` +
         `</span>` +
         `</span>`;
       wrap.append(ring, dev);
-      const icons = dev.querySelectorAll<HTMLCanvasElement>(".mini-icons");
-      if (icons.length >= 2) miniIconCanvases.push({ top: icons[0], bottom: icons[1] });
       const name = document.createElement("span");
       name.className = "shell-name";
       name.textContent = shell.id.charAt(0).toUpperCase() + shell.id.slice(1);
@@ -690,8 +657,6 @@ let p2Available = true;
 let active: Device = "p1";
 /** Letzter empfangener LCD-Frame (oder null, solange nichts kam). */
 let lastFrame: Uint8Array | null = null;
-/** Letzter empfangener Icon-Stand (P1 liefert keine echten Icons - leere Reihe). */
-const blankIcons = new Uint8Array(8);
 
 /** Schalter-Beschriftung an das aktive Geraet angleichen. */
 function syncDeviceButtons(): void {
@@ -735,8 +700,6 @@ function initDeviceSwitch(): void {
     setActive(nextDevice(active, { p2Available }));
   });
 }
-
-let iconImgs: IconImages = [];
 
 const loadtxtEl = document.querySelector<HTMLElement>("#loading .loadtxt");
 const loadbarEl = document.getElementById("loadbar");
@@ -1244,8 +1207,6 @@ async function boot(): Promise<void> {
 
   active = pickInitialDevice(localStorage.getItem(DEVICE_KEY), { p2Available });
   syncDeviceButtons();
-  iconImgs = await loadIcons();
-  paintMiniIcons();
   bindButtons();
   initTask11();
   // Der Server schickt Frames; hier wird nur gezeichnet. Der Ton entsteht
@@ -1332,9 +1293,13 @@ function bindButtons(): void {
 }
 
 /**
- * Zeichnet den zuletzt empfangenen Frame. Der Server liefert die LCD-Bits; die
- * Icon-Reihen kennt P1 nicht (der Server schickt nur das LCD), daher bleiben sie
- * leer - exakt das Aussehen des alten P1-Stands.
+ * Zeichnet den zuletzt empfangenen Frame. Der Server liefert nur die LCD-Bits -
+ * die 8 P1-Menu-Icons sind eigene LCD-Segmente, die das Task-6-Protokoll nicht
+ * uebertraegt. Frueher zeichnete der Tab sie als dauerhaft inaktive Reihe
+ * (blasse Segmente, die nie aufleuchten und keinen echten Zustand zeigen); das
+ * sah wie eine kaputte Statusleiste aus. Da der Client keinerlei Icon-Zustand
+ * hat, wird hier nichts vorgetaeuscht: nur das LCD wird gezeichnet. Die echten
+ * 8 Icons stehen weiterhin als Referenz auf der Guide-Seite (renderIconGrid).
  */
 function frame(): void {
   const lcd = lastFrame;
@@ -1343,19 +1308,14 @@ function frame(): void {
     if (canvas.width !== LCD_WIDTH * scale) {
       canvas.width = LCD_WIDTH * scale;
       canvas.height = LCD_HEIGHT * scale;
-      for (const el of [iconsTop, iconsBottom]) { el.width = LCD_WIDTH * scale; el.height = 8 * scale; }
     }
     drawLcd(ctx, lcd, scale);
-    drawIconRow(ctxTop, blankIcons, 0, scale, iconImgs);
-    drawIconRow(ctxBottom, blankIcons, 1, scale, iconImgs);
 
     // Mini-Vorschau nur spiegeln, wenn das Menü offen ist.
     if (miniLcd && miniLcdCtx && menuEl && !menuEl.hidden) {
       const ms = 4;
       miniLcd.width = LCD_WIDTH * ms; miniLcd.height = LCD_HEIGHT * ms;
       drawLcd(miniLcdCtx, lcd, ms);
-      if (miniTop && miniTopCtx) { miniTop.width = LCD_WIDTH * ms; miniTop.height = 8 * ms; drawIconRow(miniTopCtx, blankIcons, 0, ms, iconImgs); }
-      if (miniBottom && miniBottomCtx) { miniBottom.width = LCD_WIDTH * ms; miniBottom.height = 8 * ms; drawIconRow(miniBottomCtx, blankIcons, 1, ms, iconImgs); }
     }
   }
   requestAnimationFrame(frame);
