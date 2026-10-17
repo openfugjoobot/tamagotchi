@@ -31,7 +31,7 @@ Browser                                  tamagotchi-server (Node)          Postg
 | Modul | Verantwortung |
 |-------|----------------|
 | `server/src/main.ts` | Verdrahtung: Env lesen, Schema anwenden, Tiere rehydrieren, Tick + WS + API + Push-Sweeper starten |
-| `server/src/emulator.ts` | `PetEmulator`: WASM laden, `step(ms)` (reale Zeit → CPU-Schritte, **einzige Zeitquelle**), `press` (reines Eingabe-Ereignis, materialisiert die Halt aus `step`), `lcd`, `buzzer` (Piezo-Level für den Live-Ton), `save`/`loadState`, `dead` |
+| `server/src/emulator.ts` | `PetEmulator`: WASM laden, `step(ms)` (reale Zeit → CPU-Schritte, **einzige Zeitquelle**), `press(btn)` (Legacy-Tap) / `press(btn, down)` (explizite Flanken, gleichzeitige Kombis), `lcd`, `buzzer` (Piezo-Level für den Live-Ton), `save`/`loadState`, `dead` |
 | `server/src/tick.ts` | `TickLoop`: ein Intervall für alle Tiere, Fehler-Isolation pro Tier |
 | `server/src/ws.ts` | `WsHub`: `hello`-Auth → Bind an `(userId, petId)`; `{t:"frame", lcd, icons}` und `{t:"buzzer", freq, on}` raus, Buttons rein; `hasLiveConnection` als Push-Gate |
 | `server/src/api.ts` | REST `/api/*` (Fastify), jeder Aufruf nutzer-scoped über das Bearer-Token |
@@ -45,11 +45,11 @@ Browser                                  tamagotchi-server (Node)          Postg
 
 | Modul | Verantwortung |
 |-------|----------------|
-| `src/net/live.ts` | WS-Client: `hello`/`frame` (lcd+icons)/`buzzer`/`state`/`press`, Auto-Reconnect mit Backoff |
+| `src/net/live.ts` | WS-Client: `hello`/`frame` (lcd+icons)/`buzzer`/`state`, `pressDown`+`pressUp` (explizite `{t:"btn"}`-Flanken, gleichzeitige Kombis), Auto-Reconnect mit Backoff |
 | `src/emu/audio.ts` | WebAudio-Piezo: `{freq,on}` → Square-Oscillator (der Tab hört das serverseitige Tier) |
 | `src/render/lcd.ts` | 32×16-Frame auf die Canvas zeichnen |
 | `src/render/icons.ts` | 8 P1-Icon-Segmente als Reihe oben/unten zeichnen (aus den Frame-Bits) + Guide-Raster |
-| `src/emu/input.ts` | A/B/C → `{t:"press"}` über den Live-Kanal |
+| `src/emu/input.ts` | A/B/C → logische Buttons → `{t:"btn"}`-Flanken über den Live-Kanal |
 | `src/ui/{pets,slots,settings,beeps}.ts` | Tier-Liste, Speicherstände, Einstellungen, Beep-Historie |
 | `src/ui/api.ts` | fetch-Plumbing (Bearer-Header, JSON, Fehlerform) |
 | `src/ui/boot.ts` | Boot-Overlay: jeder Endzustand blendet den Vorhang aus |
@@ -74,18 +74,31 @@ vom Gerät des Nutzers — Uhr-Manipulation ist damit keine Angriffsfläche mehr
 
 ### Tasten sind Eingabe, keine Zeit
 
-`PetEmulator.press(btn)` erzeugt **keine** emulierte Zeit. Es legt den Druck nur
-in eine Warteschlange; die CPU-Schritte, die den gedrückten Pin beobachten,
-zahlt der nächste `step(ms)` **aus demselben realen Budget**, das die Uhr schon
-schuldet. Ein Druck (Halt `PRESS_HOLD_MS = 400 ms` + Release-Lücke
-`PRESS_GAP_MS = 400 ms`) ändert damit nur *wann* die CPU mit gedrückter Taste
-läuft, nie *wie viel* Zeit vergeht: die insgesamt gelaufenen Schritte sind exakt
+`PetEmulator.press(...)` erzeugt **keine** emulierte Zeit. Die Drücke werden nur
+vorgemerkt; die CPU-Schritte, die die gedrückten Pins beobachten, zahlt der
+nächste `step(ms)` **aus demselben realen Budget**, das die Uhr schon schuldet.
+Ein Druck ändert damit nur *wann* die CPU mit welchem Pin-Zustand läuft, nie
+*wie viel* Zeit vergeht: die insgesamt gelaufenen Schritte sind exakt
 `floor(Σ units(ms) / TS_PER_STEP)`, unabhängig von der Klickzahl
-(`tests/emu-time-exploit.test.ts`). Drücke werden **nicht** zusammengefasst —
-eine schnelle Sequenz (z. B. Uhrstellen) erreicht das ROM als getrennte Flanken —,
-aber sie stauen sich bei schnellerem Klicken als Echtzeit und werden in
-Echtzeit-Tempo abgearbeitet. Die 400 ms Halt sind ROM-Anforderung (kürzer
-registriert das P1-ROM keinen Uhrstellen-Tap), nicht Zeitquelle.
+(`tests/emu-time-exploit.test.ts`, `tests/emu-simultaneous-press.test.ts`).
+
+Zwei Eingabeformen, ein Budget:
+
+- **Legacy-Tap** `press(btn)`: ein in sich geschlossener Klick (Halt
+  `PRESS_HOLD_MS = 400 ms` + Release-Lücke `PRESS_GAP_MS = 400 ms`), streng
+  sequenziell. Eine schnelle Sequenz (z. B. Uhrstellen) erreicht das ROM so als
+  getrennte Flanken und staut sich in Echtzeit-Tempo ab.
+- **Explizite Flanken** `press(btn, true/false)`: Der Client sendet beide
+  Flanken (`{t:"btn", btn, down}`); der Server hält eine **Menge** gedrückter
+  Pins und lässt so **jede Kombination gleichzeitig** LOW werden. Das P1-ROM
+  tastet die Matrix pro Frame ab, und sein **Ton-Schalter ist A+C zusammen**
+  (SELECT+NEXT) — nur so kommt die Kombi beim ROM an. Der Release wartet, bis
+  die `PRESS_HOLD_MS`-Mindesthaltung bezahlt ist, damit auch ein schneller Tipp
+  als eigene Flanke landet.
+
+Die 400 ms Halt sind ROM-Anforderung (kürzer registriert das P1-ROM keinen
+Uhrstellen-Tap und keine A+C-Kombi), nicht Zeitquelle. Siehe
+[docs/SIMULTANEOUS-PRESS.md](./SIMULTANEOUS-PRESS.md).
 
 ## Catch-up nach Downtime
 

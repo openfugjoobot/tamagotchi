@@ -111,8 +111,11 @@ DATABASE_URL='postgres://tamagotchi:e2epass@127.0.0.1:55433/tamagotchi' node scr
 ## Bedienung (Client)
 
 - **A / B / C** = linke / mittlere / rechte Taste (Klick, Touch oder Tastatur:
-  `A`/`←`, `Enter`/`Space`, `→`; `Esc` schließt nur Dialoge). Die Drücke gehen als
-  `{t:"press"}` an den Server.
+  `A`/`←`, `Enter`/`Space`, `→`; `Esc` schließt nur Dialoge). Der Client sendet
+  **beide Flanken** als `{t:"btn", btn, down}` an den Server, der jeden
+  gedrückten Pin hält — so kommt eine echte Zweifinger-Kombi (**SELECT+NEXT =
+  A+C**, Ton an/aus) als *gleichzeitiger* Druck beim ROM an. Der Legacy-Tap
+  `{t:"press"}` bleibt akzeptiert.
 - **`?shell=pink`** — pinkes Gehäuse (Default blau). Der frühere `?speed=`-Parameter
   entfällt: die Zeit kommt jetzt vom Server.
 

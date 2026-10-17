@@ -182,6 +182,27 @@ describe("LiveClient", () => {
     expect(server.received.find((m) => m.t === "press")).toEqual({ t: "press", btn: "middle" });
   });
 
+  it("pressDown()/pressUp() send explicit down/up edges so A+C can overlap", async () => {
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    client.connect("pet-1", "tok");
+    await waitUntil(() => server!.received.some((m) => m.t === "hello"));
+
+    // SELECT (left) + NEXT (right) asserted together, then released together.
+    client.pressDown("left");
+    client.pressDown("right");
+    client.pressUp("left");
+    client.pressUp("right");
+    await waitUntil(() => server!.received.filter((m) => m.t === "btn").length === 4);
+    expect(server.received.filter((m) => m.t === "btn")).toEqual([
+      { t: "btn", btn: "left", down: true },
+      { t: "btn", btn: "right", down: true },
+      { t: "btn", btn: "left", down: false },
+      { t: "btn", btn: "right", down: false },
+    ]);
+  });
+
   it("delivers buzzer messages to onBuzzer", async () => {
     server = new FakeLiveServer();
     const url = await server.listen();
