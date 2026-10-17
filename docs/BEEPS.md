@@ -82,3 +82,33 @@ Separately, the client (`src/emu/audio.ts`) now **re-articulates** a repeated
 identical tone: a fresh on-edge restarts the oscillator (phase reset) instead of
 only bumping the gain, so two equal chirps are heard as two chirps, not one
 continuous tone.
+
+## Lossless tone-event stream (2026-10-17)
+
+Even at 20 ms a *level* sampler is not lossless: a chirp that starts and ends
+between two samples is gone. The HAL glue now records **every** piezo transition
+into a 512-slot ring (`emu/src/glue.c`, read by `PetEmulator.takeToneEvents()`),
+and the server forwards the ordered stream as `{t:"tones", ev:[{at,freq,play},…]}`.
+
+Measured on the real P1 ROM (same host, clock-set, then a running pet):
+
+- The ROM writes its buzzer registers in a tight poll loop: **7 329 141 writes**
+in 200 s, against **786 real chirp bursts**. Recording every write would be a
+write avalanche, not a recording — so the glue keeps only genuine `(freq, play)`
+**transitions**.
+- After collapsing to transitions: **2349 events / 20 min**, with at most **2**
+returned in a single 125 ms tick read (max batch observed at 20 ms sampling: 58).
+The 512-slot ring never overflows in normal operation.
+- A measured chirp is preserved exactly as a **two-tone chirp**: a ~1.7 ms
+`27307` blip (`set_frequency` off → on → off) immediately followed by a ~7 ms
+`23406` tone (`set_frequency` off → on → off). Transition timestamps rise strictly.
+- Frequencies seen as transitions: `27307`, `23406`, `32768`, `20480`, `16384`,
+`13653`, `11703` — the full ROM tone set (docs/BEEPS.md above).
+- **No hanging tone on batch supersede:** of 53 consecutive 20 ms batches, **0**
+end audible while the next begins audible, so cancelling an old replay plan can
+never leave the piezo stuck on.
+
+The client (`src/emu/tone-replay.ts`) turns each event's `at` into a wall-clock
+delay relative to the batch anchor (`at - at0`, µs → ms) and drives the same
+`emu/audio.ts` piezo, so a burst plays back with its real duration and shape —
+not collapsed to a click and not shifted by network latency.

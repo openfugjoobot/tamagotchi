@@ -24,6 +24,12 @@ EXPORTS=(
   -Wl,--export=emu_take_buzzer
   -Wl,--export=emu_now
   -Wl,--export=emu_lcd_pixels
+  -Wl,--export=emu_tone_head
+  -Wl,--export=emu_tone_tail
+  -Wl,--export=emu_tone_ts
+  -Wl,--export=emu_tone_freq
+  -Wl,--export=emu_tone_play
+  -Wl,--export=emu_tone_consume
   -Wl,--export-memory
 )
 

@@ -4,6 +4,7 @@ import { drawLcd } from "./render/lcd";
 import { drawIconRow, loadIcons, renderIconGrid, type IconImages } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
+import { ToneReplayer } from "./emu/tone-replay";
 import { LiveClient } from "./net/live";
 import { AUTH_ENABLED } from "./auth/config";
 import { currentSession, restoreSession, renderSignInButton, signOut, initGsi, onSessionRefresh, type Session } from "./auth/google";
@@ -68,6 +69,18 @@ function paintMiniIcons(): void {
 }
 
 const piezo = createPiezo(() => new AudioContext());
+/**
+ * Replayer fuer den verlustfreien Ton-Ereignisstrom. Der Server schickt die
+ * Piezo-Transitionen mit Emulator-Zeitstempel (`{t:"tones"}`); dieser Replayer
+ * plant jede mit ihrer `at`-relativen Verzoegerung in Wanduhr-Zeit ein und
+ * treibt damit denselben Piezo. So klingt ein Burst, der zwischen zwei
+ * Abtastungen lag, vollstaendig und mit korrekter Dauer — der grobe
+ * `buzzer`-Pegel bleibt nur als Rueckfall (Alt-Server) bzw. fuer die
+ * Offline-Stille. Die Senke ist der Piezo, damit beide Pfade identisch klingen.
+ */
+const toneReplayer = new ToneReplayer({
+  sink: { update: (freq, on) => piezo.update(freq, on) },
+});
 const menuEl = document.getElementById("menu");
 
 // Service Worker registrieren (ausgelagert, damit kein Inline-Script nötig ist → strikte CSP).
@@ -654,6 +667,12 @@ let lastIcons: Uint8Array = new Uint8Array(8);
  * Piezo gegeben (die Umrechnung macht `emu/audio.ts`, wie im alten Tab-Emulator).
  */
 let lastBuzzer: { freq: number; on: boolean } = { freq: 0, on: false };
+/**
+ * Hat der Server je ein `tones`-Batch geschickt? Dann ist der verlustfreie
+ * Replayer die Tonquelle und der grobe `buzzer`-Pegel darf den Piezo nicht mehr
+ * ueberschreiben (er ist nur der Rueckfall fuer Alt-Server ohne Ton-Strom).
+ */
+let toneStreamSeen = false;
 /** Geteilter Stille-Zustand (vermeidet Allokation im heissen Frame-Pfad). */
 const SILENT_BUZZER: { freq: number; on: boolean } = { freq: 0, on: false };
 
@@ -1230,6 +1249,13 @@ async function boot(): Promise<void> {
   // pro Zeichenframe an den WebAudio-Piezo gegeben (siehe `frame()`).
   live.onFrame((lcd, icons) => { lastFrame = lcd; lastIcons = icons; markBooted(); });
   live.onBuzzer((b) => { lastBuzzer = b; });
+  // Verlustfreier Ton-Strom: jeder Piezo-Uebergang wird mit seiner
+  // Emulator-Zeit-Verzoegerung eingeplant. Ein `tones`-Batch ist die genauere
+  // Wahrheit als der 20-ms-Pegel, daher spielt der Replayer, sobald einer kommt.
+  live.onTones((ev) => {
+    toneStreamSeen = true;
+    toneReplayer.play(ev);
+  });
   // Verbindungsstatus folgt dem Live-Client statt nur navigator.onLine
   // (Task-10-Mandat b): ein abgerissener Socket wird so sichtbar.
   live.onState(() => updateConnBadge());
@@ -1246,12 +1272,16 @@ async function boot(): Promise<void> {
       __setActive: (d: Device) => void;
       __notify: (t: string, b: string) => Promise<void>;
       __audio: () => ReturnType<typeof piezo.state>;
+      __tones: () => { seen: boolean; pending: number };
     };
     w.__live = live;
     w.__frame = () => lastFrame;
     w.__setActive = setActive;
     w.__notify = notify;
     w.__audio = () => piezo.state();
+    // Diagnose: ob der verlustfreie Ton-Strom aktiv ist und wie viele
+    // Transitionen gerade eingeplant sind.
+    w.__tones = () => ({ seen: toneStreamSeen, pending: toneReplayer.pendingCount() });
   }
 
   // Nach dem Anmelden den Stream fuer das aktive Geraet starten. Die Anmeldung
@@ -1334,8 +1364,21 @@ function frame(): void {
   // Faellt die Verbindung, bleibt der zuletzt gemeldete Zustand stehen - ein
   // Ton, der beim Socket-Abriss an war, wuerde sonst endlos weiterklingen.
   // Offline erzwingt daher Stille, bis der naechste Bind seinen Buzzer liefert.
-  const b = live.status() === "live" ? lastBuzzer : SILENT_BUZZER;
-  piezo.update(b.freq, b.on);
+  //
+  // Sobald der Server den verlustfreien Ton-Strom schickt (`tones`), uebernimmt
+  // der Replayer den Piezo: er plant jeden Uebergang mit korrekter Verzoegerung
+  // ein. Der 20-ms-Pegel wuerde diese feinere Zeitachse jeden Frame zunichte
+  // machen (und einen laufenden Chirp abschneiden), daher fuettert `frame()`
+  // den Piezo nur noch im Rueckfall (Alt-Server ohne `tones`).
+  if (live.status() !== "live") {
+    // Verbindung weg: Replayer-Timer stoppen und Stille erzwingen, damit ein
+    // Ton beim Socket-Abriss nicht endlos weiterklingt. Beim naechsten Bind
+    // liefert der Server den Ton-Strom neu.
+    toneReplayer.stop();
+    piezo.update(SILENT_BUZZER.freq, SILENT_BUZZER.on);
+  } else if (!toneStreamSeen) {
+    piezo.update(lastBuzzer.freq, lastBuzzer.on);
+  }
   const lcd = lastFrame;
   if (lcd) {
     const scale = Math.max(1, Math.floor(canvas.clientWidth / LCD_WIDTH));

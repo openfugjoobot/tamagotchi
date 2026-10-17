@@ -160,6 +160,36 @@ später nicht versehentlich zurückgedreht wird.
   hohe Chirps zu einem durchgehenden Ton. `state().articulations` zählt die
   Toneinsätze (Diagnose/Tests).
 
+## Ton-Ereignisstrom ist verlustfrei: Ring im Glue, Replay im Client (2026-10-17)
+
+- **Das Problem mit dem Pegel.** Der bisherige Ton-Pfad überträgt nur den *Zustand*
+  (`{t:"buzzer", freq, on}`), abgetastet alle 20 ms. Ein Chirp, der zwischen zwei
+  Abtastungen beginnt und endet, ist dann verschwunden — bei 20 ms selten, aber
+  möglich; bei jeder gröberen Kadenz häufiger. Ein Pegel ist grundsätzlich keine
+  verlustfreie Aufzeichnung.
+- **Der Ring.** Die HAL-Glue (`emu/src/glue.c`) zeichnet jetzt **jeden** Piezo-Übergang
+  auf: `h_set_frequency`/`h_play_frequency` pushen `(Zeitstempel, Frequenz, Enable)`
+  in einen 512-Slot-Ring; gelesen wird über `emu_tone_head/tail/ts/freq/play/consume`,
+  verdrahtet in `PetEmulator.takeToneEvents()`.
+- **Nur Transitionen, keine Write-Lawine.** Das ROM schreibt seine Buzzer-Register
+  in einer engen Poll-Schleife. Am echten ROM gemessen: **7,3 Mio. Writes in 200 s**
+  gegen **786 echte Bursts** — identische Folge-Writes sind kein Ton-Ereignis. Die
+  Glue kollabiert deshalb auf echte `(freq, play)`-**Übergänge** (2349 Events / 20 min,
+  bis zu 2 pro 125-ms-Tick). Erst das ist verlustfrei statt redundant.
+- **Der Zeitstempel** ist die Emulator-Uhr (`now_us`, µs), gesetzt von TamaLIBs
+  `h_sleep_until`/`h_get_timestamp` — **nicht** die Wanduhr des Tabs. Der Client
+  deutet sie relativ: `at - at0` des Batches wird zur Wanduhr-Verzögerung.
+- **Der Transport:** `{t:"tones", ev:[{at,freq,play},…]}` pro Abtastung, gesendet
+  nur wenn der Ring Events liefert. Der bestehende `{t:"buzzer"}`-Pegel bleibt als
+  **Rückfall** (Alt-Server ohne Ring) und für die Offline-Stille.
+- **Der Replay** (`src/emu/tone-replay.ts`) plant jede Transition mit ihrer
+  µs-Delta-Verzögerung in Wanduhr-Zeit ein und treibt denselben Piezo. Ein neuer
+  Batch bricht den alten Plan ab; offline stoppt der Replayer und erzwingt Stille.
+  Gemessen am echten ROM: kein Batch endet hörbar, wenn der nächste beginnt (0 von
+  53), ein abgebrochener Plan hinterlässt also nie einen hängenden Ton.
+- **Kostenlos bei Stille:** ein stilles Tier erzeugt keine Übergänge, also keine
+  `tones`-Nachricht; nur die tatsächlichen Zustandswechsel gehen über die Leitung.
+
 ## Tod wird am Bild erkannt (2026-10-17)
 
 - **Kein CPU-Signal.** TamaLIB ruft `hal->halt()` nie auf; das Halted-Flag des
