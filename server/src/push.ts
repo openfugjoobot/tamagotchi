@@ -18,7 +18,12 @@
  * unit-testable.
  */
 
-/** A beep waiting to be delivered, joined to its owner (beeps only name a pet). */
+/**
+ * A beep waiting to be delivered, **already joined to its owner** (a beep row
+ * only names a pet, so the owner has to come from `beeps → pets → users`).
+ * This is exactly the shape `Repo.pendingBeeps()` returns — the join lives in
+ * the repository, not here, so the sweeper stays free of SQL.
+ */
 export interface PendingBeep {
   id: string;
   petId: string;
@@ -41,13 +46,23 @@ export interface PushPayload {
   petId: string;
 }
 
-/** The repo surface the sweeper needs. Satisfied structurally by `Repo`. */
+/**
+ * The repo surface the sweeper needs. Satisfied structurally by `Repo` — keep
+ * the two in lockstep; a signature drift here is invisible to `tsc` whenever
+ * both sides are `string` (see `removePushSub`), so the integration test in
+ * `tests/server-push.test.ts` wires the **real** `Repo` in to catch it.
+ */
 export interface PushRepo {
-  /** Beeps with `notified_at IS NULL`, each with its owner's user id. */
+  /** Beeps with `notified_at IS NULL`, each with its owner's user id (joined). */
   pendingBeeps(): Promise<PendingBeep[]>;
   listPushSubs(userId: string): Promise<PushSubLike[]>;
   markBeepNotified(id: string): Promise<void>;
-  removePushSub(id: string): Promise<void>;
+  /**
+   * Drop a push subscription on `410 Gone`. Keyed by **endpoint**, matching
+   * `Repo.removePushSub(endpoint)` and the `push_subs.endpoint` unique key —
+   * not by row `id`, which would silently match nothing.
+   */
+  removePushSub(endpoint: string): Promise<void>;
 }
 
 /**
@@ -144,8 +159,9 @@ export async function sendPendingPush(
         delivered++;
       } catch (err) {
         if (isGone(err)) {
-          // The subscription is dead: drop it so we stop retrying it.
-          await deps.repo.removePushSub(sub.id);
+          // The subscription is dead: drop it so we stop retrying it. Keyed by
+          // endpoint — `Repo.removePushSub` deletes `where endpoint = $1`.
+          await deps.repo.removePushSub(sub.endpoint);
         }
         // Any other error: leave the beep pending for the next sweep.
       }

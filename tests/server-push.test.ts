@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { newDb, DataType } from "pg-mem";
+import { randomUUID } from "node:crypto";
 import { collectBeep, DEBOUNCE_MS, resetBeepDebounce, type BeepSink } from "../server/src/beeps";
+import { Repo, type Queryable } from "../server/src/db/repo";
 import {
   sendPendingPush,
   webPushSender,
@@ -43,8 +48,9 @@ function makeRepo(beeps: PendingBeep[], subs: PushSubLike[]) {
     async markBeepNotified(id: string) {
       notified.push(id);
     },
-    async removePushSub(id: string) {
-      removed.push(id);
+    // Endpoint semantics, matching the real `Repo.removePushSub(endpoint)`.
+    async removePushSub(endpoint: string) {
+      removed.push(endpoint);
     },
   };
   return { row, notified, removed };
@@ -181,7 +187,7 @@ describe("sendPendingPush — Web Push gated on hasLiveConnection", () => {
       vapid: { subject: "mailto:ops@example.com", publicKey: "pub", privateKey: "priv" },
     });
 
-    expect(repo.removed).toEqual(["sub-1"]);
+    expect(repo.removed).toEqual([SUB.endpoint]);
     // No successful delivery, so the beep stays pending for a retry.
     expect(repo.notified).toEqual([]);
     expect(result).toEqual({ sent: 0, beeps: 0 });
@@ -280,5 +286,178 @@ describe("webPushSender — production wiring", () => {
     await expect(sender.send(SUB, { title: "t", body: "b", petId: "pet-1" })).rejects.toMatchObject({
       statusCode: 410,
     });
+  });
+});
+
+/**
+ * Integration — the **real** `Repo` (pg-mem) wired into `sendPendingPush`.
+ *
+ * Finding 1 of the Task-7 review: the unit tests above pass a hand-rolled fake,
+ * so a contract drift between `push.ts`'s `PushRepo` and the real `Repo` is
+ * invisible (`removePushSub(id)` vs `removePushSub(endpoint)` are both `string`,
+ * and `tsc` cannot tell them apart). This block closes that gap: it seeds a real
+ * pg-mem database through the real `Repo`, runs the real sweeper, and asserts on
+ * the *database* — so the 410 cleanup and the owner join are checked against the
+ * code that will actually run in production, not a double.
+ */
+function newTestPool(): Queryable {
+  const db = newDb();
+  db.public.registerFunction({
+    name: "gen_random_uuid",
+    returns: DataType.uuid,
+    implementation: () => randomUUID(),
+    impure: true,
+  });
+  db.public.registerFunction({
+    name: "decode",
+    args: [DataType.text, DataType.text],
+    returns: DataType.bytea,
+    implementation: (s: string, fmt: string) => Buffer.from(s, fmt as BufferEncoding),
+  });
+  db.public.registerFunction({
+    name: "encode",
+    args: [DataType.bytea, DataType.text],
+    returns: DataType.text,
+    implementation: (b: Buffer, fmt: string) => Buffer.from(b).toString(fmt as BufferEncoding),
+  });
+  db.public.none(readFileSync(resolve("server/src/db/schema.sql"), "utf8"));
+  const PgPool = db.adapters.createPg().Pool;
+  return new PgPool() as unknown as Queryable;
+}
+
+describe("sendPendingPush — wired to the real Repo (pg-mem)", () => {
+  const VAPID = { subject: "mailto:ops@example.com", publicKey: "pub", privateKey: "priv" };
+
+  /** Seed a user + pet + sub + beep and return the handles. */
+  async function seed(pool: Queryable) {
+    const repo = new Repo(pool);
+    const { id: userId } = await repo.upsertUser({ sub: "google-sub-1", email: "ivan@example.com" });
+    const pet = await repo.createPet(userId, "p1");
+    const sub = await repo.addPushSub(userId, {
+      endpoint: "https://push.example/abc",
+      p256dh: "p256dh-key",
+      auth: "auth-secret",
+      ua: "vitest",
+    });
+    await repo.recordBeep(pet.id);
+    return { repo, userId, pet, sub };
+  }
+
+  /** Counters that do not depend on a sender double. */
+  async function subCount(pool: Queryable, userId: string): Promise<number> {
+    return (await new Repo(pool).listPushSubs(userId)).length;
+  }
+  async function pendingCount(pool: Queryable): Promise<number> {
+    return (await new Repo(pool).pendingBeeps()).length;
+  }
+
+  it("pushes to a subscription added through the real Repo and marks the beep delivered", async () => {
+    const pool = newTestPool();
+    const { repo, userId, pet } = await seed(pool);
+
+    const sentEndpoints: string[] = [];
+    const sender: PushSender = {
+      async send(sub) {
+        sentEndpoints.push(sub.endpoint);
+      },
+    };
+
+    const result = await sendPendingPush({
+      repo,
+      sender,
+      hasLiveConnection: () => false,
+      vapid: VAPID,
+    });
+
+    expect(sentEndpoints).toEqual(["https://push.example/abc"]);
+    expect(result).toEqual({ sent: 1, beeps: 1 });
+    // The real join gave the sweeper the owner, and the beep is now delivered.
+    expect(await pendingCount(pool)).toBe(0);
+    void pet;
+    void userId;
+  });
+
+  it("prunes the dead subscription on 410 through the real Repo (Finding 1)", async () => {
+    const pool = newTestPool();
+    const { repo, userId } = await seed(pool);
+    expect(await subCount(pool, userId)).toBe(1);
+
+    const gone: PushSender = {
+      async send() {
+        const err = new Error("Gone") as Error & { statusCode: number };
+        err.statusCode = 410;
+        throw err;
+      },
+    };
+
+    const result = await sendPendingPush({
+      repo,
+      sender: gone,
+      hasLiveConnection: () => false,
+      vapid: VAPID,
+    });
+
+    // The crux of the fix: endpoint-keyed remove deletes the actual row. The old
+    // id-keyed call left SUBS_AFTER at 1.
+    expect(await subCount(pool, userId)).toBe(0);
+    // No successful delivery, so the beep stays pending for the next sweep.
+    expect(result).toEqual({ sent: 0, beeps: 0 });
+    expect(await pendingCount(pool)).toBe(1);
+  });
+
+  it("does not push while the owner has a live connection (real Repo)", async () => {
+    const pool = newTestPool();
+    const { repo } = await seed(pool);
+
+    const sentEndpoints: string[] = [];
+    const sender: PushSender = {
+      async send(sub) {
+        sentEndpoints.push(sub.endpoint);
+      },
+    };
+
+    const result = await sendPendingPush({
+      repo,
+      sender,
+      hasLiveConnection: () => true,
+      vapid: VAPID,
+    });
+
+    expect(sentEndpoints).toEqual([]);
+    expect(result).toEqual({ sent: 0, beeps: 0 });
+    // Still pending: the user just has to look at the tab.
+    expect(await pendingCount(pool)).toBe(1);
+  });
+
+  it("survives a partial 410 + OK: prunes the gone sub and delivers on the live one", async () => {
+    const pool = newTestPool();
+    const repo = new Repo(pool);
+    const { id: userId } = await repo.upsertUser({ sub: "google-sub-2" });
+    const pet = await repo.createPet(userId, "p1");
+    await repo.addPushSub(userId, { endpoint: "https://push.example/gone", p256dh: "k", auth: "a" });
+    await repo.addPushSub(userId, { endpoint: "https://push.example/ok", p256dh: "k", auth: "a" });
+    await repo.recordBeep(pet.id);
+
+    const sender: PushSender = {
+      async send(sub) {
+        if (sub.endpoint.endsWith("/gone")) {
+          const err = new Error("Gone") as Error & { statusCode: number };
+          err.statusCode = 410;
+          throw err;
+        }
+      },
+    };
+
+    const result = await sendPendingPush({
+      repo,
+      sender,
+      hasLiveConnection: () => false,
+      vapid: VAPID,
+    });
+
+    expect(result).toEqual({ sent: 1, beeps: 1 });
+    const remaining = await repo.listPushSubs(userId);
+    expect(remaining.map((s) => s.endpoint)).toEqual(["https://push.example/ok"]);
+    expect(await pendingCount(pool)).toBe(0);
   });
 });

@@ -139,15 +139,17 @@ describe("Repo", () => {
     await expect(repo.removePushSub("https://push/none")).resolves.toBeUndefined();
   });
 
-  it("records a beep as pending, then marks it notified", async () => {
+  it("records a beep as pending, joined to its owner, then marks it notified", async () => {
     const { id: userId } = await repo.upsertUser(PROFILE);
     const pet = await repo.createPet(userId, "p1");
     await repo.recordBeep(pet.id);
 
+    // `pendingBeeps` returns the beep joined to its owner (`beeps→pets→users`),
+    // aliased to the `PendingBeep` shape the push sweeper consumes.
     let pending = await repo.pendingBeeps();
     expect(pending.length).toBe(1);
-    expect(pending[0].pet_id).toBe(pet.id);
-    expect(pending[0].notified_at).toBeNull();
+    expect(pending[0].petId).toBe(pet.id);
+    expect(pending[0].userId).toBe(userId);
 
     await repo.markBeepNotified(pending[0].id);
     pending = await repo.pendingBeeps();

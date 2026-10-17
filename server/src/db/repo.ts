@@ -76,11 +76,38 @@ export interface PushSubRow {
   failed_at: Date | null;
 }
 
+/**
+ * A push subscription as the sender needs it: only the columns a push uses,
+ * `user_id` aliased to camelCase. Mirrors the `PushSubLike` interface the sweeper
+ * consumes (`server/src/push.ts`) so `Repo` stays structurally assignable to
+ * `PushRepo` — same trick as `PendingBeepRow`/`PendingBeep`.
+ */
+export interface PushSubLikeRow {
+  id: string;
+  userId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+}
+
 export interface BeepRow {
   id: string;
   pet_id: string;
   at: Date;
   notified_at: Date | null;
+}
+
+/**
+ * A pending beep joined to its owner. `pendingBeeps()` needs the owner because a
+ * push goes to a *user*, while a beep row only names a pet. These names match
+ * the `PendingBeep` interface the sweeper consumes (`server/src/push.ts`) — the
+ * structural contract is pinned by the integration test in
+ * `tests/server-push.test.ts`.
+ */
+export interface PendingBeepRow {
+  id: string;
+  petId: string;
+  userId: string;
 }
 
 /** Firmware revision recorded on each pet (spec §3 `rom_ver`). */
@@ -154,10 +181,17 @@ export class Repo {
     );
   }
 
-  /** Push subscriptions of a user. */
-  async listPushSubs(userId: string): Promise<PushSubRow[]> {
-    const { rows } = await this.pool.query<PushSubRow>(
-      `select * from push_subs where user_id = $1 order by created_at desc`,
+  /**
+   * Push subscriptions of a user, aliased to the `PushSubLike` shape the push
+   * sweeper consumes (`user_id` → `userId`). Returning the full row would leave
+   * `Repo` structurally incompatible with `PushRepo` (missing `userId`).
+   */
+  async listPushSubs(userId: string): Promise<PushSubLikeRow[]> {
+    const { rows } = await this.pool.query<PushSubLikeRow>(
+      `select id, user_id as "userId", endpoint, p256dh, auth
+         from push_subs
+        where user_id = $1
+        order by created_at desc`,
       [userId],
     );
     return rows;
@@ -197,10 +231,18 @@ export class Repo {
     return rows[0];
   }
 
-  /** Beeps not yet pushed to the user, oldest first. */
-  async pendingBeeps(): Promise<BeepRow[]> {
-    const { rows } = await this.pool.query<BeepRow>(
-      `select * from beeps where notified_at is null order by at asc`,
+  /**
+   * Beeps not yet pushed to the user, oldest first, **each joined to its owner**
+   * (`beeps → pets → users`). `petId`/`userId` are aliased camelCase so this row
+   * is directly the `PendingBeep` the push sweeper consumes.
+   */
+  async pendingBeeps(): Promise<PendingBeepRow[]> {
+    const { rows } = await this.pool.query<PendingBeepRow>(
+      `select b.id as id, b.pet_id as "petId", p.user_id as "userId"
+         from beeps b
+         join pets p on p.id = b.pet_id
+        where b.notified_at is null
+        order by b.at asc`,
     );
     return rows;
   }
