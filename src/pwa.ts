@@ -1,11 +1,11 @@
 // PWA-Lifecycle: Service-Worker-Updates, Offline-Status, Installation,
-// Speicher-Persistenz, App-Badge und Wake Lock.
+// Speicher-Persistenz.
 //
 // Alles hier ist progressiv: fehlt eine API im Browser, passiert einfach
 // nichts. Kein Feature darf das Spiel blockieren.
 
 import { t } from "./i18n";
-import { BADGE_KEY, DISMISS_KEY } from "./storage/keys";
+import { DISMISS_KEY } from "./storage/keys";
 
 type Toast = (msg: string, actionLabel?: string, onAction?: () => void) => void;
 
@@ -92,21 +92,6 @@ function offerUpdate(worker: ServiceWorker): void {
   });
 }
 
-/** Update auf Wunsch sofort suchen (Einstellungen). */
-export async function checkForUpdate(): Promise<"update" | "current" | "unsupported"> {
-  if (!("serviceWorker" in navigator)) return "unsupported";
-  const reg = await navigator.serviceWorker.getRegistration();
-  if (!reg) return "unsupported";
-  try {
-    await reg.update();
-  } catch { /* egal */ }
-  if (reg.waiting) {
-    offerUpdate(reg.waiting);
-    return "update";
-  }
-  return "current";
-}
-
 // ----------------------------------------------------------- Offline-Status
 export function initOfflineStatus(): void {
   const apply = () => {
@@ -144,22 +129,17 @@ function isIos(): boolean {
 }
 
 export function initInstall(): void {
-  const installBtn = document.getElementById("btn-install");
-  if (isStandalone()) return; // schon installiert: Knopf bleibt verborgen
+  if (isStandalone()) return; // schon installiert: kein Install-Prompt noetig
 
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredPrompt = e as unknown as InstallPrompt;
-    if (installBtn) installBtn.hidden = false;
   });
 
   window.addEventListener("appinstalled", () => {
     deferredPrompt = null;
-    if (installBtn) installBtn.hidden = true;
     toast(t("installed"));
   });
-
-  installBtn?.addEventListener("click", () => { void promptInstall(); });
 
   // Hinweis beim zweiten Besuch – aber nur einmal und nur ohne Installation.
   maybeNudgeInstall();
@@ -173,8 +153,6 @@ export async function promptInstall(): Promise<void> {
       await deferredPrompt.userChoice;
     } catch { /* egal */ }
     deferredPrompt = null;
-    const installBtn = document.getElementById("btn-install");
-    if (installBtn) installBtn.hidden = true;
     return;
   }
   // Kein Prompt verfügbar: Anleitung zeigen (iOS oder schon installiert).
@@ -251,59 +229,7 @@ export async function storageInfo(): Promise<{ usage: number; quota: number; per
   }
 }
 
-// ---------------------------------------------------------------- App-Badge
-/** Setzt das Zähler-Badge am App-Icon (unterstützte Plattformen). */
-export function setAppBadge(count: number): void {
-  const nav = navigator as unknown as {
-    setAppBadge?: (n?: number) => Promise<void>;
-    clearAppBadge?: () => Promise<void>;
-  };
-  if (count > 0) nav.setAppBadge?.(count).catch(() => { /* egal */ });
-  else nav.clearAppBadge?.().catch(() => { /* egal */ });
-}
-
-export function clearAppBadge(): void {
-  setAppBadge(0);
-}
-
-export function badgeRequested(): boolean {
-  try { return localStorage.getItem(BADGE_KEY) === "1"; } catch { return false; }
-}
-
 // ----------------------------------------------------------------- Wake Lock
-let wakeLock: { release(): Promise<void> } | null = null;
-
-/** Hält den Bildschirm wach, solange der Tab sichtbar ist (Akku-schonend). */
-export async function enableWakeLock(): Promise<boolean> {
-  const nav = navigator as unknown as {
-    wakeLock?: { request(type: "screen"): Promise<{ release(): Promise<void> }> };
-  };
-  if (!nav.wakeLock) return false;
-  try {
-    wakeLock = await nav.wakeLock.request("screen");
-  } catch {
-    return false;
-  }
-  document.addEventListener("visibilitychange", reacquireWakeLock);
-  return true;
-}
-
-async function reacquireWakeLock(): Promise<void> {
-  if (document.visibilityState === "visible" && wakeLock === null) {
-    const nav = navigator as unknown as {
-      wakeLock?: { request(type: "screen"): Promise<{ release(): Promise<void> }> };
-    };
-    try { wakeLock = (await nav.wakeLock?.request("screen")) ?? null; } catch { /* egal */ }
-  }
-}
-
-export async function disableWakeLock(): Promise<void> {
-  document.removeEventListener("visibilitychange", reacquireWakeLock);
-  try { await wakeLock?.release(); } catch { /* egal */ }
-  wakeLock = null;
-}
-
-// -------------------------------------------------------------- Background-Sync
 /** Bittet den SW, den Cloud-Sync nachzuholen, sobald wieder Netz da ist. */
 export async function requestBackgroundSync(): Promise<boolean> {
   if (!("serviceWorker" in navigator) || !("SyncManager" in window)) return false;

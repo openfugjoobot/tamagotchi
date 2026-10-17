@@ -11,7 +11,7 @@ import { SHELLS, applyShell, savedShell, starPolygon, type Shell } from "./shell
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, iconNames, t } from "./i18n";
 import { THEMES, BG_KEY, AUTO, savedBg, resolveTheme } from "./theme";
-import { SOUND_KEY, NOTIFY_KEY, DEVICE_KEY, BADGE_KEY, WAKELOCK_KEY } from "./storage/keys";
+import { SOUND_KEY, NOTIFY_KEY, DEVICE_KEY } from "./storage/keys";
 import { createPetsView, type PetSummary } from "./ui/pets";
 import { createBootOverlay } from "./ui/boot";
 import { createSlotsView } from "./ui/slots";
@@ -22,13 +22,7 @@ import { api } from "./ui/api";
 import {
   initPwa,
   registerServiceWorker,
-  checkForUpdate,
   fetchVersion,
-  setAppBadge,
-  clearAppBadge,
-  badgeRequested,
-  enableWakeLock,
-  disableWakeLock,
   storageInfo,
 } from "./pwa";
 
@@ -191,31 +185,6 @@ function hideToast(): void {
   window.clearTimeout(toastTimer);
 }
 document.getElementById("toast-close")?.addEventListener("click", hideToast);
-
-// ---- App-Badge ("Braucht Aufmerksamkeit") ----
-/** Setzt das Icon-Badge, wenn der Nutzer das will und das Tier Aufmerksamkeit braucht. */
-function refreshBadge(needsAttention = false): void {
-  if (!badgeRequested()) return;
-  setAppBadge(needsAttention ? 1 : 0);
-}
-
-function updateBadgeLabel(): void {
-  const el = document.getElementById("badge-state");
-  const on = badgeRequested();
-  if (el) el.textContent = t(on ? "on" : "off");
-  document.getElementById("btn-badge")?.setAttribute("aria-pressed", String(on));
-}
-
-// ---- Wake Lock ----
-function wakeLockRequested(): boolean {
-  try { return localStorage.getItem(WAKELOCK_KEY) === "1"; } catch { return false; }
-}
-function updateWakeLockLabel(): void {
-  const el = document.getElementById("wakelock-state");
-  const on = wakeLockRequested();
-  if (el) el.textContent = t(on ? "on" : "off");
-  document.getElementById("btn-wakelock")?.setAttribute("aria-pressed", String(on));
-}
 
 function updateNotifyLabel(): void {
   const el = document.getElementById("notify-state");
@@ -611,7 +580,6 @@ function initUI(): void {
       notifyEnabled = false;
       try { localStorage.setItem(NOTIFY_KEY, "0"); } catch { /* ignore */ }
       updateNotifyLabel();
-      clearAppBadge();
       persistSetting({ push: false });
       return;
     }
@@ -630,49 +598,8 @@ function initUI(): void {
   document.documentElement.lang = currentLang();
 
   // ---- Install-Hinweis (PWA) ----
-  // Den Install-Knopf verdrahtet ausschliesslich src/pwa.ts (initInstall).
-  // Hier nur das Menue schliessen – ein zweiter Handler auf demselben Knopf
-  // liesse Prompt und Anleitung gleichzeitig feuern (Bug: 2x Installation).
-  const installBtn = document.getElementById("btn-install");
-  installBtn?.addEventListener("click", closeMenu);
-
-  // ---- App-Badge ----
-  updateBadgeLabel();
-  document.getElementById("btn-badge")?.addEventListener("click", () => {
-    const on = !badgeRequested();
-    try { localStorage.setItem(BADGE_KEY, on ? "1" : "0"); } catch { /* ignore */ }
-    if (!on) clearAppBadge(); else void refreshBadge();
-    updateBadgeLabel();
-  });
-
-  // ---- Wake Lock ----
-  updateWakeLockLabel();
-  document.getElementById("btn-wakelock")?.addEventListener("click", async () => {
-    const on = !wakeLockRequested();
-    try { localStorage.setItem(WAKELOCK_KEY, on ? "1" : "0"); } catch { /* ignore */ }
-    if (on) {
-      const ok = await enableWakeLock();
-      if (!ok) {
-        // API fehlt oder verweigert - Zustand nicht faelschlich als "an" anzeigen.
-        try { localStorage.setItem(WAKELOCK_KEY, "0"); } catch { /* ignore */ }
-      }
-    } else {
-      void disableWakeLock();
-    }
-    updateWakeLockLabel();
-  });
-
-  // ---- Update-Suche ----
-  document.getElementById("btn-update")?.addEventListener("click", async () => {
-    const state = document.getElementById("update-state");
-    if (state) state.textContent = "…";
-    const result = await checkForUpdate();
-    if (state) state.textContent = "";
-    if (result === "current") showToast(t("updateNone"));
-    else if (result === "unsupported") showToast(t("updateNone"));
-    else showToast(t("updateFound"));
-    closeMenu();
-  });
+  // Das Menue hat keinen Install-Knopf mehr; die Install-Anleitung (src/pwa.ts,
+  // initInstall) bleibt einrichtungsseitig bestehen.
 
   // ---- Version im Footer ----
   // Nicht appVersion() abfragen: das Register des Service Workers laeuft parallel,
@@ -685,8 +612,6 @@ function initUI(): void {
     verEl.hidden = false;
     if (verDot) verDot.hidden = false;
   });
-
-  window.addEventListener("appinstalled", () => { if (installBtn) installBtn.hidden = true; });
 
   // Konto (nur wenn eine Client-ID hinterlegt ist)
   initAccount();
@@ -1371,8 +1296,8 @@ function bindButtons(): void {
   );
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) releaseAll();
-    // Zurueck im Tab: Badge weg, der Nutzer kuemmert sich ja gerade.
-    else clearAppBadge();
+    // Zurueck im Tab: der Nutzer kuemmert sich ja gerade.
+    else { /* no-op */ }
   });
 
   // Pet-Buttons nur, solange kein Dialog offen ist (sonst würde z. B. Escape im
