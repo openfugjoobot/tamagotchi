@@ -9,8 +9,9 @@ Browser                                  tamagotchi-server (Node)          Postg
   src/net/live.ts  ──WS /ws────────────▶  server/src/ws.ts                 (pets.state)
    render/lcd.ts   ◀─{t:"frame",lcd(bitpacked,base64),icons?} server/src/emulator.ts (WASM)
    net/lcd-codec.ts ◀── pack/unpack (shared by client + server)
-   emu/audio.ts    ◀─{t:"buzzer",freq,on}  server/src/tick.ts (ein Loop, 125 ms)
+   emu/audio.ts    ◀─{t:"buzzer",freq,on}  server/src/ws.ts (Sampler, 20 ms)
    ui/*.ts         ──REST /api/*────────▶ server/src/api.ts (Fastify)
+                                           server/src/tick.ts (LCD, 125 ms)
                                            server/src/beeps.ts (Debounce)
                                            server/src/push.ts (web-push) ──▶ Push-Service
 ```
@@ -34,7 +35,7 @@ Browser                                  tamagotchi-server (Node)          Postg
 | `server/src/main.ts` | Verdrahtung: Env lesen, Schema anwenden, Tiere rehydrieren, Tick + WS + API + Push-Sweeper starten |
 | `server/src/emulator.ts` | `PetEmulator`: WASM laden, `step(ms)` (reale Zeit → CPU-Schritte, **einzige Zeitquelle**), `press(btn)` (Legacy-Tap) / `press(btn, down)` (explizite Flanken, gleichzeitige Kombis), `lcd`, `buzzer` (Piezo-Level für den Live-Ton), `save`/`loadState`, `dead` |
 | `server/src/tick.ts` | `TickLoop`: ein Intervall für alle Tiere, Fehler-Isolation pro Tier |
-| `server/src/ws.ts` | `WsHub`: `hello`-Auth → Bind an `(userId, petId)`; `{t:"frame", lcd}`/`{t:"frame", lcd, icons}` (bit-gepackt + base64, `icons` nur wenn nicht null) und `{t:"buzzer", freq, on}` raus, Buttons rein; `hasLiveConnection` als Push-Gate |
+| `server/src/ws.ts` | `WsHub`: `hello`-Auth → Bind an `(userId, petId)`; `{t:"frame", lcd}`/`{t:"frame", lcd, icons}` (bit-gepackt + base64, `icons` nur wenn nicht null) und `{t:"buzzer", freq, on}` raus, Buttons rein; `sampleBuzzers()` (schneller, zustands-lesender Piezo-Sampler); `hasLiveConnection` als Push-Gate |
 | `server/src/api.ts` | REST `/api/*` (Fastify), jeder Aufruf nutzer-scoped über das Bearer-Token |
 | `server/src/auth.ts` | Google-ID-Token gegen JWKS prüfen (aus dem früheren Worker übernommen) |
 | `server/src/beeps.ts` | `emu_take_buzzer()`-Latch → entprelltes, **generisches** Beep-Ereignis |

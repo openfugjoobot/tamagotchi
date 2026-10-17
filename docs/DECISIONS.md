@@ -137,6 +137,29 @@ später nicht versehentlich zurückgedreht wird.
 - Ein Tier ohne `buzzer()` (Alt-Stub) degradiert zu „immer still": es wird nie
   eine Buzzer-Nachricht gestreamt, Frame/State laufen unberührt weiter.
 
+## Piezo wird feiner abgetastet als der LCD-Tick (2026-10-17)
+
+- Der LCD-Tick läuft mit **125 ms (8 fps)**. Das ist für den Piezo **zu grob**:
+  eine gemessene Chirp-Burst ist bis zu **50 ms** kurz (Durchschnitt 136 ms,
+  `docs/BEEPS.md`). Am echten ROM gemessen (36 Bursts in ~200 s): der 125-ms-
+  Sampler erkennt **27/36 (75 %)**, mittlere Latenz **57 ms**, Maximum **125 ms**
+  — ein Viertel der Chirps geht verloren, der Rest kommt bis zu einen Tick zu spät.
+- Deshalb gibt es einen **eigenen, schnellen Buzzer-Sampler** (`BUZZER_SAMPLE_MS`,
+  Default **20 ms**) neben dem Tick: er liest je gebundenem Socket den Pegel und
+  streamt `{t:"buzzer"}` bei Änderung. Bei 20 ms landen **36/36** Bursts, mittlere
+  Latenz **~12 ms**.
+- **Zustands-Lesen, kein Zeitschritt:** der Sampler liest `buzzer()` (ein *Level*)
+  und ruft **nie** `pet.step()` — er schenkt **keine** emulierte Zeit. Die
+  Zeit-Invariante (Tastendruck münzt keine Spielzeit, die Uhr folgt nur der
+  Wanduhr) bleibt unberührt. Der Tick ruft den Sampler ebenfalls auf; die
+  Level-Diff im Hub macht die Überlappung idempotent.
+- **Der Client re-artikuliert gleiche Töne:** der Server schickt nur den Pegel,
+  zwei gleiche Chirps kommen als on→off→on. `src/emu/audio.ts` startet die
+  Wellenform bei einem **frischen On-Edge** neu (Oszillator stop+start, Phase 0),
+  statt die Verstärkung nur erneut anzuheben — sonst verschmölzen zwei gleich
+  hohe Chirps zu einem durchgehenden Ton. `state().articulations` zählt die
+  Toneinsätze (Diagnose/Tests).
+
 ## Tod wird am Bild erkannt (2026-10-17)
 
 - **Kein CPU-Signal.** TamaLIB ruft `hal->halt()` nie auf; das Halted-Flag des

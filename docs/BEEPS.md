@@ -56,3 +56,29 @@ Implications for the debounce window:
   attention bursts, since the observed quiet gap is ≥ 114 s.
 - Beeps stop at death, so no extra death-muting is required — the latch simply
   goes quiet once the angel frame appears.
+
+## Sampler cadence: why the LCD tick is too coarse (2026-10-17)
+
+The live beep level (`emu_freq()`/`emu_en()`) was originally sampled only on the
+LCD tick (125 ms). Re-measured on the same host/ROM, ~200 s of a running pet,
+ground truth at 5 ms sampling: **36 chirp bursts**, duration min **50 ms**, max
+225 ms, avg 136 ms — **18 of 36 bursts are shorter than 125 ms**. Simulating a
+diff-only sampler at each cadence against that ground truth:
+
+| Sampler interval | Bursts detected (of 36) | Avg latency | Max latency |
+| --- | --- | --- | --- |
+| 125 ms (original tick) | **27 (75 %)** | **57 ms** | **125 ms** |
+| 62.5 ms | 33 (92 %) | 31 ms | 60 ms |
+| 30 ms | 36 (100 %) | 16 ms | 30 ms |
+| **20 ms (shipped)** | **36 (100 %)** | **12 ms** | **20 ms** |
+
+At 125 ms a quarter of the chirps never reach the browser and the rest lag up to
+one tick. The shipped **`BUZZER_SAMPLE_MS = 20 ms`** dedicated sampler
+(`server/src/ws.ts` `sampleBuzzers()`, driven from `server/src/main.ts`) captures
+every burst within ~12 ms. It is **state-read only** — it never takes an emulator
+step, so it grants no emulated time.
+
+Separately, the client (`src/emu/audio.ts`) now **re-articulates** a repeated
+identical tone: a fresh on-edge restarts the oscillator (phase reset) instead of
+only bumping the gain, so two equal chirps are heard as two chirps, not one
+continuous tone.

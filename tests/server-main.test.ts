@@ -436,6 +436,82 @@ describe("startServer wiring", () => {
     }
   }, 15000);
 
+  it("pushes a rapid run of distinct buzzer levels the 125 ms tick could not deliver", async () => {
+    // The dedicated buzzer sampler reads the level every `buzzerSampleMs`
+    // (default 20 ms), independent of the 125 ms LCD tick. This proves the
+    // wiring by delivering a run of four distinct levels 40 ms apart (~160 ms
+    // total): a 125 ms tick sampler can observe at most a couple of them, while
+    // a 10 ms sampler captures every step. Without the dedicated sampler this
+    // sequence collapses (bursts missed/merged), which is exactly the measured
+    // real-ROM failure (27/36 chirps at 125 ms).
+    resetBeepDebounce();
+    resetJwksCache();
+    const Pool = memPool();
+    const pool = new Pool();
+    const key: TestKey = await makeTestKey();
+
+    const sounding = {
+      ...fakePet(),
+      piezo: { freq: 0, on: false },
+      buzzer(): { freq: number; on: boolean } {
+        return this.piezo;
+      },
+    };
+    const srv = await startServer(
+      baseDeps(pool, {
+        verify: (token: string, clientId: string) =>
+          verifyIdToken(token, clientId, { fetchImpl: jwksFetch(key.jwk), now: Date.now() }),
+        createPet: () => sounding as never,
+        // Sample every 10 ms, far finer than the 125 ms tick.
+        buzzerSampleMs: 10,
+      }),
+    );
+    try {
+      const { Repo } = await import("../server/src/db/repo");
+      const repo = new Repo(pool);
+      const owner = await repo.upsertUser({ sub: "sub-fast" });
+      const pet = await repo.createPet(owner.id, "p1");
+      await srv.rehydrate();
+
+      const token = await signJwt(key.priv, {
+        sub: "sub-fast",
+        aud: CLIENT,
+        iss: "https://accounts.google.com",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+
+      const ws = new WebSocket(`${srv.wsUrl}/ws`);
+      await new Promise<void>((r) => ws.on("open", () => r()));
+      const levels: string[] = [];
+      ws.on("message", (d) => {
+        const m = JSON.parse(String(d));
+        if (m.t === "buzzer") levels.push(`${m.freq}:${m.on}`);
+      });
+      ws.send(JSON.stringify({ t: "hello", token, petId: pet.id }));
+      await new Promise((r) => setTimeout(r, 250)); // let hello bind + settle
+      levels.length = 0; // ignore the bind-time level
+
+      // Four distinct chirp tones, 40 ms apart.
+      const seq: Array<[number, boolean]> = [
+        [27307, true],
+        [23406, true],
+        [32768, true],
+        [23406, false],
+      ];
+      for (const [freq, on] of seq) {
+        sounding.piezo = { freq, on };
+        await new Promise((r) => setTimeout(r, 40));
+      }
+      await new Promise((r) => setTimeout(r, 80));
+
+      // Every distinct level in the fast run reached the socket.
+      expect(levels).toEqual(seq.map(([f, o]) => `${f}:${o}`));
+      ws.close();
+    } finally {
+      await srv.close();
+    }
+  }, 15000);
+
   it("loads an owned save slot into the live pet via POST /api/pets/:id/slots/:slotId/load (Task-11 D1)", async () => {
     resetBeepDebounce();
     resetJwksCache();

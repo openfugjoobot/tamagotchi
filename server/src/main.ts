@@ -40,6 +40,18 @@ import { verifyIdToken, type TokenClaims } from "./auth.js";
 
 /** How often the tick loop advances every pet (8 fps, matches the browser). */
 export const TICK_MS = 125;
+/**
+ * How often the dedicated buzzer sampler reads every live pet's piezo level.
+ *
+ * The LCD tick (125 ms) is far too coarse for the piezo: a measured chirp burst
+ * can be as short as 50 ms (docs/BEEPS.md), and at 125 ms the sampler misses
+ * ~25 % of bursts and delays the rest by up to 125 ms (measured on the real ROM:
+ * 27/36 bursts, avg 57 ms, max 125 ms). At 20 ms every burst lands and the tone
+ * reaches the browser within ~12 ms. The sampler only *reads* `buzzer()` — a
+ * level, not the consumed latch — and takes no emulator step, so it grants zero
+ * emulated time (the time invariant is untouched).
+ */
+export const BUZZER_SAMPLE_MS = 20;
 /** How often the push sweeper drains pending beeps. */
 export const PUSH_SWEEP_MS = 30_000;
 
@@ -89,6 +101,12 @@ export interface StartServerDeps {
   port?: number;
   /** Sweeper interval; `0` disables it (tests). */
   pushIntervalMs?: number;
+  /**
+   * Dedicated buzzer-sampler interval in ms; `0` disables the fast sampler
+   * (tests), leaving the 125 ms tick as the only buzzer source. Defaults to
+   * `BUZZER_SAMPLE_MS` (20 ms).
+   */
+  buzzerSampleMs?: number;
 }
 
 /** Handle returned by `startServer`, exposing the live pieces for tests/CLI. */
@@ -309,6 +327,17 @@ export async function startServer(deps: StartServerDeps): Promise<ServerHandle> 
   // consumed latch) in the same `notifyChanged` sweep, so the live beep reaches
   // a watching tab without a per-pet beep hook here.
 
+  // 4b. dedicated fast buzzer sampler: the 125 ms tick is far too coarse for the
+  //     piezo (measured chirps down to 50 ms; the tick misses ~25 % of bursts).
+  //     A separate timer reads each bound pet's level between ticks and streams
+  //     `{t:"buzzer"}` on change. **State-read only** — no `pet.step()`, so it
+  //     grants no emulated time. `notifyChanged` still samples too, and the
+  //     level-diff in the hub keeps the overlap idempotent. `0` disables it
+  //     (tests); the fast loop falls back to the tick's own buzzer emission.
+  let buzzerTimer: ReturnType<typeof setInterval> | null = null;
+  const buzzerMs = deps.buzzerSampleMs ?? BUZZER_SAMPLE_MS;
+  if (buzzerMs > 0) buzzerTimer = setInterval(() => hub.sampleBuzzers(), buzzerMs);
+
   // 5. push sweeper.
   let sweepTimer: ReturnType<typeof setInterval> | null = null;
   const sweep = async (): Promise<void> => {
@@ -341,6 +370,7 @@ export async function startServer(deps: StartServerDeps): Promise<ServerHandle> 
     async close() {
       if (closed) return;
       closed = true;
+      if (buzzerTimer) clearInterval(buzzerTimer);
       if (sweepTimer) clearInterval(sweepTimer);
       loop.stop();
       await hub.close();
