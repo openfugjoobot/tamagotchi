@@ -9,12 +9,8 @@ export const LCD_WIDTH = 32;
 export const LCD_HEIGHT = 16;
 export const ICON_COUNT = 8;
 
-/** Emulator timestamp units per second (E0C6S46 timer, 1/32768 s). */
-export const TS_FREQ = 32768;
 /** Timestamp units per CPU step (calibrated; see docs/ARCHITECTURE.md). */
 export const TS_PER_STEP = 5.648;
-/** Emulator units for one real millisecond. */
-export const UNITS_PER_MS = TS_FREQ / 1000;
 
 /** P1 buttons: A=left, B=middle, C=right. */
 export type Btn = "left" | "middle" | "right";

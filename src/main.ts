@@ -602,8 +602,8 @@ function initUI(): void {
   // initInstall) bleibt einrichtungsseitig bestehen.
 
   // ---- Version im Footer ----
-  // Nicht appVersion() abfragen: das Register des Service Workers laeuft parallel,
-  // die Versionsdatei waere hier oft noch nicht gelesen. Direkt holen.
+  // Direkt holen statt aus dem SW-Register: dessen Registrierung laeuft parallel,
+  // die Versionsdatei waere hier sonst oft noch nicht gelesen.
   const verEl = document.getElementById("footer-version");
   const verDot = document.getElementById("footer-version-dot");
   void fetchVersion().then((ver) => {
@@ -1299,9 +1299,9 @@ function bindButtons(): void {
     window.addEventListener(ev, releaseAll),
   );
   document.addEventListener("visibilitychange", () => {
+    // Verlaesst der Tab den Vordergrund, alle gedrueckten Tasten freigeben –
+    // sonst blieben Pins serverseitig haengen. Zurueck im Tab passiert nichts.
     if (document.hidden) releaseAll();
-    // Zurueck im Tab: der Nutzer kuemmert sich ja gerade.
-    else { /* no-op */ }
   });
 
   // Pet-Buttons nur, solange kein Dialog offen ist (sonst würde z. B. Escape im

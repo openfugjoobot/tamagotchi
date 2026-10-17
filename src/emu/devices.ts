@@ -16,8 +16,6 @@ export const DEVICES: Record<Device, DeviceSpec> = {
   p2: { id: "p2", label: "P2", rom: "/emu/rom2.bin", name: "Tamagotchi P2" },
 };
 
-export const DEVICE_IDS: Device[] = ["p1", "p2"];
-
 /** Startgeraet aus dem gespeicherten Wert; P2 nur, wenn sein ROM geladen ist. */
 export function pickInitialDevice(
   saved: string | null,

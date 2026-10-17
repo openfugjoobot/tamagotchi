@@ -17,6 +17,7 @@
 import type { LiveClient } from "../net/live";
 import type { Device } from "../emu/devices";
 import { t } from "../i18n";
+import { formatDate } from "./format";
 
 /** A pet as `GET /api/pets` returns it (see server/src/api.ts `petDto`). */
 export interface PetSummary {
@@ -59,17 +60,6 @@ export function buildPetsView(pets: PetSummary[], currentPetId: string | null = 
   }));
   // Stable partition: alive rows keep their order, dead rows keep theirs.
   return [...rows.filter((r) => r.alive), ...rows.filter((r) => !r.alive)];
-}
-
-/** Format an ISO timestamp for display, falling back to the raw string. */
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  try {
-    return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  } catch {
-    return d.toISOString();
-  }
 }
 
 export interface PetsViewDeps {

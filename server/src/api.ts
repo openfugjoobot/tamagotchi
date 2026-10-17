@@ -359,6 +359,3 @@ function userId(req: FastifyRequest): string {
   if (!id) throw new Error("unauthenticated request reached a handler");
   return id;
 }
-
-/** Exposed for tests: the settings a fresh user starts with. */
-export const SETTINGS_BASE = SETTINGS_DEFAULTS;

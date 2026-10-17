@@ -8,6 +8,7 @@
  */
 
 import { t } from "../i18n";
+import { formatDate } from "./format";
 
 /** A beep as `GET /api/beeps` returns it. No `kind`, by design. */
 export interface BeepSummary {
@@ -24,17 +25,6 @@ export interface BeepRowView {
   notified: boolean;
   /** The generic, kind-independent sentence (i18n `beepGeneric`). */
   text: string;
-}
-
-/** Format an ISO timestamp for display, falling back to the raw string. */
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  try {
-    return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  } catch {
-    return d.toISOString();
-  }
 }
 
 /**

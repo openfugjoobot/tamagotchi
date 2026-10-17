@@ -16,14 +16,9 @@
 // suffix is the ESM-correct specifier for the emitted file; vitest and `tsc`
 // both resolve `death.js` back to `death.ts`.
 import { isAngelFrame } from "../../src/emu/death.js";
-import { TS_PER_STEP } from "../../src/emu/constants.js";
-
-export const LCD_WIDTH = 32;
-export const LCD_HEIGHT = 16;
-export const ICON_COUNT = 8;
+import { TS_PER_STEP, LCD_WIDTH, LCD_HEIGHT, ICON_COUNT, type Btn } from "../../src/emu/constants.js";
 
 /** Buttons A=left, B=middle, C=right (same mapping as the browser wrapper). */
-export type Btn = "left" | "middle" | "right";
 const BTN_INDEX: Record<Btn, number> = { left: 0, middle: 1, right: 2 };
 
 /**

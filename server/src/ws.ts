@@ -47,8 +47,8 @@ import type { Server as HttpsServer } from "node:https";
 import { WebSocketServer, WebSocket } from "ws";
 import { verifyIdToken, type TokenClaims } from "./auth.js";
 import { encodeLcd, encodeIcons, iconsAreZero } from "../../src/net/lcd-codec.js";
+import { ICON_COUNT, type Btn } from "../../src/emu/constants.js";
 
-export type Btn = "left" | "middle" | "right";
 const BTNS: readonly Btn[] = ["left", "middle", "right"];
 
 /** What a bound socket can do with its pet. Satisfied by `PetEmulator`. */
@@ -73,9 +73,6 @@ export interface LivePet {
    */
   press(btn: Btn, down?: boolean): void;
 }
-
-/** Number of icon segments carried per frame (P1: 8). */
-export const ICON_COUNT = 8;
 
 /** Pet plus life-state resolved for a `hello`. */
 export interface LoadedPet {
@@ -292,7 +289,6 @@ export class WsHub {
     this.pushBuzzer(ws, binding);
   }
 
-  /** Forward a button press to the bound pet. Ignored before `hello`. */
   /**
    * Forward a button event to the bound pet. Ignored before `hello`.
    *

@@ -18,7 +18,6 @@ function toast(msg: string, actionLabel?: string, onAction?: () => void): void {
 }
 
 // ---------------------------------------------------------------- Version
-let currentVersion = "";
 
 /** Build-Version aus /version.json (falls vorhanden). */
 export async function fetchVersion(): Promise<string> {
@@ -32,10 +31,6 @@ export async function fetchVersion(): Promise<string> {
   }
 }
 
-export function appVersion(): string {
-  return currentVersion;
-}
-
 // ------------------------------------------------------- Service Worker
 let waitingWorker: ServiceWorker | null = null;
 let reloadRequested = false;
@@ -44,8 +39,6 @@ let reloadRequested = false;
  *  Neue Versionen werden NICHT automatisch aktiv – die Seite fragt. */
 export async function registerServiceWorker(): Promise<void> {
   if (!("serviceWorker" in navigator)) return;
-
-  currentVersion = await fetchVersion();
 
   try {
     const reg = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
@@ -145,20 +138,6 @@ export function initInstall(): void {
   maybeNudgeInstall();
 }
 
-/** Startet den Install-Dialog; auf iOS stattdessen die Anleitung. */
-export async function promptInstall(): Promise<void> {
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    try {
-      await deferredPrompt.userChoice;
-    } catch { /* egal */ }
-    deferredPrompt = null;
-    return;
-  }
-  // Kein Prompt verfügbar: Anleitung zeigen (iOS oder schon installiert).
-  showInstallHelp();
-}
-
 export function showInstallHelp(): void {
   const dialog = document.getElementById("install-help") as HTMLDialogElement | null;
   if (!dialog) return;
@@ -227,29 +206,6 @@ export async function storageInfo(): Promise<{ usage: number; quota: number; per
   } catch {
     return null;
   }
-}
-
-// ----------------------------------------------------------------- Wake Lock
-/** Bittet den SW, den Cloud-Sync nachzuholen, sobald wieder Netz da ist. */
-export async function requestBackgroundSync(): Promise<boolean> {
-  if (!("serviceWorker" in navigator) || !("SyncManager" in window)) return false;
-  try {
-    const reg = (await navigator.serviceWorker.ready) as unknown as {
-      sync?: { register(tag: string): Promise<void> };
-    };
-    await reg.sync?.register("tamagotchi-sync");
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Lauscht auf Sync-Anforderungen aus dem Service Worker. */
-export function onBackgroundSync(handler: () => void): void {
-  if (!("serviceWorker" in navigator)) return;
-  navigator.serviceWorker.addEventListener("message", (event) => {
-    if (event.data?.type === "SYNC_REQUESTED") handler();
-  });
 }
 
 // ------------------------------------------------------------------ Init
