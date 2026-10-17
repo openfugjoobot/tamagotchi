@@ -305,6 +305,51 @@ describe("LiveClient", () => {
     expect(received[1]).toEqual({ freq: 0, on: false });
   });
 
+  it("delivers a lossless tone batch to onTones, ordered and coerced", async () => {
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    const batches: Array<Array<{ at: number; freq: number; play: boolean }>> = [];
+    client.onTones((ev) => batches.push(ev));
+    client.connect("pet-1", "tok");
+    await waitUntil(() => server!.received.some((m) => m.t === "hello"));
+
+    // A measured two-tone chirp, plus a malformed event and an out-of-order one.
+    server.broadcast({
+      t: "tones",
+      ev: [
+        { at: 1000, freq: 27307, play: false },
+        { at: 1015, freq: 27307, play: true },
+        { at: 900, freq: 27307, play: false }, // backwards: dropped
+        { at: 2715, freq: NaN, play: 1 }, // coerced: freq 0, play false
+        { at: 4624, freq: 23406, play: true },
+      ],
+    });
+    await waitUntil(() => batches.length === 1);
+    expect(batches[0]).toEqual([
+      { at: 1000, freq: 27307, play: false },
+      { at: 1015, freq: 27307, play: true },
+      { at: 2715, freq: 0, play: false },
+      { at: 4624, freq: 23406, play: true },
+    ]);
+  });
+
+  it("ignores a tones batch with no usable events", async () => {
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    let count = 0;
+    client.onTones(() => count++);
+    client.connect("pet-1", "tok");
+    await waitUntil(() => server!.received.some((m) => m.t === "hello"));
+
+    server.broadcast({ t: "tones" }); // no ev field
+    server.broadcast({ t: "tones", ev: [] }); // empty
+    server.broadcast({ t: "tones", ev: [{ at: -5, freq: 1, play: true }] }); // bad stamp
+    await new Promise((r) => setTimeout(r, 60));
+    expect(count).toBe(0);
+  });
+
   it("reports state messages to onState without trusting the docstring", async () => {
     server = new FakeLiveServer();
     const url = await server.listen();

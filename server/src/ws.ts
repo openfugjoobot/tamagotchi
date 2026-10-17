@@ -14,7 +14,14 @@
  *                 icon segments also changed,
  *                 `{t:"buzzer", freq, on}` whenever the pet's piezo state
  *                 changed (so a watching tab can drive its local audio — the
- *                 browser no longer runs the emulator, only renders its output), and
+ *                 browser no longer runs the emulator, only renders its output),
+ *                 and `{t:"tones", ev:[{at,freq,play},…]}` with **every** piezo
+ *                 transition the ROM produced since the last sample, each
+ *                 stamped with the emulator time it happened at — the lossless
+ *                 tone stream the client replays in order at the correct
+ *                 relative times (the coarse `buzzer` level stays for legacy
+ *                 pets and as a fallback, but a chirp shorter than the sample
+ *                 interval survives only on `tones`), and
  *                 `{t:"state", alive, ageYears}` on bind *and* whenever the
  *                 life-state (alive) flips — so a pet dying with the tab open
  *                 emits `state{alive:false}` (Task-6 Finding B). The `lcd`
@@ -51,6 +58,18 @@ import { encodeLcd, encodeIcons, iconsAreZero } from "../../src/net/lcd-codec.js
 export type Btn = "left" | "middle" | "right";
 const BTNS: readonly Btn[] = ["left", "middle", "right"];
 
+/**
+ * One lossless piezo transition as forwarded on the wire. `at` is the server's
+ * emulator timestamp in µs (the instant the glue recorded the change), `freq`
+ * the raw glue value in dHz (0 = none), `play` the enable flag. The client
+ * replays these in order at `at`-relative times.
+ */
+export interface ToneEventWire {
+  at: number;
+  freq: number;
+  play: boolean;
+}
+
 /** What a bound socket can do with its pet. Satisfied by `PetEmulator`. */
 export interface LivePet {
   lcd(): Uint8Array;
@@ -65,6 +84,13 @@ export interface LivePet {
    * no audio instead of breaking the frame/state path.
    */
   buzzer?(): { freq: number; on: boolean };
+  /**
+   * Drain every lossless tone transition since the previous call, in order. Each
+   * carries the emulator timestamp (µs) of the change. Optional: a pet predating
+   * the tone-event extension streams no `tones` messages and falls back to the
+   * coarse `buzzer` level path.
+   */
+  takeToneEvents?(): ToneEventWire[];
   /**
    * Feed a button event. `down === undefined` is a legacy self-contained tap;
    * explicit `true`/`false` assert/release a button, and any combination may be
@@ -203,6 +229,7 @@ export class WsHub {
       const binding = this.bindings.get(client);
       if (!binding) continue;
       this.pushBuzzer(client, binding);
+      this.pushTones(client, binding);
     }
   }
 
@@ -229,6 +256,7 @@ export class WsHub {
         }
       }
       this.pushBuzzer(client, binding);
+      this.pushTones(client, binding);
       this.pushFrame(client, binding);
     }
   }
@@ -290,6 +318,7 @@ export class WsHub {
     this.send(ws, { t: "state", alive: binding.alive, ageYears: binding.ageYears });
     this.pushFrame(ws, binding);
     this.pushBuzzer(ws, binding);
+    this.pushTones(ws, binding);
   }
 
   /** Forward a button press to the bound pet. Ignored before `hello`. */
@@ -358,6 +387,56 @@ export class WsHub {
     if (last && last.freq === b.freq && last.on === b.on) return;
     binding.lastBuzzer = b;
     this.send(ws, { t: "buzzer", freq: b.freq, on: b.on });
+  }
+
+  /**
+   * Drain the pet's lossless tone-event ring and forward every transition to the
+   * socket, batched per call, as `{t:"tones", ev:[{at,freq,play},…]}`.
+   *
+   * This is the **lossless** path: unlike `pushBuzzer` (a level sampled at some
+   * cadence, which can miss a chirp shorter than the interval) it forwards the
+   * exact ordered stream of state changes the HAL glue recorded, each stamped
+   * with the emulator time it happened at. The client replays them at the right
+   * relative times, so a burst that fell between two LCD ticks is still heard in
+   * full and at the correct instant.
+   *
+   * A batch is emitted only when the ring yielded events (an idle pet costs
+   * nothing). The read is defensive: a legacy `LivePet` without
+   * `takeToneEvents()` never produces a `tones` message, so the frame/state path
+   * is untouched and such a pet simply keeps the coarse `buzzer` level. Each
+   * event is coerced (finite non-negative integer `at`/`freq`, strict-boolean
+   * `play`) so garbage can never reach the wire, and `at` must not go backwards
+   * within a batch (the glue emits strictly increasing stamps) — a malformed
+   * event is dropped rather than delivered out of order.
+   *
+   * `sampleBuzzers()` and `notifyChanged()` both call this; the `takeToneEvents()`
+   * drain makes the overlap idempotent (events already forwarded are consumed and
+   * never re-sent).
+   */
+  private pushTones(ws: WebSocket, binding: Binding): void {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    const pet = binding.pet;
+    if (typeof pet.takeToneEvents !== "function") return; // legacy pet: no tone stream
+    let raw: ToneEventWire[];
+    try {
+      raw = pet.takeToneEvents();
+    } catch {
+      return; // a throwing ring read must not break the buzzer/frame path
+    }
+    if (!Array.isArray(raw) || raw.length === 0) return;
+
+    const ev: ToneEventWire[] = [];
+    let prevAt = -1;
+    for (const e of raw) {
+      const at = Number.isFinite(e.at) && e.at >= 0 ? Math.floor(e.at) : -1;
+      const freq = Number.isFinite(e.freq) ? Math.max(0, Math.floor(e.freq)) : 0;
+      if (at < 0 || at < prevAt) continue; // drop unusable / out-of-order stamps
+      prevAt = at;
+      ev.push({ at, freq, play: e.play === true });
+    }
+    if (ev.length === 0) return;
+
+    this.send(ws, { t: "tones", ev });
   }
 
   private addLive(userId: string, ws: WebSocket): void {

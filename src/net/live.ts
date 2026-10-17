@@ -15,6 +15,14 @@
  *                              Drawn with render/lcd.ts and render/icons.ts.
  *   ←  {t:"buzzer", freq, on}  the pet's piezo state in the ROM's raw units;
  *                              consumed by emu/audio.ts on the frame loop
+ *   ←  {t:"tones", ev:[{at,freq,play},…]}  the **lossless** tone stream: every
+ *                              piezo transition the ROM produced since the last
+ *                              sample, in order, each stamped with the emulator
+ *                              time it happened at. `main.ts` replays them at
+ *                              the right relative times, so a chirp shorter
+ *                              than the 20 ms sample interval is still heard
+ *                              (and with correct timing). The coarse `buzzer`
+ *                              level stays as the fallback for legacy servers.
  *   ←  {t:"state", alive, ageYears}
  *   →  {t:"press", btn}            a self-contained button tap (legacy)
  *   →  {t:"btn", btn, down}       an explicit button edge: true asserts, false
@@ -42,6 +50,19 @@ export interface LiveState {
 export interface LiveBuzzer {
   freq: number;
   on: boolean;
+}
+
+/**
+ * One lossless tone transition as carried on the wire. `at` is the server's
+ * emulator timestamp in µs (the instant the change happened), `freq` the raw
+ * glue value in dHz (0 = none), `play` the enable flag. The client replays these
+ * in order, scheduling each at its `at`-relative offset from the batch anchor so
+ * even a chirp shorter than the sampling interval is heard, at the right moment.
+ */
+export interface LiveToneEvent {
+  at: number;
+  freq: number;
+  play: boolean;
 }
 
 export interface LiveClientOptions {
@@ -81,6 +102,7 @@ export class LiveClient {
   private readonly frameCbs = new Set<(lcd: Uint8Array, icons: Uint8Array) => void>();
   private readonly stateCbs = new Set<(s: LiveState) => void>();
   private readonly buzzerCbs = new Set<(b: LiveBuzzer) => void>();
+  private readonly tonesCbs = new Set<(ev: LiveToneEvent[]) => void>();
 
   constructor(opts: LiveClientOptions = {}) {
     this.url = opts.url ?? defaultUrl();
@@ -130,6 +152,18 @@ export class LiveClient {
   onBuzzer(cb: (b: LiveBuzzer) => void): () => void {
     this.buzzerCbs.add(cb);
     return () => this.buzzerCbs.delete(cb);
+  }
+
+  /**
+   * Register a lossless tone-event consumer. The callback fires once per
+   * `{t:"tones"}` batch with the ordered transitions, each stamped with the
+   * server's emulator time (µs). The client replays them at the right relative
+   * times (see `main.ts`), so a burst the coarse `buzzer` level would miss is
+   * still heard — and with correct timing. Returns an unsubscribe function.
+   */
+  onTones(cb: (ev: LiveToneEvent[]) => void): () => void {
+    this.tonesCbs.add(cb);
+    return () => this.tonesCbs.delete(cb);
   }
 
   /** Send a button press. Ignored while not connected (nothing to press). */
@@ -241,6 +275,7 @@ export class LiveClient {
       ageYears?: unknown;
       freq?: unknown;
       on?: unknown;
+      ev?: unknown;
     };
     try {
       msg = JSON.parse(typeof data === "string" ? data : String(data));
@@ -270,6 +305,28 @@ export class LiveClient {
       const freq = typeof msg.freq === "number" && Number.isFinite(msg.freq) ? Math.max(0, msg.freq) : 0;
       const b: LiveBuzzer = { freq, on: msg.on === true };
       for (const cb of this.buzzerCbs) cb(b);
+      return;
+    }
+    if (msg.t === "tones") {
+      // Lossless transition batch. Coerce defensively: each event needs a finite
+      // non-negative `at`/`freq` and a strict-boolean `play`, and `at` must not
+      // go backwards within the batch (the server emits strictly increasing
+      // stamps) — a malformed event is dropped rather than replayed out of
+      // order. An empty result delivers nothing.
+      const raw = Array.isArray(msg.ev) ? msg.ev : [];
+      const ev: LiveToneEvent[] = [];
+      let prevAt = -1;
+      for (const e of raw) {
+        if (typeof e !== "object" || e === null) continue;
+        const r = e as { at?: unknown; freq?: unknown; play?: unknown };
+        const at = typeof r.at === "number" && Number.isFinite(r.at) && r.at >= 0 ? Math.floor(r.at) : -1;
+        const freq = typeof r.freq === "number" && Number.isFinite(r.freq) ? Math.max(0, Math.floor(r.freq)) : 0;
+        if (at < 0 || at < prevAt) continue;
+        prevAt = at;
+        ev.push({ at, freq, play: r.play === true });
+      }
+      if (ev.length === 0) return;
+      for (const cb of this.tonesCbs) cb(ev);
     }
   }
 
