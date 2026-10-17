@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -8,7 +8,7 @@ import { startServer, resolvePublicDir } from "../server/src/main";
 import { TickLoop, type PetLike } from "../server/src/tick";
 import { collectBeep, beepDebounceSize, resetBeepDebounce } from "../server/src/beeps";
 import { signJwt, makeTestKey, jwksFetch, type TestKey } from "./helpers/jwt";
-import { verifyIdToken } from "../server/src/auth";
+import { verifyIdToken, resetJwksCache } from "../server/src/auth";
 
 /**
  * The entrypoint wires the whole server: schema, pet rehydration, the tick loop,
@@ -131,6 +131,12 @@ describe("PUBLIC_DIR default resolution (Task-9 N1)", () => {
 });
 
 describe("startServer wiring", () => {
+  // `verifyIdToken` caches Google's JWKS at module level for an hour. Every test
+  // here signs with its own key, so without clearing the cache a later test
+  // would verify against the first test's key and get 4401 instead of the code
+  // it asserts. Reset before each test.
+  beforeEach(() => resetJwksCache());
+
   it("runs the schema, boots, and serves /api/beeps (empty) unauthenticated → 401", async () => {
     resetBeepDebounce();
     const Pool = memPool();
@@ -218,6 +224,55 @@ describe("startServer wiring", () => {
       const code = await closed;
       expect(code).toBe(4404); // unknown pet — B does not own it
       expect(srv.hub.hasLiveConnection("sub-B")).toBe(false);
+    } finally {
+      await srv.close();
+    }
+  }, 15000);
+
+  it("binds a pet on `hello` when the token carries the Google sub, not the users.id (Task-13 e2e fix)", async () => {
+    resetBeepDebounce();
+    resetJwksCache();
+    const Pool = memPool();
+    const pool = new Pool();
+    const key: TestKey = await makeTestKey();
+    const srv = await startServer(
+      baseDeps(pool, {
+        verify: (token: string, clientId: string) =>
+          verifyIdToken(token, clientId, { fetchImpl: jwksFetch(key.jwk), now: Date.now() }),
+      }),
+    );
+    try {
+      const { Repo } = await import("../server/src/db/repo");
+      const repo = new Repo(pool);
+      const owner = await repo.upsertUser({ sub: "sub-owner" });
+      const pet = await repo.createPet(owner.id, "p1");
+      await srv.rehydrate();
+
+      // The token carries the Google `sub` (never the internal UUID). The hub
+      // must resolve it to `users.id` and scope the pet by that — otherwise
+      // every `hello` fails 4404 `unknown pet` (the bug this pins).
+      const token = await signJwt(key.priv, {
+        sub: "sub-owner",
+        aud: CLIENT,
+        iss: "https://accounts.google.com",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+
+      const ws = new WebSocket(`${srv.wsUrl}/ws`);
+      await new Promise<void>((r) => ws.on("open", () => r()));
+      const gotState = new Promise<boolean>((r) => {
+        ws.on("message", (d) => {
+          const m = JSON.parse(String(d));
+          if (m.t === "state") r(true);
+        });
+        setTimeout(() => r(false), 5000);
+      });
+      ws.send(JSON.stringify({ t: "hello", token, petId: pet.id }));
+      expect(await gotState).toBe(true);
+      // The push gate is keyed by the internal id, not the sub — a watching
+      // user must therefore suppress a push.
+      expect(srv.hub.hasLiveConnection(owner.id)).toBe(true);
+      ws.close();
     } finally {
       await srv.close();
     }

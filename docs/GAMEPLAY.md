@@ -1,7 +1,10 @@
 # Gameplay
 
-Menschliche Referenz der Spielregeln. Alle Zahlenwerte stehen in
-`src/engine/config.ts`.
+Menschliche Referenz der Spielregeln. Diese Regeln werden **nicht mehr im Browser**,
+sondern **serverseitig** ausgeführt: das P1-ROM läuft im Server-Emulator
+(`server/src/emulator.ts`), der Browser zeigt nur das Ergebnis. Es gibt daher
+keine `src/engine/config.ts` mehr — die „Zahlenwerte" sind das Verhalten des echten
+ROMs, nicht ein nachgebautes Regelwerk.
 
 ## Bedürfnisse
 
@@ -11,7 +14,7 @@ Menschliche Referenz der Spielregeln. Alle Zahlenwerte stehen in
   Maximum 99. Meal +1, Snack +2, Spielen −1.
 - **Poop:** erscheint in Intervallen (Adult ~3 h), max 4. Bei 4 Poops wird das
   Tamagotchi krank. „Duck" (Reinigen) entfernt alle.
-- **Schlaf:** je Charakter eine Bettzeit (Gerätezeit). Beim Aufwachen zählt ein
+- **Schlaf:** je Charakter eine Bettzeit (Serverzeit). Beim Aufwachen zählt ein
   Lebensjahr hoch. Licht muss beim Schlafen aus sein.
 - **Discipline:** 0 / 25 / 50 / 75 / 100 %. Beim „Misbehaving" erhöht Ausschimpfen
   um 25 %.
@@ -58,4 +61,15 @@ Menschliche Referenz der Spielregeln. Alle Zahlenwerte stehen in
 ## Tod & Neustart
 
 Tod durch Alter (Basis-Lebensdauer abzüglich Care Mistakes) oder unbehandelte
-Krankheit. Auf dem Tod-Screen startet `A`+`C` ein neues Ei.
+Krankheit. Der Server erkennt ihn **am LCD-Bild** (Engel-Animation,
+`src/emu/death.ts`) und setzt `alive=false`/`died_at` — es wird **kein
+Todesgrund** ermittelt oder gespeichert (`pets` hat kein `cause_of_death`). Die
+Tier-Liste zeigt gestorbene Tiere mit Alter, nie mit Ursache. Auf dem Tod-Screen
+startet `A`+`C` ein neues Ei (bzw. das Anlegen eines neuen Tieres über die Liste).
+
+## Beeps
+
+Der Server meldet Beeps **generisch** — nur *dass* das Tier sich meldet, nie *warum*
+(das ROM gibt keine belastbare Ursache her, siehe [BEEPS.md](./BEEPS.md) und
+[DECISIONS.md](./DECISIONS.md)). Beep-Historie und Benachrichtigung nennen deshalb
+keinen Grund.

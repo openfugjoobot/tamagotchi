@@ -1,83 +1,89 @@
 # Entscheidungen
 
-## Ansatz: Emulation statt Nachbau
+Chronologisch, neueste zuerst. Jede Entscheidung nennt den Grund — damit sie
+später nicht versehentlich zurückgedreht wird.
+
+## Server statt Cloudflare Worker (2026-10-17)
+
+- **Der Worker wurde verworfen.** Ein Cloudflare-Isolate kann **nicht dauerhaft
+  pro Nutzer ticken** — es lebt nur, solange eine Anfrage es wachhält. Ein Tier,
+  das auch bei geschlossenem Browser weiterläuft, braucht einen **always-on**
+  Prozess.
+- **Eigener Dienst** auf dem fugjoo-Host: Node/TypeScript (`fastify` + `ws`),
+  Container `tamagotchi-server` im `proxy`-Netz, erreichbar über Nginx Proxy
+  Manager. `tamagotchi.fugjoo.com` bleibt die App; der Server liegt hinter
+  demselben Host unter `/api/*` **und** `/ws` (kein CORS, keine neue
+  Zertifikatsfrage, same-origin).
+- Der frühere statische Container (nginx) wird zum reinen Frontend-Host.
+- Die Google-JWKS-Prüfung wanderte **unverändert** aus `src/worker/auth.ts` in
+  `server/src/auth.ts`. `worker/`, `wrangler.toml` und der `/api/save`-KV-Pfad
+  wurden entfernt.
+
+## Der Server besitzt die Zeit (2026-10-17)
+
+- Früher tickte der Emulator im Browser; Manipulation der Geräteuhr und
+  Tab-Throttling beeinflussten die Echtzeit (das war „nicht abwehrbar").
+- Jetzt treibt **ein** Tick-Loop auf dem Server alle Tiere mit der realen
+  Zeitdifferenz. `?speed=`, lokaler Spielstand und Catch-up im Tab entfallen.
+- Vorteile: gleiches Tempo für alle, deterministisch, und ein Serverneustart holt
+  die verstrichene Zeit über `last_tick_at` in 60-s-Scheiben nach.
+- Kosten: ohne Server läuft nichts. Bewusst akzeptiert (Betriebsentscheidung oben).
+
+## Beeps sind generisch (2026-10-17)
+
+- Der Piezo liefert ein **Beep-Signal** (`emu_take_buzzer()`, Latch), aber
+  **keinen Grund**. Ob Hunger, Krankheit oder Aufmerksamkeit: aus dem ROM nicht
+  belastbar auslesbar (`docs/BEEPS.md`, Anhang A4 des Specs).
+- Deshalb wird nur *dass* es piepte gespeichert — `beeps` hat **kein `kind`** — und
+  die Benachrichtigung ist grundlos („Dein Tamagotchi braucht dich").
+- Eine abgeleitete Ursache wäre **geraten**; geratene Ursachen kommen nicht in die
+  Daten oder in den Text.
+- Der Latch wird über ein **60-s-Fenster pro Tier** entprellt (gemessen: echte
+  Aufmerksamkeits-Schübe liegen ≥ 114 s auseinander, also kollabiert das Fenster
+  einen Schub zu einem Ereignis, ohne zwei zu verschlucken).
+
+## Tod wird am Bild erkannt (2026-10-17)
+
+- **Kein CPU-Signal.** TamaLIB ruft `hal->halt()` nie auf; das Halted-Flag des
+  Kerns blieb über 8+ simulierte Tage konstant 0.
+- **Nur das LCD-Bild.** Im Todesfall zeichnet das P1-ROM einen Engel mit Sternen.
+  Die Figur ist stabil, nur die Sternchen animieren — ein ganzer Frame-Hash
+  scheitert daran, ein **Formvergleich des zentralen Bereichs** funktioniert
+  (`src/emu/death.ts`, `BOX` + `TOLERANCE`).
+- Auch hier gibt es **keinen Grund**: `pets` hat kein `cause_of_death`, `died_at`
+  ist die einzige Todes-Information. Der Client zeigt nie eine Ursache.
+
+## Emulation statt Nachbau (2026-10-11, gilt weiter)
 
 Der erste Versuch (eigene Engine + handgezeichnete Sprites) wirkte nicht
-originalgetreu. Abgelöst durch **Ausführen der echten Firmware**:
+originalgetreu. Abgelöst durch **Ausführen der echten Firmware** (TamaLIB, GPLv2;
+ROM `tama.bin` aus dem MAME-Romset `tama.zip`, MD5 `3fce172403c27274e59723bbb9f6d8e9`).
+Logik, Menü, Icons, Animation und Timing sind damit 1:1 das Original.
 
-- **TamaLIB** (`jcrona/tamalib`, GPLv2) — hardware-agnostische P1-Emulation
-  (Epson E0C6S46 @ 32768 Hz, LCD 32×16 B/W, 8 Icons).
-- **ROM**: `tama.bin` aus dem MAME-Romset `tama.zip`
-  (MD5 `3fce172403c27274e59723bbb9f6d8e9`, 12288 Bytes).
-- Ergebnis: Logik, Menü, Icons, Animation und Timing sind 1:1 das Original.
-
-## Build ohne Emscripten/Docker/root
+## Build ohne Emscripten/Docker/root (2026-10-11, gilt weiter)
 
 Statt Emscripten wurde **Zig** (`zig cc`, `wasm32-freestanding`) gewählt: ein
-einzelnes ~45-MB-Binary, kein root, kein 1,5-GB-Image — passt auch auf eine
-volle Platte. `emu/build.sh` ist reproduzierbar.
+einzelnes ~45-MB-Binary, kein root, kein 1,5-GB-Image. `emu/build.sh` ist
+reproduzierbar.
 
-## Timing
+## Storage- und Theme-Entscheidungen (2026-10-11, weiterhin gültig)
 
-Schrittbasiert kalibriert (~5,65 µs/Schritt). Kein `sleep` im HAL, damit das
-Timing im Browser deterministisch und speed-skalierbar bleibt.
+- **localStorage-Keys zentral** in `src/storage/keys.ts` (früher überschrieben sich
+  alle Einstellungen als Literal `"***"`).
+- **Kein Auto-Reload bei SW-Updates** (network-first SW; ein Reload erzeugte einen
+  zweiten Spinner).
+- **Offline ab dem ersten Besuch** über `dist/precache.json`.
+- **Theme ohne Flash**: `public/theme-init.js` setzt `body[data-bg]` vor dem Paint.
+- **Hintergrund „Auto"**: folgt der Tageszeit (`blossom`/`day`/`dusk`/`night`/
+  `midnight`), 60-s-Intervall wendet nur bei Wechsel neu an.
 
-## Lizenz & Rechtliches
+## Lizenz & Rechtliches (gilt weiter)
 
-- TamaLIB ist **GPLv2**. Für privaten Gebrauch unkritisch; eine Veröffentlichung
-  müsste die Lizenzpflichten erfüllen.
-- ROM und Firmware nur für **privaten Gebrauch**, keine öffentliche Distribution.
+- TamaLIB ist **GPLv2** → dieses Projekt ebenfalls GPLv2.
+- ROM/Firmware nur für **privaten Gebrauch**, nicht im Repo, keine Distribution.
 
-## Nicht abwehrbar
+## Icons (2026-10-11, gilt weiter)
 
-Geräteuhr-Manipulation und Browser-Throttling bei inaktivem Tab beeinflussen die
-Echtzeit; der Frame-Loop klemmt große Deltas, um Sprünge zu begrenzen.
-
-## Icons
-
-Die 8 Menü-Icons sind beim P1 **feste LCD-Segmente** und nicht als Bitmap im ROM —
-der Emulator liefert dafür also keine Grafik (`icons()` bleibt leer; die ROM zeichnet
-ihr aktives Menü-Icon selbst im 32×16-Raster). Für die sichtbare Icon-Leiste werden
-die echten P1-Icon-Grafiken aus dem Open-Source-Projekt
-`GMMan/flipperzero-tamagotch-p1` (`icons/icon_0..7.png`) verwendet; der weiße
-Hintergrund wird zur Laufzeit per Luminanz weggekeyt. Lizenz dort nicht eindeutig
-ausgewiesen — für privaten Gebrauch unkritisch. Aktive Icons voll, inaktive dezent.
-
-## Storage & Updates (2026-10-11)
-
-- **localStorage-Keys zentral** in `src/storage/keys.ts`. Vorher waren
-  `LANG_KEY`/`SOUND_KEY`/`SHELL_KEY`/`BG_KEY` alle das Literal `"***"` und
-  überschrieben sich gegenseitig; seither überlebt jede Einstellung einen Reload.
-- **Kein Auto-Reload bei SW-Updates**: der `controllerchange`-Reload erzeugte
-  beim SW-Wechsel einen zweiten Lade-Spinner. Der SW ist network-first, Inhalte
-  sind also ohnehin frisch.
-- **Offline ab dem ersten Besuch**: `dist/precache.json` (Build-Artefakt,
-  `scripts/gen-precache.mjs`) listet alle Assets; der SW cached sie im `install`.
-- **Theme ohne Flash**: `public/theme-init.js` (klassisches Script direkt nach
-  `<body>`) setzt `body[data-bg]` vor dem ersten Paint; die Guide-Seite folgt so
-  demselben Theme wie die Startseite.
-
-## Hintergrund "Auto" (2026-10-11)
-
-- `forest` ist raus; an letzter Stelle der Swatches steht **Auto**. Es speichert die
-  Auswahl `auto` und zeigt das zur Uhrzeit passende Theme:
-  `05–09 blossom` (Morgen), `09–17 day`, `17–20 dusk`, `20–23 night`, sonst `midnight`.
-- Auflösung in `src/theme.ts` (`phaseForHour`/`resolveTheme`) und – für den
-  flackerfreien Start – dupliziert in `public/theme-init.js`.
-- Bei `auto` prüft ein 60-s-Intervall, ob die Tageszeit ein anderes Theme verlangt
-  (nur dann wird neu angewendet, damit das Gras nicht ständig neu aufgebaut wird).
-
-## Konto & Cloud-Spielstand (2026-10-11)
-
-- Weg: **Cloudflare Worker + KV** statt eigenem Server oder Supabase, weil die Domain
-  ohnehin über Cloudflare läuft → `/api/save` liegt same-origin (kein CORS). Entwurf:
-  [AUTH-SYNC.md](./AUTH-SYNC.md).
-- Anmeldung über **Google Identity Services** (ID-Token); der Worker prüft die Signatur
-  gegen Googles JWKS. Kein Secret im Worker, keins im Browser.
-- **Kein Merging**: Snapshot + Zeitstempel, „der neuere gewinnt"; das andere Gerät holt
-  beim Start per catch-up bis „jetzt" auf. Last-Write-Wins prüft der Server.
-- Die Funktion ist **standardmäßig aus** (`src/auth/config.ts`: leere Client-ID) — kein
-  UI, keine Requests. Zum Aktivieren: Google-Client-ID eintragen, KV-Namespace anlegen,
-  Worker deployen (siehe `worker/README.md`).
-- CSP in `deploy/nginx.conf` erlaubt `accounts.google.com` bereits (sonst würde GIS
-  blockiert).
+Die 8 P1-Menü-Icons sind feste LCD-Segmente, keine Bitmap im ROM (`icons()` bleibt
+leer). Die sichtbare Icon-Leiste nutzt die Grafiken aus
+`GMMan/flipperzero-tamagotch-p1` (Lizenz dort unklar, privater Gebrauch).

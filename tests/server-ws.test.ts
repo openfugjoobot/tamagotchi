@@ -28,13 +28,13 @@ class FakePet {
 }
 
 /**
- * A pet source: user "user-1" owns pet "pet-1"; any other id is unknown. This
- * is the shape `main.ts` fills from `Repo.listPets`.
+ * A pet source: token sub "user-1" owns pet "pet-1"; any other sub is unknown.
+ * The loader returns the internal `userId` (the push-gate key) alongside the pet.
  */
 function loadPet(pet: FakePet) {
-  return async (userId: string, petId: string): Promise<{ pet: FakePet; alive: boolean; ageYears: number }> => {
-    if (userId !== "user-1" || petId !== "pet-1") throw new Error("unknown pet");
-    return { pet, alive: true, ageYears: 2 };
+  return async (sub: string, petId: string): Promise<{ pet: FakePet; alive: boolean; ageYears: number; userId: string }> => {
+    if (sub !== "user-1" || petId !== "pet-1") throw new Error("unknown pet");
+    return { pet, alive: true, ageYears: 2, userId: "uuid-user-1" };
   };
 }
 
@@ -119,7 +119,7 @@ describe("WsHub", () => {
     // The server should close the socket (auth failure), not leave it hanging.
     await new Promise<void>((r) => ws.on("close", () => r()));
     expect(ws.readyState).toBe(WebSocket.CLOSED);
-    expect(hub.hasLiveConnection("user-1")).toBe(false);
+    expect(hub.hasLiveConnection("uuid-user-1")).toBe(false);
   });
 
   it("streams frames on change and marks the user live", async () => {
@@ -132,7 +132,8 @@ describe("WsHub", () => {
     ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
     const frame = await frameP;
     expect(frame.lcd).toHaveLength(512);
-    expect(hub.hasLiveConnection("user-1")).toBe(true);
+    // The gate is keyed by the internal id the loader returned, not the token sub.
+    expect(hub.hasLiveConnection("uuid-user-1")).toBe(true);
 
     // A second frame arrives only after the LCD actually changes.
     pet.setPixel(0, 1);
@@ -191,10 +192,10 @@ describe("WsHub", () => {
     await new Promise<void>((r) => ws.on("open", () => r()));
     ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
     await waitForMessage(ws, (m) => m.t === "state");
-    expect(hub.hasLiveConnection("user-1")).toBe(true);
+    expect(hub.hasLiveConnection("uuid-user-1")).toBe(true);
     ws.close();
     await new Promise<void>((r) => ws.on("close", () => r()));
-    expect(hub.hasLiveConnection("user-1")).toBe(false);
+    expect(hub.hasLiveConnection("uuid-user-1")).toBe(false);
   });
 
   it("ignores presses before a successful hello", async () => {

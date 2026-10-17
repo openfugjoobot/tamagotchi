@@ -1,5 +1,5 @@
 // Prüft Googles ID-Token (JWT) ohne Secrets: Signatur gegen das öffentliche JWKS,
-// danach aud/iss/exp/sub. Läuft unverändert in Cloudflare Workers und in Node (Tests).
+// danach aud/iss/exp/sub. Läuft in Node (und in Tests unverändert mit injiziertem fetch).
 
 export interface TokenClaims {
   sub: string;

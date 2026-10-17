@@ -43,13 +43,25 @@ export interface LoadedPet {
   pet: LivePet;
   alive: boolean;
   ageYears: number;
+  /**
+   * Our internal `users.id` for the authenticated caller — NOT the Google
+   * `sub` the token carried. The push gate is keyed by this id (the sweeper
+   * looks up beeps' owner as `pets.user_id`), so binding by the raw `sub` would
+   * leave the gate permanently open and push a notification even to a watching
+   * user. The loader resolves it (Task-13 e2e fix).
+   */
+  userId: string;
 }
 
 export interface WsHubDeps {
   /** Verify a Google ID token. Defaults to the real JWKS verifier. */
   verify?: (token: string, clientId: string) => Promise<TokenClaims>;
-  /** Resolve the pet named in `hello`, scoped to the authenticated user. */
-  loadPet: (userId: string, petId: string) => Promise<LoadedPet>;
+  /**
+   * Resolve the pet named in `hello`, scoped to the authenticated user. The
+   * first argument is the token's Google `sub`; the returned `userId` is our
+   * internal `users.id` (the push-gate key).
+   */
+  loadPet: (sub: string, petId: string) => Promise<LoadedPet>;
   /** Google client id used as the token audience. */
   clientId: string;
 }
@@ -161,10 +173,10 @@ export class WsHub {
       ws.close(4400, "hello requires token and petId");
       return;
     }
-    let userId: string;
+    let sub: string;
     try {
       const claims = await this.verify(token, this.clientId);
-      userId = claims.sub;
+      sub = claims.sub;
     } catch {
       ws.close(4401, "unauthenticated");
       return;
@@ -172,14 +184,16 @@ export class WsHub {
 
     let loaded: LoadedPet;
     try {
-      loaded = await this.loadPet(userId, petId);
+      // The loader takes the token's `sub` and resolves it to our internal
+      // users.id; that resolved id is what the push gate keys on.
+      loaded = await this.loadPet(sub, petId);
     } catch {
       ws.close(4404, "unknown pet");
       return;
     }
 
     const binding: Binding = {
-      userId,
+      userId: loaded.userId,
       petId,
       pet: loaded.pet,
       alive: loaded.alive,
@@ -187,7 +201,7 @@ export class WsHub {
       lastLcd: null,
     };
     this.bindings.set(ws, binding);
-    this.addLive(userId, ws);
+    this.addLive(loaded.userId, ws);
 
     this.send(ws, { t: "state", alive: binding.alive, ageYears: binding.ageYears });
     this.pushFrame(ws, binding);

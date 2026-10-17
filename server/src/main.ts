@@ -152,12 +152,18 @@ export async function startServer(deps: StartServerDeps): Promise<ServerHandle> 
   const hub = new WsHub({
     verify,
     clientId: deps.clientId,
-    loadPet: async (userId, petId): Promise<LoadedPet> => {
-      const row = await repo.getPet(userId, petId); // where id=$1 and user_id=$2
+    loadPet: async (sub, petId): Promise<LoadedPet> => {
+      // `hello` carries the Google `sub` (from the verified token), not our
+      // internal `users.id`. Resolve it to the internal id first — exactly like
+      // the REST API does — so `repo.getPet` (where id=$1 and user_id=$2) is
+      // scoped by the real owner. Passing the raw `sub` as `user_id` matched
+      // nothing and made every `hello` fail with 4404 `unknown pet`.
+      const user = await repo.upsertUser({ sub });
+      const row = await repo.getPet(user.id, petId); // where id=$1 and user_id=$2
       if (!row) throw new Error("unknown pet");
       const entry = live.get(petId);
       if (!entry) throw new Error("pet not live");
-      return { pet: entry.pet, alive: row.alive, ageYears: row.age_years };
+      return { pet: entry.pet, alive: row.alive, ageYears: row.age_years, userId: user.id };
     },
   });
 
