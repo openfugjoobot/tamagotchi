@@ -349,6 +349,31 @@ describe("sendPendingPush — wired to the real Repo (pg-mem)", () => {
   async function subCount(pool: Queryable, userId: string): Promise<number> {
     return (await new Repo(pool).listPushSubs(userId)).length;
   }
+  /**
+   * Count **all** subscription rows, regardless of owner.
+   *
+   * The per-user `subCount` above is not enough to catch a bare-endpoint delete:
+   * a `delete … where endpoint = $1` with no `user_id` predicate removes *both*
+   * owners' rows and still leaves the beep owner's count at 0, so the vacuous
+   * assertion `subCount(a) === 0` passes on the very regression it exists to
+   * catch (Task-8 review R1). A global count is the cheap discriminator: a
+   * correct owner-scoped delete drops 2 → 1, a bare delete drops it 2 → 0.
+   */
+  async function totalSubCount(pool: Queryable): Promise<number> {
+    const { rows } = await pool.query<{ n: string | number }>("select count(*) as n from push_subs");
+    return Number(rows[0].n);
+  }
+  /**
+   * The `(id, userId)` of every surviving subscription row — asserted instead of
+   * an inferred shape so the *identity* of the surviving row is pinned, not just
+   * that some row survived.
+   */
+  async function subRows(pool: Queryable): Promise<Array<{ id: string; userId: string }>> {
+    const { rows } = await pool.query<{ id: string; userId: string }>(
+      `select id, user_id as "userId" from push_subs order by user_id`,
+    );
+    return rows;
+  }
   async function pendingCount(pool: Queryable): Promise<number> {
     return (await new Repo(pool).pendingBeeps()).length;
   }
@@ -424,8 +449,10 @@ describe("sendPendingPush — wired to the real Repo (pg-mem)", () => {
     // impossible (the second insert stole the first row); with the per-user key
     // both coexist.
     const shared = "https://push.example/shared";
-    await repo.addPushSub(a.id, { endpoint: shared, p256dh: "ka", auth: "aa" });
-    await repo.addPushSub(b.id, { endpoint: shared, p256dh: "kb", auth: "ab" });
+    const subA = await repo.addPushSub(a.id, { endpoint: shared, p256dh: "ka", auth: "aa" });
+    const subB = await repo.addPushSub(b.id, { endpoint: shared, p256dh: "kb", auth: "ab" });
+    // Preconditions: exactly two rows share the endpoint, one per owner.
+    expect(await totalSubCount(pool)).toBe(2);
     expect(await subCount(pool, a.id)).toBe(1);
     expect(await subCount(pool, b.id)).toBe(1);
 
@@ -442,9 +469,17 @@ describe("sendPendingPush — wired to the real Repo (pg-mem)", () => {
 
     await sendPendingPush({ repo, sender: gone, hasLiveConnection: () => false, vapid: VAPID });
 
-    // A's dead row is gone; B's row with the same endpoint survives untouched.
+    // Non-vacuous: exactly ONE of the two rows is gone. A bare-endpoint delete
+    // (`… where endpoint = $1`, dropping the owner predicate — the exact
+    // regression this test guards) removes both and fails *this* assertion,
+    // whereas the owner-scoped delete drops 2 → 1.
+    expect(await totalSubCount(pool)).toBe(1);
+    // A's dead row is gone; B's row with the same endpoint survives untouched —
+    // pinned by identity, not merely by a surviving count.
+    expect(await subRows(pool)).toEqual([{ id: subB.id, userId: b.id }]);
     expect(await subCount(pool, a.id)).toBe(0);
     expect(await subCount(pool, b.id)).toBe(1);
+    void subA;
   });
 
   it("does not push while the owner has a live connection (real Repo)", async () => {
