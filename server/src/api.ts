@@ -22,8 +22,8 @@
  * entrypoint in Task 9 wires the real one).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { verifyIdToken, type TokenClaims } from "./auth";
-import type { BeepRow, Device, PetRow } from "./db/repo";
+import { verifyIdToken, type TokenClaims } from "./auth.js";
+import type { BeepRow, Device, PetRow } from "./db/repo.js";
 
 /** The repo surface the API consumes. Satisfied structurally by `Repo`. */
 export interface ApiRepo {

@@ -174,6 +174,19 @@ export class Repo {
   }
 
   /**
+   * Every still-living pet across all users — the entrypoint's rehydration set.
+   * Dead pets are excluded: they never advance again, so hydrating them would
+   * only burn tick budget (Task-3 F4). Oldest-first keeps catch-up ordering
+   * stable across boots.
+   */
+  async listLivingPets(): Promise<PetRow[]> {
+    const { rows } = await this.pool.query<PetRow>(
+      `select * from pets where alive = true order by last_tick_at asc`,
+    );
+    return rows;
+  }
+
+  /**
    * One pet, **scoped to its owner**. The `user_id` predicate is not optional:
    * a load that only matched `id` would bind a foreign pet. Returns null when the
    * pet does not exist *or* belongs to someone else, so callers cannot tell the

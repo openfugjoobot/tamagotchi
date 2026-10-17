@@ -1,0 +1,11 @@
+# Keep the Docker build context small and deterministic.
+node_modules
+dist
+.git
+.worktrees
+.vite
+*.local
+server/.secrets
+coverage
+
+# Firmware is .gitignored but needed in the image; do NOT ignore public/emu.

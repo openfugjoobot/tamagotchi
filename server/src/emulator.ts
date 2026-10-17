@@ -10,8 +10,13 @@
  * `dead()` is latched: once the angel frame has been seen it stays true, since
  * the death image can flicker (stars animate) and a pet never comes back.
  */
-import { isAngelFrame } from "@/emu/death";
-import { TS_PER_STEP } from "@/emu/clock";
+// Runtime-resolvable relative specifiers, NOT the `@/emu/*` alias: the alias is
+// known only to vitest + tsconfig, so a plain `node dist/server/src/main.js` run
+// would die with ERR_MODULE_NOT_FOUND on the first import (Task-3 F2). The `.js`
+// suffix is the ESM-correct specifier for the emitted file; vitest and `tsc`
+// both resolve `death.js` back to `death.ts`.
+import { isAngelFrame } from "../../src/emu/death.js";
+import { TS_PER_STEP } from "../../src/emu/clock.js";
 
 export const LCD_WIDTH = 32;
 export const LCD_HEIGHT = 16;

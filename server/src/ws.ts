@@ -10,9 +10,11 @@
  *                 checked to belong to that user. Only then is the socket bound
  *                 to a `(userId, petId)` pair and registered as "live".
  *   3. streaming — the hub pushes `{t:"frame", lcd}` whenever the pet's LCD
- *                 changed and `{t:"state", alive, ageYears}` on bind and on
- *                 change; `{t:"press", btn}` from the client is forwarded to the
- *                 bound pet.
+ *                 changed and `{t:"state", alive, ageYears}` on bind *and*
+ *                 whenever the life-state (alive) flips — so a pet dying with
+ *                 the tab open emits `state{alive:false}` (Task-6 Finding B).
+ *                 `{t:"press", btn}` from the client is forwarded to the bound
+ *                 pet.
  *
  * `hasLiveConnection(userId)` is the push gate (spec §4): if the user is
  * watching, they already see and hear the beep, so no system notification is
@@ -25,7 +27,7 @@
 import type { Server as HttpServer } from "node:http";
 import type { Server as HttpsServer } from "node:https";
 import { WebSocketServer, WebSocket } from "ws";
-import { verifyIdToken, type TokenClaims } from "./auth";
+import { verifyIdToken, type TokenClaims } from "./auth.js";
 
 export type Btn = "left" | "middle" | "right";
 const BTNS: readonly Btn[] = ["left", "middle", "right"];
@@ -118,14 +120,25 @@ export class WsHub {
 
   /**
    * Signal that a pet's LCD may have changed. Call after each tick: every bound
-   * socket whose pet changed receives a fresh `frame` (and a `state` if the
-   * life-state moved). Frames are only sent on actual change, so an idle pet
-   * costs nothing.
+   * socket whose pet changed receives a fresh `frame`, and a `state` whenever
+   * the pet's life-state flipped since the last emission. Frames are only sent
+   * on actual change, so an idle pet costs nothing.
+   *
+   * `alive` is supplied by the caller (the entrypoint reads `pet.dead()`): the
+   * hub itself cannot inspect a `LivePet` for death, so the tick loop passes the
+   * freshly-determined flag. Omitting it keeps the previously-known state.
    */
-  notifyChanged(): void {
+  notifyChanged(alive?: (petId: string) => boolean): void {
     for (const client of this.wss?.clients ?? []) {
       const binding = this.bindings.get(client);
       if (!binding) continue;
+      if (alive) {
+        const nowAlive = alive(binding.petId);
+        if (nowAlive !== binding.alive) {
+          binding.alive = nowAlive;
+          this.send(client, { t: "state", alive: binding.alive, ageYears: binding.ageYears });
+        }
+      }
       this.pushFrame(client, binding);
     }
   }

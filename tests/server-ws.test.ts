@@ -12,11 +12,15 @@ const NOW = Date.UTC(2026, 0, 1, 12, 0, 0);
 class FakePet {
   lcdBuf = new Uint8Array(512);
   presses: string[] = [];
+  alive = true;
   lcd(): Uint8Array {
     return this.lcdBuf;
   }
   press(btn: string): void {
     this.presses.push(btn);
+  }
+  dead(): boolean {
+    return !this.alive;
   }
   setPixel(i: number, v: number): void {
     this.lcdBuf[i] = v;
@@ -147,6 +151,24 @@ describe("WsHub", () => {
     ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
     const state = await stateP;
     expect(state).toMatchObject({ t: "state", alive: true, ageYears: 2 });
+  });
+
+  it("emits state{alive:false} when a pet dies, not only on bind (Task-6 Finding B)", async () => {
+    const pet = new FakePet();
+    await startHub(pet);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise<void>((r) => ws.on("open", () => r()));
+    ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
+    // The bind-time state says the pet is alive.
+    const initial = await waitForMessage(ws, (m) => m.t === "state");
+    expect(initial.alive).toBe(true);
+
+    // The pet dies: the next notifyChanged must push state{alive:false}.
+    pet.alive = false;
+    const deadState = waitForMessage(ws, (m) => m.t === "state" && m.alive === false);
+    hub.notifyChanged(() => pet.alive);
+    const msg = await deadState;
+    expect(msg).toMatchObject({ t: "state", alive: false });
   });
 
   it("forwards a button press to the bound pet", async () => {
