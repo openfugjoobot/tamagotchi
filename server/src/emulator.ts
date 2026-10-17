@@ -22,24 +22,6 @@ export const LCD_WIDTH = 32;
 export const LCD_HEIGHT = 16;
 export const ICON_COUNT = 8;
 
-/** Number of slots in the glue's tone-event ring (`emu/src/glue.c`, TONE_RING_CAP). */
-export const TONE_RING_CAP = 512;
-
-/**
- * One piezo transition, exactly as the HAL glue recorded it: the emulator
- * timestamp (µs) of the change plus the resulting `(freq, play)` state. `freq`
- * is the raw glue value in dHz (0 = none), `play` the enable flag — the same
- * units `buzzer()` reports, so the client treats both paths identically.
- */
-export interface ToneEvent {
-  /** Emulator time of the transition, in µs (`emu_now()` at the change). */
-  at: number;
-  /** Raw glue frequency in dHz (0 = no frequency set). */
-  freq: number;
-  /** Whether the piezo was switched audible at this transition. */
-  play: boolean;
-}
-
 /** Buttons A=left, B=middle, C=right (same mapping as the browser wrapper). */
 export type Btn = "left" | "middle" | "right";
 const BTN_INDEX: Record<Btn, number> = { left: 0, middle: 1, right: 2 };
@@ -102,12 +84,6 @@ interface RawExports {
   emu_en(): number;
   emu_take_buzzer(): number;
   emu_now(): number;
-  emu_tone_head(): number;
-  emu_tone_tail(): number;
-  emu_tone_ts(slot: number): number;
-  emu_tone_freq(slot: number): number;
-  emu_tone_play(slot: number): number;
-  emu_tone_consume(): number;
 }
 
 /**
@@ -470,42 +446,5 @@ export class PetEmulator {
    */
   buzzer(): { freq: number; on: boolean } {
     return { freq: this.ex.emu_freq(), on: this.ex.emu_en() !== 0 };
-  }
-
-  /**
-   * Drain every tone event the ROM produced since the previous call, in exact
-   * emission order, and consume them from the WASM ring.
-   *
-   * A tone event is a **transition** of the piezo state `(freq, play)` — the
-   * precise instants `hal->set_frequency` / `hal->play_frequency` changed the
-   * sound, each stamped with the emulator time (`emu_now()`, in µs) at which it
-   * happened. This is the *lossless* view of the buzzer: unlike `buzzer()` (a
-   * level sampled at some cadence, which can miss a chirp shorter than the
-   * interval) the ring records every transition, so nothing between two reads
-   * is lost. The redundant register writes the ROM makes each poll step are
-   * already collapsed to transitions in the glue, so a read returns only the
-   * state changes, never the write avalanche.
-   *
-   * The glue keeps a 512-slot ring; the reader here walks `tail → head` and then
-   * advances the consume mark. `freq` is the raw glue value (dHz, 0 = none) and
-   * `play` is the enable flag — the same units `buzzer()` reports, so the client
-   * consumes both paths identically. `at` is the emulator timestamp in µs
-   * (u32, wraps at ~71.6 min of emulated time; the tick loop advances time and
-   * reads every tick, so a wrap is never observed across a read).
-   */
-  takeToneEvents(): ToneEvent[] {
-    const head = this.ex.emu_tone_head() >>> 0;
-    let tail = this.ex.emu_tone_tail() >>> 0;
-    const out: ToneEvent[] = [];
-    while (tail !== head) {
-      out.push({
-        at: this.ex.emu_tone_ts(tail),
-        freq: this.ex.emu_tone_freq(tail),
-        play: this.ex.emu_tone_play(tail) !== 0,
-      });
-      tail = (tail + 1) % TONE_RING_CAP;
-    }
-    this.ex.emu_tone_consume();
-    return out;
   }
 }

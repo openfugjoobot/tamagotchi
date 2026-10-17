@@ -153,61 +153,30 @@ später nicht versehentlich zurückgedreht wird.
   Zeit-Invariante (Tastendruck münzt keine Spielzeit, die Uhr folgt nur der
   Wanduhr) bleibt unberührt. Der Tick ruft den Sampler ebenfalls auf; die
   Level-Diff im Hub macht die Überlappung idempotent.
-- **Der Client re-artikuliert gleiche Töne:** der Server schickt nur den Pegel,
-  zwei gleiche Chirps kommen als on→off→on. `src/emu/audio.ts` startet die
-  Wellenform bei einem **frischen On-Edge** neu (Oszillator stop+start, Phase 0),
-  statt die Verstärkung nur erneut anzuheben — sonst verschmölzen zwei gleich
-  hohe Chirps zu einem durchgehenden Ton. `state().articulations` zählt die
-  Toneinsätze (Diagnose/Tests).
+- **Der Client ist ein schlichter Pegel-Gate.** `src/emu/audio.ts` hält **einen**
+  Dauerlauf-Oszillator, schaltet ihn über die Verstärkung an/aus und schreibt die
+  Frequenz nur bei Wechsel — keine Node-Neuerzeugung, keine Re-Artikulation, keine
+  Zeitplanung. Ein kurzer Chirp, der zwischen zwei 20-ms-Samples beginnt und endet,
+  wird dabei bewusst nicht mehr rekonstruiert; der Pegel-Pfad ist die einzige
+  Tonquelle (siehe „Ton-Pfad wieder minimal" unten).
 
-## Ton-Ereignisstrom ist verlustfrei: Ring im Glue, Replay im Client (2026-10-17)
+## Ton-Pfad wieder minimal: ein Pegel, ein Oszillator (2026-10-18)
 
-- **Das Problem mit dem Pegel.** Der bisherige Ton-Pfad überträgt nur den *Zustand*
-  (`{t:"buzzer", freq, on}`), abgetastet alle 20 ms. Ein Chirp, der zwischen zwei
-  Abtastungen beginnt und endet, ist dann verschwunden — bei 20 ms selten, aber
-  möglich; bei jeder gröberen Kadenz häufiger. Ein Pegel ist grundsätzlich keine
-  verlustfreie Aufzeichnung.
-- **Der Ring.** Die HAL-Glue (`emu/src/glue.c`) zeichnet jetzt **jeden** Piezo-Übergang
-  auf: `h_set_frequency`/`h_play_frequency` pushen `(Zeitstempel, Frequenz, Enable)`
-  in einen 512-Slot-Ring; gelesen wird über `emu_tone_head/tail/ts/freq/play/consume`,
-  verdrahtet in `PetEmulator.takeToneEvents()`.
-- **Nur Transitionen, keine Write-Lawine.** Das ROM schreibt seine Buzzer-Register
-  in einer engen Poll-Schleife. Am echten ROM gemessen: **7,3 Mio. Writes in 200 s**
-  gegen **786 echte Bursts** — identische Folge-Writes sind kein Ton-Ereignis. Die
-  Glue kollabiert deshalb auf echte `(freq, play)`-**Übergänge** (2349 Events / 20 min,
-  bis zu 2 pro 125-ms-Tick). Erst das ist verlustfrei statt redundant.
-- **Der Zeitstempel** ist die Emulator-Uhr (`now_us`, µs), gesetzt von TamaLIBs
-  `h_sleep_until`/`h_get_timestamp` — **nicht** die Wanduhr des Tabs. Der Client
-  deutet sie relativ: `at - at0` des Batches wird zur Wanduhr-Verzögerung.
-- **Der Transport:** `{t:"tones", ev:[{at,freq,play},…]}` pro Abtastung, gesendet
-  nur wenn der Ring Events liefert. Der bestehende `{t:"buzzer"}`-Pegel bleibt als
-  **Rückfall** (Alt-Server ohne Ring) und für die Offline-Stille.
-- **Der Replay** (`src/emu/tone-replay.ts`) legt jede Transition auf die
-  **AudioContext-Uhr** und treibt denselben Piezo. Ein neuer Batch bricht den
-  alten Plan ab; offline stoppt der Replayer und erzwingt Stille. Gemessen am
-  echten ROM: kein Batch endet hörbar, wenn der nächste beginnt (0 von 53), ein
-  abgebrochener Plan hinterlässt also nie einen hängenden Ton.
-  - **Warum nicht `setTimeout`:** eine geplante Wanduhr-Verzögerung feuert
-    *frühestens* nach ihrer Zeit — im geladenen Event-Loop gemessen bis zu
-    **9,6 ms** zu spät (p95 7,9 ms, Mittel 4,8 ms über den ganzen Burst). Damit
-    kollabiert der 15-µs-Blitz zu einem Klick und der 10,8-ms-Burst wird auf die
-    tatsächliche Auslieferungszeit gestreckt. Der Timer ist jetzt **nur noch ein
-    Wecker**; die *hörbare* Zeit setzt WebAudio.
-  - **Absolut statt relativ:** `planTonesAt(ev, at0Sec)` rechnet
-    `at0Sec + (at - at0)/1e6` Sekunden; `at0Sec` ist `ctx.currentTime` beim
-    Eintreffen des Batches. Die absolute Position wird **nie in die Vergangenheit
-    gedrückt** (Untergrenze = der Anker): ein verspätet angekommener Batch kommt
-    sofort statt um die Ankunftslatenz verschoben, und ein Batch wird **nie
-    gestreckt** — die Spanne bleibt exakt die Emulator-Spanne.
-  - **Sample-accurate Senke** (`src/emu/audio.ts`): `update(freq, on, atSec?)`
-    startet den frischen Oszillator mit `osc.start(atSec)`,
-    `frequency.setValueAtTime(hz, atSec)` und `gain.setValueAtTime(0.05, atSec)`;
-    Abklingen auf `0.0001` zur Off-Zeit. Ohne `atSec` (Legacy-Pegelpfad) gilt
-    „jetzt". Fehlt eine Uhr noch (keine Nutzergeste → kein AudioContext), liest
-    `main.ts` `performance.now()/1000` als Ersatzanker; `state().nowSec` meldet
-    die echte Uhr.
-- **Kostenlos bei Stille:** ein stilles Tier erzeugt keine Übergänge, also keine
-  `tones`-Nachricht; nur die tatsächlichen Zustandswechsel gehen über die Leitung.
+- **Vereinfachung.** Der zwischenzeitlich aufgebaute **verlustfreie Ton-Ereignisstrom**
+  (Ring in der Glue, `takeToneEvents` im Emulator, `{t:"tones"}` auf der Leitung,
+  Replay über die AudioContext-Uhr) wurde zurückgebaut. Der Ton-Pfad ist wieder der
+  klassische minimale Piezo: der Server streamt den **Pegel** `{t:"buzzer", freq, on}`
+  (20-ms-Sampler), der Client hält **einen** Square-Oszillator, gated per Gain,
+  Frequenz nur bei Wechsel, **keine Node-Neuerzeugung**.
+- **Was entfernt wurde:** `src/emu/tone-replay.ts` (Replayer/Planer),
+  `PetEmulator.takeToneEvents` + `TONE_RING_CAP`, `WsHub.pushTones`,
+  `LiveClient.onTones`, `main.ts`-Replayer-Verdrahtung und der 512-Slot-Ring in
+  `emu/src/glue.c` (inkl. `emu_tone_*`-Exporte). Netto **−1465 Zeilen**.
+- **Warum:** der Ring/Replay löste ein Randproblem (ein Chirp kürzer als das
+  20-ms-Abtastintervall) mit einem erheblichen Maschinenpark (Ring + Emulator-Reads
+  + Protokollerweiterung + Audiouhr-Planung + `setTimeout`-Wecker). Bei der
+  gemessenen Realität (36/36 Bursts bei 20 ms) genügt der Pegel-Gate; die
+  Re-Artikulation gleich bleibender Töne ist bewusst aufgegeben.
 
 ## Tod wird am Bild erkannt (2026-10-17)
 

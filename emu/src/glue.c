@@ -14,65 +14,6 @@ static bool_t buzzer_en = 0;
 static bool_t buzzer_latch = 0;
 static timestamp_t now_us = 0;
 
-/*
- * Verlustfreier Ton-Ereignisring.
- *
- * Jeder HAL-Aufruf, der den Piezo veraendert (set_frequency/play_frequency),
- * wird als (Zeitstempel, Frequenz, Enable) aufgezeichnet. Der bisherige Pfad
- * liefert nur den *Pegel* (buzzer_freq/buzzer_en) und ein Latch (buzzer_latch),
- * das vom Abtaster konsumiert wird; beides ist verlustbehaftet: ein Chirp, der
- * zwischen zwei Abtastungen beginnt und endet, ist verschwunden, bevor er
- * gelesen wird. Der Ring haelt die exakte Reihenfolge und Dauer fest.
- *
- * Der Ring fasst TONE_RING_CAP Eintraege; laeuft er voll, ueberschreibt die
- * aeltesten Eintraege (der Leser holt jeweils alles ab, was seit dem letzten
- * Aufruf dazukam). Der Zeiger wird nur von einem einzigen Leser (dem Server)
- * vorgespult, daher genuegt ein einfacher Schreib-/Lese-Index.
- */
-#define TONE_RING_CAP 512
-
-typedef struct {
-  u32_t ts;    /* Emulatorzeit in us (now_us) zum Zeitpunkt der Aenderung */
-  u32_t freq;  /* zuletzt gesetzte Frequenz in dHz (0 = noch keine) */
-  u32_t play;  /* 1 = hörbar, 0 = still */
-} tone_ev_t;
-
-static tone_ev_t tone_ring[TONE_RING_CAP];
-static u32_t tone_head = 0;   /* naechster Schreibplatz */
-static u32_t tone_tail = 0;   /* aeltester noch nicht gelesener Eintrag */
-
-static void tone_push(u32_t play) {
-  tone_ring[tone_head].ts = now_us;
-  tone_ring[tone_head].freq = buzzer_freq;
-  tone_ring[tone_head].play = play;
-  tone_head = (tone_head + 1u) % TONE_RING_CAP;
-  /* Voll: aeltesten Eintrag verwerfen, damit der Ring nie ueberlaeuft. */
-  if (tone_head == tone_tail) tone_tail = (tone_tail + 1u) % TONE_RING_CAP;
-}
-
-/*
- * Letzter aufgezeichneter Zustand (freq, play). Das ROM schreibt seine
- * Buzzer-Register in einer engen Poll-Schleife: dieselbe (freq, play)-Kombi
- * wiederholt sich millionenfach, ohne dass sich der Klang aendert. Nur eine
- * echte *Transition* ist ein Ton-Ereignis — ein Push bei jedem Write waere
- * nicht verlustfrei, sondern eine Lawine redundanter Eintraege (gemessen: 7,3
- * Mio. Writes in 200 s gegen 786 echte Bursts am selben ROM). Wir zeichnen
- * deshalb nur auf, wenn sich (freq, play) gegenueber dem letzten Eintrag
- * aendert; die Reihenfolge und die exakten Zeitstempel der Uebergaenge bleiben
- * erhalten.
- */
-static u32_t tone_last_freq = 0;
-static u32_t tone_last_play = 0;
-static bool_t tone_have_last = 0;
-
-static void tone_emit(u32_t play) {
-  if (tone_have_last && tone_last_freq == buzzer_freq && tone_last_play == play) return;
-  tone_have_last = 1;
-  tone_last_freq = buzzer_freq;
-  tone_last_play = play;
-  tone_push(play);
-}
-
 /* ---- HAL ---- */
 static void *h_malloc(u32_t size) { (void)size; return 0; }
 static void h_free(void *p) { (void)p; }
@@ -86,16 +27,10 @@ static void h_set_lcd_matrix(u8_t x, u8_t y, bool_t val) {
   if (x < LCD_WIDTH && y < LCD_HEIGHT) lcd_buf[y * LCD_WIDTH + x] = val ? 1 : 0;
 }
 static void h_set_lcd_icon(u8_t icon, bool_t val) { if (icon < ICON_NUM) icon_buf[icon] = val ? 1 : 0; }
-static void h_set_frequency(u32_t freq) {
-  buzzer_freq = freq;
-  /* Nur ein tatsaechlicher Wechsel ist ein Ton-Ereignis (kein Doppel bei
-   * wiederholtem Schreiben derselben Frequenz durch das ROM). */
-  tone_emit(buzzer_en);
-}
+static void h_set_frequency(u32_t freq) { buzzer_freq = freq; }
 static void h_play_frequency(bool_t en) {
   buzzer_en = en;
   if (en) buzzer_latch = 1;
-  tone_emit(en);
 }
 static int h_handler(void) { return 0; }
 
@@ -135,14 +70,3 @@ u32_t emu_lcd_pixels(void) {
   for (u32_t i = 0; i < LCD_WIDTH * LCD_HEIGHT; i++) n += lcd_buf[i] ? 1u : 0u;
   return n;
 }
-
-/* ---- Verlustfreier Ton-Ereignisring ---- */
-
-u32_t emu_tone_head(void) { return tone_head; }
-u32_t emu_tone_tail(void) { return tone_tail; }
-/* Zeitstempel des aeltesten nicht gelesenen Ereignisses (us); 0 wenn leer. */
-u32_t emu_tone_ts(u32_t slot) { return slot < TONE_RING_CAP ? tone_ring[slot].ts : 0; }
-u32_t emu_tone_freq(u32_t slot) { return slot < TONE_RING_CAP ? tone_ring[slot].freq : 0; }
-u32_t emu_tone_play(u32_t slot) { return slot < TONE_RING_CAP ? tone_ring[slot].play : 0; }
-/* Liest alle ausstehenden Ereignisse ab: die Gelesen-Marke rueckt auf head. */
-u32_t emu_tone_consume(void) { tone_tail = tone_head; return tone_tail; }

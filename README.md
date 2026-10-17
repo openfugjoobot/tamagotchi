@@ -47,8 +47,8 @@ See [emu/README.md](./emu/README.md).
 ## Known gaps
 
 Slot loading has no server route; server settings ids and UI ids do not match
-(only `sound`/`push` persist); no in-tab beep audio (no buzzer message on the WS
-protocol); no timeout when the live socket never delivers a frame.
+(only `sound`/`push` persist); no timeout when the live socket never delivers a
+frame.
 
 ## Licence
 

@@ -78,58 +78,10 @@ one tick. The shipped **`BUZZER_SAMPLE_MS = 20 ms`** dedicated sampler
 every burst within ~12 ms. It is **state-read only** — it never takes an emulator
 step, so it grants no emulated time.
 
-Separately, the client (`src/emu/audio.ts`) now **re-articulates** a repeated
-identical tone: a fresh on-edge restarts the oscillator (phase reset) instead of
-only bumping the gain, so two equal chirps are heard as two chirps, not one
-continuous tone.
-
-## Lossless tone-event stream (2026-10-17)
-
-Even at 20 ms a *level* sampler is not lossless: a chirp that starts and ends
-between two samples is gone. The HAL glue now records **every** piezo transition
-into a 512-slot ring (`emu/src/glue.c`, read by `PetEmulator.takeToneEvents()`),
-and the server forwards the ordered stream as `{t:"tones", ev:[{at,freq,play},…]}`.
-
-Measured on the real P1 ROM (same host, clock-set, then a running pet):
-
-- The ROM writes its buzzer registers in a tight poll loop: **7 329 141 writes**
-in 200 s, against **786 real chirp bursts**. Recording every write would be a
-write avalanche, not a recording — so the glue keeps only genuine `(freq, play)`
-**transitions**.
-- After collapsing to transitions: **2349 events / 20 min**, with at most **2**
-returned in a single 125 ms tick read (max batch observed at 20 ms sampling: 58).
-The 512-slot ring never overflows in normal operation.
-- A measured chirp is preserved exactly as a **two-tone chirp**: a ~1.7 ms
-`27307` blip (`set_frequency` off → on → off) immediately followed by a ~7 ms
-`23406` tone (`set_frequency` off → on → off). Transition timestamps rise strictly.
-- Frequencies seen as transitions: `27307`, `23406`, `32768`, `20480`, `16384`,
-`13653`, `11703` — the full ROM tone set (docs/BEEPS.md above).
-- **No hanging tone on batch supersede:** of 53 consecutive 20 ms batches, **0**
-end audible while the next begins audible, so cancelling an old replay plan can
-never leave the piezo stuck on.
-
-The client (`src/emu/tone-replay.ts`) turns each event's `at` into an
-**absolute AudioContext position** — `at0Sec + (at - at0)/1e6`, with `at0Sec`
-the `ctx.currentTime` when the batch arrived — and drives the same
-`emu/audio.ts` piezo, whose ramps (`osc.start(atSec)`,
-`frequency.setValueAtTime(hz, atSec)`, `gain.setValueAtTime(…, atSec)`) sit on
-that same clock. So a burst plays back with its real duration and shape — not
-collapsed to a click and not shifted by network latency — **sample-accurately**,
-because the audible time is the audio graph's, not the event loop's.
-
-The scheduled time is never pushed into the past: the batch anchor is a lower
-bound, so a late-arriving batch sounds immediately (no arrival-latency shift) and
-the batch span stays exactly the emulator span (no stretch).
-
-## `setTimeout` cannot hold a sample-accurate onset (2026-10-17)
-
-Measured on this host (node v26.10.0, a burst of events at deltas
-`0/1/2/5/5.5/10 ms`, 2 ms of load per hop, n = 400 bursts): replaying via
-relative `setTimeout` delays delivered each event **mean 4.84 ms, p95 7.89 ms,
-max 9.63 ms late** — far beyond the 15 µs / 1 ms structure the stream encodes.
-With the burst's last edge at 10.8 ms, that drift is the same order as the whole
-chirp, so the two-tone shape smears and the short blip collapses.
-
-Hence the timer demoted to a mere *wake-up*; the onset is set on
-`ctx.currentTime`, where WebAudio renders at the block rate (~2.7 ms at 48 kHz)
-regardless of what the event loop was doing.
+The client (`src/emu/audio.ts`) is a plain level gate: one long-running square
+oscillator, switched on/off by the gain node, with the frequency written only
+when it changes and the node never re-created. There is no re-articulation and no
+absolute-time scheduling — a chirp shorter than the 20 ms sample interval is not
+reconstructed (a level stream is inherently lossy, and at 20 ms every measured
+burst is captured). For the earlier lossless-ring / AudioContext-clock design see
+the git history (`feat/tone-event-stream`, reverted on 2026-10-18).
