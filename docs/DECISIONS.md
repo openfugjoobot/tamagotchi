@@ -3,6 +3,36 @@
 Chronologisch, neueste zuerst. Jede Entscheidung nennt den Grund — damit sie
 später nicht versehentlich zurückgedreht wird.
 
+## Tasten sind Eingabe, nicht Zeit — Zeit-Exploit geschlossen (2026-10-17)
+
+- **Fehler:** `PetEmulator.press()` fuhr pro Druck **800 ms emulierte Zeit**
+  (400 ms down + 400 ms up). Damit war der Tastendruck eine *zweite* Uhr neben
+  dem Tick-Loop: wer A/B/C schnell genug drückte, trieb das Spiel schneller als
+  die Echtzeit — ein Tier ließ sich in Sekunden altern und töten. Genau das
+  sollte die Server-Ownership der Zeit (s. oben) verhindern; ein Rest des alten
+  Tab-Emulators hatte es wieder eingeschleppt.
+- **Fix:** `press()` erzeugt **keine** Zeit mehr, sondern legt den Druck nur in
+  eine Warteschlange. Der nächste `step(ms)` (die reale Echtzeit des Tick-Loops)
+  materialisiert den Druck als kurzen down→up-Zyklus — der gedrückte Pin wird
+  also *aus dem schon geschuldeten Realzeit-Budget bezahlt*. Die insgesamt
+  gelaufenen CPU-Schritte bleiben exakt `floor(Σ units(ms) / TS_PER_STEP)`, egal
+  wie oft geklickt wurde.
+- **Drücke werden nicht zusammengefasst.** Der Ursprungscode fuhr jeden Druck
+  vollständig; ein Coalescing hätte die schnelle Uhrstell-Sequenz zerstört
+  (mehrere Taps in einem Tick ⇒ nur ein Klick). Stattdessen Queue in
+  Ankunftsreihenfolge, mit 400 ms Release-Lücke zwischen zwei Drücken für
+  getrennte Flanken.
+- **400 ms Halt ist ROM-Anforderung, keine Zeitquelle.** Gegen die echte P1-FW
+  verifiziert: eine 100-ms-Halt registriert den Uhrstellen-Tap nie, 400 ms schon
+  (`tests/server-emulator-buzzer.test.ts`). Die Halt-Dauer bleibt also, nur ihre
+  *Herkunft* ändert sich: früher gemünzt, jetzt aus Echtzeit bezahlt.
+- **Beweis:** `tests/emu-time-exploit.test.ts` — 200 Klicks über dieselbe reale
+  Spanne liefern denselben Schrittzähler wie 0 Klicks; ein Druck allein bewegt
+  die Uhr nicht; nur `step(ms)` tut es.
+- **Ehrlicher Zähler:** `PetEmulator.steps()` zählt die gelaufenen CPU-Schritte;
+  das ist das belastbare Maß für „gewährte Spielzeit“ (`now()` hängt zusätzlich
+  vom ROM-Codepfad ab, der sich mit dem Tastenzustand ändert).
+
 ## Server statt Cloudflare Worker (2026-10-17)
 
 - **Der Worker wurde verworfen.** Ein Cloudflare-Isolate kann **nicht dauerhaft

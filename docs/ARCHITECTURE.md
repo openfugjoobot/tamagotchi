@@ -31,7 +31,7 @@ Browser                                  tamagotchi-server (Node)          Postg
 | Modul | Verantwortung |
 |-------|----------------|
 | `server/src/main.ts` | Verdrahtung: Env lesen, Schema anwenden, Tiere rehydrieren, Tick + WS + API + Push-Sweeper starten |
-| `server/src/emulator.ts` | `PetEmulator`: WASM laden, `step(ms)` (reale Zeit → CPU-Schritte), `press`, `lcd`, `buzzer` (Piezo-Level für den Live-Ton), `save`/`loadState`, `dead` |
+| `server/src/emulator.ts` | `PetEmulator`: WASM laden, `step(ms)` (reale Zeit → CPU-Schritte, **einzige Zeitquelle**), `press` (reines Eingabe-Ereignis, materialisiert die Halt aus `step`), `lcd`, `buzzer` (Piezo-Level für den Live-Ton), `save`/`loadState`, `dead` |
 | `server/src/tick.ts` | `TickLoop`: ein Intervall für alle Tiere, Fehler-Isolation pro Tier |
 | `server/src/ws.ts` | `WsHub`: `hello`-Auth → Bind an `(userId, petId)`; `{t:"frame", lcd, icons}` und `{t:"buzzer", freq, on}` raus, Buttons rein; `hasLiveConnection` als Push-Gate |
 | `server/src/api.ts` | REST `/api/*` (Fastify), jeder Aufruf nutzer-scoped über das Bearer-Token |
@@ -71,6 +71,21 @@ Kalibriert ist **~5,65 µs emulierte Zeit pro Schritt** (`TS_PER_STEP = 5.648`).
 Der Tick-Loop misst die echte Zeitdifferenz zwischen zwei Ticks und schiebt sie
 weiter; dadurch driftet nichts. **Die Zeit kommt jetzt vom Server**, nicht mehr
 vom Gerät des Nutzers — Uhr-Manipulation ist damit keine Angriffsfläche mehr.
+
+### Tasten sind Eingabe, keine Zeit
+
+`PetEmulator.press(btn)` erzeugt **keine** emulierte Zeit. Es legt den Druck nur
+in eine Warteschlange; die CPU-Schritte, die den gedrückten Pin beobachten,
+zahlt der nächste `step(ms)` **aus demselben realen Budget**, das die Uhr schon
+schuldet. Ein Druck (Halt `PRESS_HOLD_MS = 400 ms` + Release-Lücke
+`PRESS_GAP_MS = 400 ms`) ändert damit nur *wann* die CPU mit gedrückter Taste
+läuft, nie *wie viel* Zeit vergeht: die insgesamt gelaufenen Schritte sind exakt
+`floor(Σ units(ms) / TS_PER_STEP)`, unabhängig von der Klickzahl
+(`tests/emu-time-exploit.test.ts`). Drücke werden **nicht** zusammengefasst —
+eine schnelle Sequenz (z. B. Uhrstellen) erreicht das ROM als getrennte Flanken —,
+aber sie stauen sich bei schnellerem Klicken als Echtzeit und werden in
+Echtzeit-Tempo abgearbeitet. Die 400 ms Halt sind ROM-Anforderung (kürzer
+registriert das P1-ROM keinen Uhrstellen-Tap), nicht Zeitquelle.
 
 ## Catch-up nach Downtime
 
