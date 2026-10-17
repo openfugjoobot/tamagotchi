@@ -109,4 +109,46 @@ describe("piezo: re-articulation of repeated tones", () => {
     p.update(23406, true);
     expect(gainValues(ctx)).not.toContain(AUDIBLE);
   });
+
+  // A fresh articulation replaces the oscillator with a brand-new node whose
+  // WebAudio default frequency is 440 Hz. The shipped guard
+  // `if (hz !== currentFreq) osc.frequency.value = hz` only wrote the frequency
+  // when it *changed*, so a fresh chirp carrying the SAME freq as the previous
+  // one skipped the write and the new oscillator stayed at 440 Hz: the second
+  // identical chirp is heard at the wrong pitch ("the tone hangs"). The
+  // frequency must ALWAYS be set on the oscillator a re-attack just created.
+  it("always sets the frequency on the oscillator a re-attack created (same freq)", () => {
+    const ctx = fakeCtx();
+    const p = createPiezo(() => ctx);
+    p.unlock();
+
+    p.update(23406, true); // first chirp: osc[0] = 2340.6 Hz
+    p.update(23406, false); // off
+    p.update(23406, true); // second, identical chirp on a NEW oscillator (osc[1])
+
+    const oscs = (ctx as any).oscs;
+    expect(oscs.length).toBeGreaterThan(1);
+    const fresh = oscs[oscs.length - 1];
+    // The fresh oscillator must carry the chirp's real frequency, not the 440 Hz
+    // default it was created with.
+    expect(fresh.frequency.value).toBeCloseTo(2340.6, 1);
+  });
+
+  it("sets the frequency on every re-articulation, whatever the previous tone was", () => {
+    const ctx = fakeCtx();
+    const p = createPiezo(() => ctx);
+    p.unlock();
+
+    p.update(27307, true);
+    p.update(27307, false);
+    p.update(27307, true); // same freq again -> must still be written
+    p.update(23406, false);
+    p.update(23406, true); // different freq
+
+    const oscs = (ctx as any).oscs;
+    const freqs = oscs.map((o: any) => o.frequency.value);
+    // No oscillator may be left at its 440 Hz default once it is driving a tone.
+    expect(freqs).not.toContain(440);
+    expect(oscs[oscs.length - 1].frequency.value).toBeCloseTo(2340.6, 1);
+  });
 });

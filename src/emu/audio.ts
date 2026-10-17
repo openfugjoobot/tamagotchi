@@ -47,8 +47,17 @@ export function createPiezo(createCtx: () => AudioContext): Piezo {
     osc.start();
   };
 
-  /** Startet die Wellenform neu, damit die Phase zurückgesetzt wird. */
-  const reattack = (): void => {
+  /**
+   * Startet die Wellenform neu, damit die Phase zurückgesetzt wird.
+   *
+   * `hz` wird dem frischen Oszillator **immer** mitgegeben: der neue Node hat
+   * die WebAudio-Vorgabe 440 Hz, und `currentFreq` beschreibt den *alten*
+   * Oszillator — der Change-Guard `hz !== currentFreq` würde einen gleich
+   * klingenden Folge-Chirp überspringen und den neuen Node auf 440 Hz stehen
+   * lassen (der Ton "hängt" auf der falschen Höhe). Deshalb setzt der
+   * Re-Attack die Frequenz unbedingt.
+   */
+  const reattack = (hz: number): void => {
     if (!ctx || !osc || !gain) return;
     try {
       // Den laufenden Oszillator ersetzen: nur so beginnt der frische Chirp mit
@@ -58,6 +67,7 @@ export function createPiezo(createCtx: () => AudioContext): Piezo {
       osc.disconnect();
       osc = ctx.createOscillator();
       osc.type = "square";
+      osc.frequency.value = hz;
       osc.connect(gain);
       osc.start();
     } catch { /* Audio nicht verfügbar */ }
@@ -96,10 +106,16 @@ export function createPiezo(createCtx: () => AudioContext): Piezo {
         // neuer Chirp.
         if (!sounding) {
           articulations++;
-          reattack();
+          // Frischer Node: Frequenz unbedingt setzen (siehe reattack-Notiz).
+          reattack(hz);
+          currentFreq = hz;
           sounding = true;
+        } else if (hz !== currentFreq) {
+          // Mitten im Ton: nur bei echtem Wechsel schreiben; `currentFreq`
+          // beschreibt hier weiterhin denselben Oszillator.
+          osc.frequency.value = hz;
+          currentFreq = hz;
         }
-        if (hz !== currentFreq) { osc.frequency.value = hz; currentFreq = hz; }
         gain.gain.setValueAtTime(0.05, ctx.currentTime);
       } catch { /* Audio nicht verfügbar */ }
     },
