@@ -1,17 +1,15 @@
 /**
- * Save slots — create, list, delete a pet's save states.
+ * Save slots — create, load, list, delete a pet's save states.
  *
  * Slots belong to the user and are filtered to the pet's device by the API
  * (`GET /api/pets/:id/slots`). This module renders that list and performs the
- * two writes the Task-8 API offers: create (`POST /api/pets/:id/slots`) and
- * delete (`DELETE /api/slots/:id`).
+ * three writes the API offers: create (`POST /api/pets/:id/slots`), load
+ * (`POST /api/pets/:id/slots/:slotId/load`), and delete (`DELETE /api/slots/:id`).
  *
- * "Load" has no server route: the API intentionally never carries the snapshot
- * bytes (they are binary and the repo-only `getSlot` is not exposed). Loading a
- * slot is therefore a *server* operation that no task in the plan defines, so
- * this module does not invent an endpoint — it renders the load affordance and
- * reports the missing route instead of firing a request that would 404. The gap
- * is carried to the final review.
+ * Loading restores the snapshot **server-side** (the API never ships the binary
+ * bytes to the client): the request names the pet and the slot, the server
+ * validates ownership + device and rewrites the running emulator's state. The
+ * tab then receives the new frames over the live channel like any other tick.
  */
 
 import { api } from "./api";
@@ -39,6 +37,7 @@ export interface SlotsView {
   render(slots: SlotSummary[], petId: string): void;
   list(petId: string): Promise<SlotSummary[]>;
   create(petId: string, label: string): Promise<boolean>;
+  load(slotId: string, petId: string): Promise<boolean>;
   remove(slotId: string, petId: string): Promise<boolean>;
 }
 
@@ -58,6 +57,16 @@ export function createSlotsView(deps: SlotsDeps): SlotsView {
     const res = await api.post<SlotSummary>(`/api/pets/${petId}/slots`, deps.token(), { label: label.trim() });
     if (res.ok) {
       deps.notify?.(t("slotCreated"));
+      deps.onChange?.();
+      return true;
+    }
+    return false;
+  };
+
+  const load = async (slotId: string, petId: string): Promise<boolean> => {
+    const res = await api.post<{ ok: true }>(`/api/pets/${petId}/slots/${slotId}/load`, deps.token(), {});
+    if (res.ok) {
+      deps.notify?.(t("slotLoaded"));
       deps.onChange?.();
       return true;
     }
@@ -107,11 +116,18 @@ export function createSlotsView(deps: SlotsDeps): SlotsView {
         del.setAttribute("aria-label", t("slotDelete"));
         del.addEventListener("click", () => void remove(s.id, petId));
 
-        li.append(label, meta, del);
+        const loadBtn = document.createElement("button");
+        loadBtn.type = "button";
+        loadBtn.className = "slot-load";
+        loadBtn.textContent = t("slotLoad");
+        loadBtn.setAttribute("aria-label", t("slotLoad"));
+        loadBtn.addEventListener("click", () => void load(s.id, petId));
+
+        li.append(label, meta, loadBtn, del);
         return li;
       }),
     );
   };
 
-  return { render, list, create, remove };
+  return { render, list, create, load, remove };
 }

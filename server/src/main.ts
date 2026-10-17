@@ -177,6 +177,13 @@ export async function startServer(deps: StartServerDeps): Promise<ServerHandle> 
       // (the API allowed p1 or p2), not a hard-coded one.
       void hydrateById(userId, petId);
     },
+    loadSlot: (userId, petId, slot) => {
+      // The API already proved the pet and slot belong to the user and share a
+      // device. Restore the bytes into the live emulator and persist the new
+      // state. If the pet is not live (it died and was dropped), bring it back
+      // first so the loaded snapshot actually ticks.
+      void restoreSlot(userId, petId, slot.snapshot);
+    },
   });
   // Attach the WS hub to Fastify's own HTTP server before listening: Fastify
   // owns the socket, so we must not wrap it in a second `createServer`.
@@ -242,6 +249,26 @@ export async function startServer(deps: StartServerDeps): Promise<ServerHandle> 
       return;
     }
     await hydrate(row);
+  }
+
+  /**
+   * Load a save-slot snapshot into a pet and persist it. The API has already
+   * checked ownership and device; here we touch the running emulator. A pet that
+   * died earlier is no longer in `live`, so hydrate it first (from its current
+   * DB state) and then overwrite that state with the loaded snapshot — the slot
+   * must actually tick, not sit inert.
+   */
+  async function restoreSlot(userId: string, petId: string, snapshot: Uint8Array): Promise<void> {
+    if (!live.has(petId)) await hydrateById(userId, petId);
+    const entry = live.get(petId);
+    if (!entry) return; // pet vanished between the ownership check and here
+    entry.pet.loadState(snapshot);
+    // A loaded state can be the angel frame; latch the truth and never resurrect
+    // a dead pet just because a slot was loaded.
+    const alive = !entry.pet.dead();
+    entry.alive = alive;
+    entry.lastSavedAt = Date.now();
+    await repo.savePetState(petId, entry.pet.save(), alive, alive ? null : new Date());
   }
 
   await rehydrate();

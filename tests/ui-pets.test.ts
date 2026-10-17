@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildPetsView, createPetsView, type PetSummary } from "@/ui/pets";
 import { buildBeepsView, type BeepSummary } from "@/ui/beeps";
 import { normalizeSettings, SETTINGS_DEFAULTS } from "@/ui/settings";
-import { validSlotLabel } from "@/ui/slots";
+import { validSlotLabel, createSlotsView } from "@/ui/slots";
 import { t } from "@/i18n";
 
 /**
@@ -137,6 +137,36 @@ describe("validSlotLabel", () => {
     expect(validSlotLabel("")).toBe(false);
     expect(validSlotLabel("   ")).toBe(false);
     expect(validSlotLabel("before boss")).toBe(true);
+  });
+});
+
+/**
+ * Slot load is a *server* operation: the client must hit the owner-scoped load
+ * route and never try to fetch the snapshot bytes itself (Task-11 D1). This
+ * pins the exact path the API exposes.
+ */
+describe("createSlotsView.load", () => {
+  it("POSTs to the owner-scoped per-pet load route", async () => {
+    const calls: Array<{ url: string; token: string | null; body: unknown }> = [];
+    const view = createSlotsView({ token: () => "tok-1", notify: () => {} });
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      calls.push({
+        url: String(url),
+        token: (init.headers as Record<string, string>)?.["authorization"] ?? null,
+        body: init.body,
+      });
+      return { ok: true, status: 200, text: async () => JSON.stringify({ ok: true }) } as unknown as Response;
+    }) as typeof fetch;
+    try {
+      const ok = await view.load("slot-9", "pet-3");
+      expect(ok).toBe(true);
+      expect(calls).toHaveLength(1);
+      expect(calls[0].url).toMatch(/\/api\/pets\/pet-3\/slots\/slot-9\/load$/);
+      expect(calls[0].token).toBe(`Bearer tok-1`);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
   });
 });
 

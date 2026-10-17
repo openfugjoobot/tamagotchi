@@ -61,13 +61,34 @@ export interface ApiDeps {
   clientId: string;
   /** Bring up (or restart) the live emulator for a freshly created pet. */
   startPet?: (userId: string, petId: string) => Promise<void> | void;
+  /**
+   * Restore a save slot's snapshot into the live emulator for `petId`. The API
+   * owns auth + ownership + device validation; the entrypoint owns the running
+   * `PetEmulator` and the DB write, so the restore is injected here. The slot is
+   * already proven to belong to `userId` and to match the pet's device.
+   */
+  loadSlot?: (
+    userId: string,
+    petId: string,
+    slot: { id: string; snapshot: Uint8Array; device: string; ageYears: number },
+  ) => Promise<void> | void;
 }
 
-/** Settings a user may change, with their allowed values (spec §3/§5). */
-const SETTINGS_DEFAULTS = { theme: "light", lang: "de", shell: "green", sound: true, push: true } as const;
-const THEMES = ["light", "dark"] as const;
+/** Settings a user may change, with their allowed values (spec §3/§5).
+ *
+ * The id lists MUST mirror the real UI ids (`src/theme.ts` THEME_IDS,
+ * `src/shell.ts` SHELLS): `applyServerSettings()` in the web client only applies
+ * a server value that is an actual UI id, so an allow-list of `light`/`green`/
+ * `dino` accepted exactly the values the UI then discarded — theme and shell
+ * could never round-trip (Task-11 D2). `tests/server-api.test.ts` pins these to
+ * the UI lists; change one, change both. */
+const SETTINGS_DEFAULTS = { theme: "auto", lang: "de", shell: "teal", sound: true, push: true } as const;
+const THEMES = ["blossom", "day", "dusk", "night", "midnight", "auto"] as const;
 const LANGS = ["de", "en", "it"] as const;
-const SHELLS = ["green", "blue", "pink", "dino"] as const;
+const SHELLS = [
+  "teal", "pink", "blue", "purple", "sunset", "mono", "mint", "coral", "pearl",
+  "raptor", "amber", "swamp", "gecko",
+] as const;
 
 /** How many recent beeps `GET /api/beeps` returns. */
 const BEEP_LIMIT = 50;
@@ -126,6 +147,29 @@ function validateSettings(patch: Record<string, unknown>): string | null {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/** The slot shape the load route consumes (repo `getSlot` is typed `unknown`). */
+interface LoadableSlot {
+  id: string;
+  snapshot: Uint8Array;
+  device: string;
+  age_years: number;
+}
+
+/**
+ * Narrow a `repo.getSlot` result to what the load route needs. The repo is typed
+ * `unknown` on `ApiRepo` so the API does not depend on the concrete `SlotRow`;
+ * this validates the fields it actually reads and returns `null` for anything
+ * that is not a real slot row (never trusts the shape blindly).
+ */
+function asSlot(v: unknown): LoadableSlot | null {
+  if (!isRecord(v)) return null;
+  const snapshot = v.snapshot;
+  if (typeof v.id !== "string" || typeof v.device !== "string") return null;
+  if (typeof v.age_years !== "number") return null;
+  if (!(snapshot instanceof Uint8Array)) return null;
+  return { id: v.id, snapshot, device: v.device, age_years: v.age_years };
 }
 
 /**
@@ -218,6 +262,32 @@ export function registerApi(app: FastifyInstance, deps: ApiDeps): void {
     if (!slot) return reply.code(404).send({ error: "not found" });
     await repo.deleteSlot(userId(req), id);
     return reply.code(204).send();
+  });
+
+  /**
+   * Load a save slot into one of the caller's pets. Owner-scoped twice over:
+   * the pet must be the caller's (`getPet`), the slot must be the caller's
+   * (`getSlot`), and both `404` when they are not — a foreign id is
+   * indistinguishable from a missing one. A slot belongs to a *device*, so it
+   * only loads into a pet of the same device; otherwise `409`.
+   */
+  app.post("/api/pets/:id/slots/:slotId/load", async (req, reply) => {
+    const { id, slotId } = req.params as { id: string; slotId: string };
+    const uid = userId(req);
+    const pet = await repo.getPet(uid, id);
+    if (!pet) return reply.code(404).send({ error: "not found" });
+    const slot = asSlot(await repo.getSlot(uid, slotId));
+    if (!slot) return reply.code(404).send({ error: "not found" });
+    if (slot.device !== pet.device) return reply.code(409).send({ error: "device mismatch" });
+    // Auth + ownership + device are settled; the entrypoint restores the bytes
+    // into the live emulator and persists the new state.
+    await deps.loadSlot?.(uid, id, {
+      id: slot.id,
+      snapshot: slot.snapshot,
+      device: slot.device,
+      ageYears: slot.age_years,
+    });
+    return { ok: true, petId: id, slotId: slot.id };
   });
 
   // ---- settings -----------------------------------------------------------

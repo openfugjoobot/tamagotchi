@@ -861,10 +861,9 @@ function persistSetting(patch: Partial<Settings>): void {
 
 /** Ein geladenes Settings-Objekt auf die vorhandene UI anwenden. */
 function applyServerSettings(s: Settings): void {
-  // Shell/Hintergrund nur anwenden, wenn der Server-Wert eine echte UI-ID ist.
-  // Die Server-Allow-List (green/blue/pink/dino, light/dark) deckt sich NICHT
-  // mit den UI-IDs (teal/pink/…, blossom/day/…); ein unbekannter Wert wuerde die
-  // Auswahl nur kaputtmachen. Klang und Push passen sauber (boolesch).
+  // Der Server fuehrt dieselben UI-IDs wie die Oberflaeche (theme: blossom/day/
+  // …/auto, shell: teal/pink/…); die Pruefung unten ist nur ein Guertel, falls
+  // ein unbekannter Wert aus einer alten Zeile kommt. Klang und Push sind boolesch.
   if (SHELLS.some((x) => x.id === s.shell)) {
     const el = document.querySelector(".device-wrap") as HTMLElement | null;
     if (el) applyShell(el, s.shell, localStorage);

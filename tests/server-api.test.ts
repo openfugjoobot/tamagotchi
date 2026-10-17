@@ -3,6 +3,8 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { registerApi, type ApiRepo } from "../server/src/api";
 import type { TokenClaims } from "../server/src/auth";
 import type { BeepRow, PetRow, PushSub, PushSubRow, UserRow } from "../server/src/db/repo";
+import { THEME_IDS } from "@/theme";
+import { SHELLS } from "@/shell";
 
 /**
  * The HTTP API is exercised against a *fake* repo and a *fake* verifier, so the
@@ -351,6 +353,102 @@ describe("HTTP API", () => {
       expect(listed.json()).toHaveLength(0);
     });
 
+    it("loads an owned slot into its pet via the injected hook", async () => {
+      const { petId } = await petFor(SUB);
+      const created = await authed(app, "POST", `/api/pets/${petId}/slots`, { label: "checkpoint" });
+      const slotId = created.json().id;
+
+      const loaded: Array<{ petId: string; slotId: string; bytes: number }> = [];
+      const withHook = Fastify();
+      registerApi(withHook, {
+        repo,
+        verify,
+        clientId: CLIENT,
+        loadSlot: (_userId, pId, slot) => {
+          loaded.push({ petId: pId, slotId: slot.id, bytes: slot.snapshot.length });
+        },
+      });
+
+      const res = await withHook.inject({
+        method: "POST",
+        url: `/api/pets/${petId}/slots/${slotId}/load`,
+        headers: { authorization: `Bearer ${GOOD}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, petId, slotId });
+      // The hook got the pet, the slot, and the snapshot bytes to restore.
+      expect(loaded).toEqual([{ petId, slotId, bytes: 4 }]);
+    });
+
+    it("404s loading a slot that belongs to another user (no cross-user access)", async () => {
+      const { petId } = await petFor(SUB);
+      const created = await authed(app, "POST", `/api/pets/${petId}/slots`, { label: "mine" });
+      const slotId = created.json().id;
+
+      const loaded: string[] = [];
+      const withHook = Fastify();
+      registerApi(withHook, {
+        repo,
+        verify,
+        clientId: CLIENT,
+        loadSlot: (_u, _p, s) => void loaded.push(s.id),
+      });
+
+      // User 2 presents user 1's pet id and slot id: both resolve to 404, and the
+      // hook never runs (the row is never read past the ownership check).
+      const res = await withHook.inject({
+        method: "POST",
+        url: `/api/pets/${petId}/slots/${slotId}/load`,
+        headers: { authorization: `Bearer ${GOOD2}` },
+      });
+      expect(res.statusCode).toBe(404);
+      expect(loaded).toEqual([]);
+    });
+
+    it("404s loading an owned pet from an unknown slot", async () => {
+      const { petId } = await petFor(SUB);
+      const loaded: string[] = [];
+      const withHook = Fastify();
+      registerApi(withHook, {
+        repo,
+        verify,
+        clientId: CLIENT,
+        loadSlot: (_u, _p, s) => void loaded.push(s.id),
+      });
+      const res = await withHook.inject({
+        method: "POST",
+        url: `/api/pets/${petId}/slots/nope/load`,
+        headers: { authorization: `Bearer ${GOOD}` },
+      });
+      expect(res.statusCode).toBe(404);
+      expect(loaded).toEqual([]);
+    });
+
+    it("rejects loading a slot for a different device than the pet (409)", async () => {
+      const { petId } = await petFor(SUB, "p1");
+      // A slot created under a p2 pet of the same user.
+      const other = await petFor(SUB, "p2");
+      const created = await authed(app, "POST", `/api/pets/${other.petId}/slots`, { label: "p2 save" });
+      const slotId = created.json().id;
+
+      const loaded: string[] = [];
+      const withHook = Fastify();
+      registerApi(withHook, {
+        repo,
+        verify,
+        clientId: CLIENT,
+        loadSlot: (_u, _p, s) => void loaded.push(s.id),
+      });
+
+      const res = await withHook.inject({
+        method: "POST",
+        url: `/api/pets/${petId}/slots/${slotId}/load`,
+        headers: { authorization: `Bearer ${GOOD}` },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(loaded).toEqual([]);
+    });
+
     it("cannot delete another user's slot", async () => {
       // User 1 creates a slot on their own pet.
       const { petId } = await petFor(SUB);
@@ -368,16 +466,16 @@ describe("HTTP API", () => {
     it("returns defaults for a fresh user", async () => {
       const res = await authed(app, "GET", "/api/settings");
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({ theme: "light", lang: "de", shell: "green", sound: true, push: true });
+      expect(res.json()).toEqual({ theme: "auto", lang: "de", shell: "teal", sound: true, push: true });
     });
 
     it("merges a partial update and persists it", async () => {
-      const put = await authed(app, "PUT", "/api/settings", { theme: "dark", push: false });
+      const put = await authed(app, "PUT", "/api/settings", { theme: "night", push: false });
       expect(put.statusCode).toBe(200);
-      expect(put.json()).toMatchObject({ theme: "dark", push: false, lang: "de", shell: "green", sound: true });
+      expect(put.json()).toMatchObject({ theme: "night", push: false, lang: "de", shell: "teal", sound: true });
 
       const get = await authed(app, "GET", "/api/settings");
-      expect(get.json()).toMatchObject({ theme: "dark", push: false });
+      expect(get.json()).toMatchObject({ theme: "night", push: false });
     });
 
     it("rejects unknown settings values with 400", async () => {
@@ -388,6 +486,31 @@ describe("HTTP API", () => {
     it("rejects an unknown lang with 400", async () => {
       const res = await authed(app, "PUT", "/api/settings", { lang: "fr" });
       expect(res.statusCode).toBe(400);
+    });
+
+    it("round-trips a real UI theme id", async () => {
+      const put = await authed(app, "PUT", "/api/settings", { theme: "blossom" });
+      expect(put.statusCode).toBe(200);
+      expect(put.json()).toMatchObject({ theme: "blossom" });
+      const get = await authed(app, "GET", "/api/settings");
+      expect(get.json()).toMatchObject({ theme: "blossom" });
+    });
+
+    it("round-trips a real UI shell id", async () => {
+      const put = await authed(app, "PUT", "/api/settings", { shell: "raptor" });
+      expect(put.statusCode).toBe(200);
+      expect(put.json()).toMatchObject({ shell: "raptor" });
+      const get = await authed(app, "GET", "/api/settings");
+      expect(get.json()).toMatchObject({ shell: "raptor" });
+    });
+
+    it("still rejects a value that is not a real UI id", async () => {
+      // 'green'/'dino'/'light'/'dark' were the *old* fictional allow-list; they
+      // must NOT be accepted now that the list mirrors the real UI ids.
+      for (const bad of [{ theme: "light" }, { theme: "dark" }, { shell: "green" }, { shell: "dino" }]) {
+        const res = await authed(app, "PUT", "/api/settings", bad);
+        expect(res.statusCode).toBe(400);
+      }
     });
   });
 
@@ -461,5 +584,43 @@ describe("HTTP API", () => {
       expect(rows[0]).toEqual({ id: "b1", petId: mine.id, at: "2026-01-02T08:00:00.000Z", notified: false });
       expect(JSON.stringify(rows[0])).not.toMatch(/kind|cause/i);
     });
+  });
+});
+
+/**
+ * The settings allow-list must mirror the *real* UI ids, or theme/shell can
+ * never round-trip: `applyServerSettings` only applies a server value that is an
+ * actual UI id, so an allow-list of `light`/`green`/`dino` accepts exactly the
+ * values the UI then rejects (Task-11 D2). This pins the server constants to the
+ * single source of truth (`src/theme.ts`, `src/shell.ts`).
+ */
+describe("settings allow-list mirrors the UI ids", () => {
+  it("accepts every real UI theme id and rejects a non-id", async () => {
+    const repo = new FakeRepo();
+    const app = build(repo);
+    for (const id of THEME_IDS) {
+      const res = await authed(app, "PUT", "/api/settings", { theme: id });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().theme).toBe(id);
+    }
+  });
+
+  it("accepts every real UI shell id", async () => {
+    const repo = new FakeRepo();
+    const app = build(repo);
+    for (const s of SHELLS) {
+      const res = await authed(app, "PUT", "/api/settings", { shell: s.id });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().shell).toBe(s.id);
+    }
+  });
+
+  it("the server defaults are themselves valid UI ids", async () => {
+    const repo = new FakeRepo();
+    const app = build(repo);
+    const res = await authed(app, "GET", "/api/settings");
+    const defaults = res.json();
+    expect(THEME_IDS).toContain(defaults.theme);
+    expect(SHELLS.map((s) => s.id)).toContain(defaults.shell);
   });
 });

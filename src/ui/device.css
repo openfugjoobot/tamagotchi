@@ -692,11 +692,11 @@ body[data-bg="night"] #btn-confirm-reset, body[data-bg="midnight"] #btn-confirm-
 .beep-text { font-weight: 600; }
 .slots-empty, .beeps-empty { margin: 0; font-size: 12.5px; color: var(--ink-dim); }
 .slot-label { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.slot-del, .slot-create {
+.slot-del, .slot-load, .slot-create {
   border: 1px solid var(--border-strong); background: transparent; color: var(--ink);
   border-radius: 9px; padding: 5px 10px; font: inherit; font-size: 12px; cursor: pointer;
 }
-.slot-del:hover, .slot-create:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.slot-del:hover, .slot-load:hover, .slot-create:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
 .slot-create { width: 100%; min-height: 34px; }
 .slot-form { display: flex; gap: 6px; }
 .slot-form input {

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { newDb } from "pg-mem";
+import { newDb, DataType } from "pg-mem";
 import { WebSocket } from "ws";
 import { startServer, resolvePublicDir } from "../server/src/main";
 import { TickLoop, type PetLike } from "../server/src/tick";
@@ -28,6 +28,21 @@ function memPool() {
     returns: "uuid" as never,
     implementation: () => crypto.randomUUID(),
     impure: true,
+  });
+  // The repo moves `bytea` as hex (`decode($n,'hex')` / `encode(col,'hex')`);
+  // pg-mem does not ship these native functions, so a test that touches save
+  // slots must register them (same shape as tests/server-repo.test.ts).
+  db.public.registerFunction({
+    name: "decode",
+    args: [DataType.text, DataType.text],
+    returns: DataType.bytea,
+    implementation: (s: string, fmt: string) => Buffer.from(s, fmt as BufferEncoding),
+  });
+  db.public.registerFunction({
+    name: "encode",
+    args: [DataType.bytea, DataType.text],
+    returns: DataType.text,
+    implementation: (b: Buffer, fmt: string) => Buffer.from(b).toString(fmt as BufferEncoding),
   });
   return db.adapters.createPg().Pool;
 }
@@ -347,6 +362,113 @@ describe("startServer wiring", () => {
       expect(states).toContain(false);
       expect(srv.livePetIds()).not.toContain(pet.id);
       ws.close();
+    } finally {
+      await srv.close();
+    }
+  }, 15000);
+
+  it("loads an owned save slot into the live pet via POST /api/pets/:id/slots/:slotId/load (Task-11 D1)", async () => {
+    resetBeepDebounce();
+    resetJwksCache();
+    const Pool = memPool();
+    const pool = new Pool();
+    const key: TestKey = await makeTestKey();
+
+    // A fake pet that records the bytes handed to loadState, so the test can
+    // prove the *emulator* (not just the DB row) received the snapshot.
+    const loaded: Uint8Array[] = [];
+    const pet = {
+      ...fakePet(),
+      loadState(buf: Uint8Array) {
+        loaded.push(buf);
+      },
+    };
+
+    const srv = await startServer(
+      baseDeps(pool, {
+        createPet: () => pet as never,
+        startPet: () => pet as never,
+        verify: (token: string, clientId: string) =>
+          verifyIdToken(token, clientId, { fetchImpl: jwksFetch(key.jwk), now: Date.now() }),
+      }),
+    );
+    try {
+      const { Repo } = await import("../server/src/db/repo");
+      const repo = new Repo(pool);
+      const owner = await repo.upsertUser({ sub: "sub-load" });
+      const created = await repo.createPet(owner.id, "p1");
+      await srv.rehydrate();
+      // Snapshot a slot at the repo level (the API's own create path is covered
+      // in server-api.test.ts) so the load route has real bytes to restore.
+      const snapshot = new Uint8Array([9, 8, 7, 6]);
+      const slot = await repo.createSlot(owner.id, {
+        label: "checkpoint",
+        snapshot,
+        device: "p1",
+        ageYears: 2,
+      });
+
+      const token = await signJwt(key.priv, {
+        sub: "sub-load",
+        aud: CLIENT,
+        iss: "https://accounts.google.com",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+      const res = await fetch(`${srv.url}/api/pets/${created.id}/slots/${slot.id}/load`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ ok: true, petId: created.id, slotId: slot.id });
+      // The live emulator was actually handed the snapshot bytes.
+      expect(loaded).toHaveLength(1);
+      expect(Array.from(loaded[0])).toEqual([9, 8, 7, 6]);
+    } finally {
+      await srv.close();
+    }
+  }, 15000);
+
+  it("a foreign user cannot load a slot into someone else's pet (404)", async () => {
+    resetBeepDebounce();
+    resetJwksCache();
+    const Pool = memPool();
+    const pool = new Pool();
+    const key: TestKey = await makeTestKey();
+    const loaded: Uint8Array[] = [];
+    const pet = { ...fakePet(), loadState: (b: Uint8Array) => void loaded.push(b) };
+    const srv = await startServer(
+      baseDeps(pool, {
+        createPet: () => pet as never,
+        startPet: () => pet as never,
+        verify: (token: string, clientId: string) =>
+          verifyIdToken(token, clientId, { fetchImpl: jwksFetch(key.jwk), now: Date.now() }),
+      }),
+    );
+    try {
+      const { Repo } = await import("../server/src/db/repo");
+      const repo = new Repo(pool);
+      const a = await repo.upsertUser({ sub: "sub-A" });
+      const petA = await repo.createPet(a.id, "p1");
+      const slot = await repo.createSlot(a.id, {
+        label: "mine",
+        snapshot: new Uint8Array([1, 1, 1, 1]),
+        device: "p1",
+        ageYears: 1,
+      });
+      await srv.rehydrate();
+      const tokenB = await signJwt(key.priv, {
+        sub: "sub-B",
+        aud: CLIENT,
+        iss: "https://accounts.google.com",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+      const res = await fetch(`${srv.url}/api/pets/${petA.id}/slots/${slot.id}/load`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${tokenB}` },
+      });
+      expect(res.status).toBe(404);
+      // A's emulator was never touched.
+      expect(loaded).toHaveLength(0);
     } finally {
       await srv.close();
     }

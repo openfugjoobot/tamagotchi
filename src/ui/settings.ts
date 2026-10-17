@@ -21,11 +21,14 @@ export interface Settings {
   push: boolean;
 }
 
-/** The settings a fresh user starts with — mirrors the server defaults. */
+/** The settings a fresh user starts with — mirrors the server defaults.
+ * `theme`/`shell` are **real UI ids** (`src/theme.ts`, `src/shell.ts`), matching
+ * the device's own defaults (`savedBg` → "auto", `savedShell` → "teal"), so a
+ * loaded server value round-trips into the UI instead of being discarded. */
 export const SETTINGS_DEFAULTS: Settings = {
-  theme: "light",
+  theme: "auto",
   lang: "de",
-  shell: "green",
+  shell: "teal",
   sound: true,
   push: true,
 };
