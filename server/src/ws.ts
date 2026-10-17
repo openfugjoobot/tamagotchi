@@ -176,6 +176,37 @@ export class WsHub {
   }
 
   /**
+   * Sample every bound pet's piezo **level** and push a `buzzer` message on
+   * change, at whatever cadence the caller runs it.
+   *
+   * This exists because the LCD tick (125 ms, 8 fps) is far too coarse for the
+   * piezo: a measured chirp burst can be as short as 50 ms (docs/BEEPS.md), and
+   * the 125 ms sampler misses ~25 % of bursts (measured on the real ROM: 27/36
+   * bursts detected, avg latency 57 ms, max 125 ms). A dedicated fast sampler
+   * (see `main.ts`, `BUZZER_SAMPLE_MS`) closes that gap: 100 % of bursts land
+   * and the tone reaches the browser within one sample interval.
+   *
+   * **State-read only:** it reads `pet.buzzer()` (a level, not the consumed
+   * latch) and never takes an emulator step, so it grants **zero** emulated
+   * time — the time invariant (a button press never mints game time, and the
+   * clock follows only the wall clock) is untouched. See docs/DECISIONS.md.
+   *
+   * It is split out from `notifyChanged` so `notifyChanged` can stay the coarse
+   * LCD/state tick while the buzzer is sampled independently and much faster.
+   * `notifyChanged` still calls it, so a caller that only drives ticks keeps the
+   * previous behaviour (buzzer on tick); the fast sampler calls it too, and the
+   * level-diff in `pushBuzzer` makes the overlap idempotent (a state already
+   * streamed this tick is not re-sent).
+   */
+  sampleBuzzers(): void {
+    for (const client of this.wss?.clients ?? []) {
+      const binding = this.bindings.get(client);
+      if (!binding) continue;
+      this.pushBuzzer(client, binding);
+    }
+  }
+
+  /**
    * Signal that a pet's LCD or buzzer may have changed. Call after each tick:
    * every bound socket whose pet changed receives a fresh `frame`, a `buzzer`
    * whenever the pet's piezo state flipped since the last emission, and a
