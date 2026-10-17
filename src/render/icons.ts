@@ -8,6 +8,9 @@ const ICON_ROW_H = 8;  // logische Höhe der Leiste
 const ICON_PAD = 2.5;  // Luft um jedes Icon
 const ICON_INNER = ICON_SLOT - 2 * ICON_PAD; // 3
 
+/** Linienfarbe des Auswahl-Rings (clientseitig abgeleitet, s. `emu/menu.ts`). */
+const ICON_HIGHLIGHT_COLOR = "#ffb300";
+
 export type IconImages = (HTMLCanvasElement | null)[];
 
 /** Weißen Hintergrund wegkeyen: dunkle Pixel → Icon-Farbe, helle → transparent. */
@@ -74,6 +77,12 @@ export function renderIconGrid(container: HTMLElement, names: string[]): void {
  * Segmente derzeit nicht (die gedruckten Menü-Icons sind keine ROM-Segmente),
  * daher liest die Reihe faktisch durchgehend dezent — aber sie leuchtet auf,
  * sobald ein ROM/Gerät die Segmente treibt, ohne weitere Protokolländerung.
+ *
+ * `highlight` ist die **clientseitig abgeleitete** Auswahl aus `emu/menu.ts`
+ * (A-Taste wandert über den Ring). Sie liegt als zusätzlicher Ring um das Icon
+ * und lässt die ROM-Bits unberührt: das Gerät meldet die Auswahl nicht, daher
+ * bleibt die Segment-Opazität exakt die übertragene — die Hervorhebung ist ein
+ * bewusst als abgeleitet erkennbarer Zusatz, kein vorgetäuschter Segmentzustand.
  */
 export function drawIconRow(
   ctx: CanvasRenderingContext2D,
@@ -81,6 +90,7 @@ export function drawIconRow(
   row: 0 | 1,
   scale: number,
   imgs: IconImages,
+  highlight = -1,
 ): void {
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, LCD_WIDTH * scale, ICON_ROW_H * scale);
@@ -93,6 +103,23 @@ export function drawIconRow(
     const dx = (i * ICON_SLOT + ICON_PAD) * scale;
     const dy = ICON_PAD * scale;
     ctx.drawImage(img, dx, dy, size, size);
+  }
+  // Auswahl-Ring zuletzt, über den Icons, und unabhängig von deren Opazität.
+  if (highlight >= row * 4 && highlight < (row + 1) * 4) {
+    const cell = highlight - row * 4;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = ICON_HIGHLIGHT_COLOR;
+    // Ein 1-Pixel-Rahmen um die Zelle, einen Pixel innerhalb der Slot-Kanten,
+    // damit die Kanten der Nachbarzellen nicht überlappen.
+    const x0 = Math.round((cell * ICON_SLOT + 0.5) * scale);
+    const y0 = Math.round(0.5 * scale);
+    const x1 = Math.round(((cell + 1) * ICON_SLOT - 0.5) * scale) - 1;
+    const y1 = Math.round((ICON_ROW_H - 0.5) * scale) - 1;
+    const t = Math.max(1, Math.round(scale)); // Rahmenbreite 1 logisches Pixel
+    ctx.fillRect(x0, y0, x1 - x0 + 1, t);            // oben
+    ctx.fillRect(x0, y1 - t + 1, x1 - x0 + 1, t);    // unten
+    ctx.fillRect(x0, y0, t, y1 - y0 + 1);            // links
+    ctx.fillRect(x1 - t + 1, y0, t, y1 - y0 + 1);    // rechts
   }
   ctx.globalAlpha = 1;
 }

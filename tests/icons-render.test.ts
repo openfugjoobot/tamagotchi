@@ -7,11 +7,14 @@ function mockCtx() {
   return {
     imageSmoothingEnabled: true,
     globalAlpha: 1,
+    fillStyle: "",
     clearRect: vi.fn(),
     drawImage: vi.fn(),
+    fillRect: vi.fn(),
   } as unknown as CanvasRenderingContext2D & {
     clearRect: ReturnType<typeof vi.fn>;
     drawImage: ReturnType<typeof vi.fn>;
+    fillRect: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -77,5 +80,31 @@ describe("drawIconRow (live icon strip)", () => {
     drawIconRow(spy, bits, 0, 4, fakeImages());
     expect(alphas[0]).toBe(1);            // active -> full
     expect(alphas[1]).toBeCloseTo(0.16);  // inactive -> dim
+  });
+
+  it("outlines the derived selection without touching the ROM bits", () => {
+    const ctx = mockCtx();
+    const bits = new Uint8Array(ICON_COUNT); // all 0: ROM drives nothing
+    drawIconRow(ctx, bits, 0, 4, fakeImages(), 2); // derived selection = slot 2
+    // The four icons still draw with the honest dim/full opacity from `bits`.
+    expect(ctx.drawImage).toHaveBeenCalledTimes(4);
+    // A ring is drawn for the highlighted slot only: four edges.
+    expect(ctx.fillRect).toHaveBeenCalledTimes(4);
+    expect(ctx.globalAlpha).toBe(1);
+  });
+
+  it("draws the ring on the bottom row only for a bottom-row slot", () => {
+    const ctx = mockCtx();
+    drawIconRow(ctx, new Uint8Array(ICON_COUNT), 0, 4, fakeImages(), 5); // slot 5 is bottom
+    expect(ctx.fillRect).not.toHaveBeenCalled(); // top row draws no ring
+    drawIconRow(ctx, new Uint8Array(ICON_COUNT), 1, 4, fakeImages(), 5);
+    expect(ctx.fillRect).toHaveBeenCalledTimes(4);
+  });
+
+  it("draws no ring when nothing is selected (highlight = -1)", () => {
+    const ctx = mockCtx();
+    drawIconRow(ctx, new Uint8Array(ICON_COUNT), 0, 4, fakeImages(), -1);
+    expect(ctx.drawImage).toHaveBeenCalledTimes(4);
+    expect(ctx.fillRect).not.toHaveBeenCalled();
   });
 });

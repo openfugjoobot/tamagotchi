@@ -42,6 +42,20 @@ später nicht versehentlich zurückgedreht wird.
   Aufmerksamkeits-Schübe liegen ≥ 114 s auseinander, also kollabiert das Fenster
   einen Schub zu einem Ereignis, ohne zwei zu verschlucken).
 
+## Ton im Tab kommt vom Server (2026-10-17)
+
+- Der Tab führt keinen Emulator mehr, trotzdem soll er **klingen**. Der Server
+  schickt daher den **Piezo-Zustand** des Tiers über den Live-Kanal:
+  `{t:"buzzer", freq, on}` (`PetEmulator.buzzer()` = `emu_freq()`/`emu_en()`,
+  ein *Level*, nicht der konsumierte Latch).
+- Gesendet wird **nur bei Änderung** (der Hub diffed gegen den letzten Wert),
+  genau wie beim LCD-Frame — ein stilles Tier kostet kein Byte.
+- Die Werte gehen **unskaliert** durch; die Umrechnung in Hz macht der Client
+  (`src/emu/audio.ts`), wie schon im früheren Tab-Emulator. Das hält
+  Server und Client byte-identisch zu dem, was vor der Server-Ownership klang.
+- Ein Tier ohne `buzzer()` (Alt-Stub) degradiert zu „immer still": es wird nie
+  eine Buzzer-Nachricht gestreamt, Frame/State laufen unberührt weiter.
+
 ## Tod wird am Bild erkannt (2026-10-17)
 
 - **Kein CPU-Signal.** TamaLIB ruft `hal->halt()` nie auf; das Halted-Flag des
@@ -106,3 +120,20 @@ Reihe ganz entfernt, weil sie einen nie wechselnden Zustand aus einem
 hartkodierten Null-Puffer zeigte; jetzt ist die Quelle des Zustands echt, daher
 ist die Reihe wieder da. Die statischen Grafiken auf der Guide-Seite
 (`renderIconGrid`) bleiben.
+
+**Auswahl-Hervorhebung (2026-10-17, clientseitig abgeleitet):** Weil die
+Segment-Bits dauerhaft 0 bleiben, ist auf der Leiste nicht zu sehen, welches
+Icon der Nutzer gerade angewählt hat. Diese Auswahl ist aber aus den
+Tastendrücken selbst ableitbar und wird in `src/emu/menu.ts` (`MenuTracker`)
+geführt: A (`SELECT`/`left`) wandert über den 8er-**Ring** der Icons (am Ende
+Umbruch auf das erste), B/C verlassen das Blättern und **suspendieren** die
+Ableitung (im Item ist der ROM-Zustand maßgeblich), und nach
+`MENU_BROWSE_TIMEOUT_MS` (5 s) ohne A-Druck erlischt sie (das P1 verlässt das
+Menü selbst). Bei Tod/neuem Tier `reset()`.
+
+`drawIconRow(..., highlight)` zeichnet für den ausgewählten Slot einen
+1-Pixel-Ring **zusätzlich** zu den Icons; die Segment-Opazität bleibt exakt der
+übertragene `bits`-Wert. Die Hervorhebung fälscht also **keinen** ROM-Zustand:
+sie ist ein bewusst separat gezeichneter, clientseitig abgeleiteter Hinweis.
+Rein und zeit-injizierbar (kein DOM/Timer/Uhr), daher voll unit-testbar
+(`tests/menu-tracking.test.ts`, `tests/icons-render.test.ts`).

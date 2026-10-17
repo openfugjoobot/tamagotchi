@@ -4,6 +4,7 @@ import { drawLcd } from "./render/lcd";
 import { drawIconRow, loadIcons, renderIconGrid, type IconImages } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
+import { MenuTracker } from "./emu/menu";
 import { LiveClient } from "./net/live";
 import { AUTH_ENABLED } from "./auth/config";
 import { currentSession, restoreSession, renderSignInButton, signOut, initGsi, onSessionRefresh, type Session } from "./auth/google";
@@ -723,6 +724,21 @@ let active: Device = "p1";
 let lastFrame: Uint8Array | null = null;
 /** Letzter empfangener Icon-Segment-Zustand (8 Bits, aus dem Live-Frame). */
 let lastIcons: Uint8Array = new Uint8Array(8);
+/**
+ * Abgeleitete Menü-Auswahl (clientseitig, aus den Tastendrücken). Das ROM meldet
+ * die Auswahl nicht (die 8 Segment-Bits bleiben 0), daher wird sie hier aus den
+ * A-Drücken über den Icon-Ring geführt und als Ring hervorgehoben (s.
+ * `emu/menu.ts` und `render/icons.ts`). Bei Tod/neuem Tier per `reset()`.
+ */
+const menu = new MenuTracker();
+/**
+ * Letzter empfangener Piezo-Zustand aus `{t:"buzzer"}`. `freq` in den rohen
+ * ROM-Einheiten (0 = still), `on` das Enable-Flag. Wird pro Zeichenframe an den
+ * Piezo gegeben (die Umrechnung macht `emu/audio.ts`, wie im alten Tab-Emulator).
+ */
+let lastBuzzer: { freq: number; on: boolean } = { freq: 0, on: false };
+/** Geteilter Stille-Zustand (vermeidet Allokation im heissen Frame-Pfad). */
+const SILENT_BUZZER: { freq: number; on: boolean } = { freq: 0, on: false };
 
 /** Schalter-Beschriftung an das aktive Geraet angleichen. */
 function syncDeviceButtons(): void {
@@ -752,6 +768,11 @@ function setActive(device: Device): void {
   active = device;
   try { localStorage.setItem(DEVICE_KEY, device); } catch { /* Quota */ }
   syncDeviceButtons();
+  // Anderes Tier/anderes Geraet: die abgeleitete Menue-Auswahl gilt nicht mehr.
+  menu.reset();
+  // Und der alte Piezo-Zustand auch nicht: bis der neue Bind seinen Buzzer
+  // liefert, darf kein Restton des vorigen Tiers weiterklingen.
+  lastBuzzer = { freq: 0, on: false };
   live.disconnect();
   void startStream();
 }
@@ -1288,13 +1309,15 @@ async function boot(): Promise<void> {
   // Die 8 echten P1-Icon-Grafiken laden (fuer Live-Reihen + Vorschau-Karten).
   iconImgs = await loadIcons();
   paintMiniIcons();
-  // Der Server schickt Frames; hier wird nur gezeichnet. Der Ton entsteht
-  // serverseitig (Beep-Latch → Push, Task 7); das Task-6-Protokoll traegt
-  // keinen Buzzer-Zustand, daher bleibt der Tab selbst stumm.
+  // Der Server schickt Frames; hier wird nur gezeichnet. Den Ton liefert der
+  // Server ueber `{t:"buzzer", freq, on}`: der Tab selbst laeuft nicht mehr,
+  // hoert aber den Piezo des serverseitigen Tiers. Der Zustand wird gemerkt und
+  // pro Zeichenframe an den WebAudio-Piezo gegeben (siehe `frame()`).
   live.onFrame((lcd, icons) => { lastFrame = lcd; lastIcons = icons; markBooted(); });
+  live.onBuzzer((b) => { lastBuzzer = b; });
   // Verbindungsstatus folgt dem Live-Client statt nur navigator.onLine
   // (Task-10-Mandat b): ein abgerissener Socket wird so sichtbar.
-  live.onState(() => updateConnBadge());
+  live.onState((s) => { updateConnBadge(); if (!s.alive) menu.reset(); });
   requestAnimationFrame(frame);
 
   // Einstellungen vom Server laden, sobald ein Konto da ist. Ohne Konto
@@ -1335,7 +1358,11 @@ function bindButtons(): void {
     if (down) pressed.add(b); else pressed.delete(b);
     // Nur der Druck wird gesendet - der Server faehrt den down/up-Zyklus selbst
     // (Task-6-Protokoll, diskretes {t:"press"}).
-    if (down) live.press(BUTTON_MAP[b] as Btn);
+    if (down) {
+      live.press(BUTTON_MAP[b] as Btn);
+      // Die abgeleitete Menü-Auswahl speist sich aus denselben Drücken.
+      menu.press(b, performance.now());
+    }
   };
   const releaseAll = () => { for (const b of [...pressed]) set(b, false); };
 
@@ -1381,6 +1408,21 @@ function bindButtons(): void {
  * ROM/Geraet die Segmente treibt, ohne weitere Protokollaenderung.
  */
 function frame(): void {
+  // Piezo aus dem Live-Kanal speisen. Der Server schickt nur bei Aenderung,
+  // `update` ist aber idempotent (setzt die Verstaerkung jeden Frame neu) und
+  // weckt einen suspended Kontext. So klingt das serverseitige Tier im Tab,
+  // sofern Audio entsperrt und nicht stummgeschaltet ist.
+  //
+  // Faellt die Verbindung, bleibt der zuletzt gemeldete Zustand stehen - ein
+  // Ton, der beim Socket-Abriss an war, wuerde sonst endlos weiterklingen.
+  // Offline erzwingt daher Stille, bis der naechste Bind seinen Buzzer liefert.
+  const b = live.status() === "live" ? lastBuzzer : SILENT_BUZZER;
+  piezo.update(b.freq, b.on);
+  // Abgeleitete Menü-Auswahl altern lassen (Browsing-Fenster) und den Ring
+  // bestimmen. -1 = nichts hervorgehoben (nicht am Blättern / im Item / tot).
+  const now = performance.now();
+  menu.tick(now);
+  const highlight = menu.selection(now).index;
   const lcd = lastFrame;
   if (lcd) {
     const scale = Math.max(1, Math.floor(canvas.clientWidth / LCD_WIDTH));
@@ -1390,16 +1432,16 @@ function frame(): void {
       for (const el of [iconsTop, iconsBottom]) { el.width = LCD_WIDTH * scale; el.height = 8 * scale; }
     }
     drawLcd(ctx, lcd, scale);
-    drawIconRow(ctxTop, lastIcons, 0, scale, iconImgs);
-    drawIconRow(ctxBottom, lastIcons, 1, scale, iconImgs);
+    drawIconRow(ctxTop, lastIcons, 0, scale, iconImgs, highlight);
+    drawIconRow(ctxBottom, lastIcons, 1, scale, iconImgs, highlight);
 
     // Mini-Vorschau nur spiegeln, wenn das Menü offen ist.
     if (miniLcd && miniLcdCtx && menuEl && !menuEl.hidden) {
       const ms = 4;
       miniLcd.width = LCD_WIDTH * ms; miniLcd.height = LCD_HEIGHT * ms;
       drawLcd(miniLcdCtx, lcd, ms);
-      if (miniTop && miniTopCtx) { miniTop.width = LCD_WIDTH * ms; miniTop.height = 8 * ms; drawIconRow(miniTopCtx, lastIcons, 0, ms, iconImgs); }
-      if (miniBottom && miniBottomCtx) { miniBottom.width = LCD_WIDTH * ms; miniBottom.height = 8 * ms; drawIconRow(miniBottomCtx, lastIcons, 1, ms, iconImgs); }
+      if (miniTop && miniTopCtx) { miniTop.width = LCD_WIDTH * ms; miniTop.height = 8 * ms; drawIconRow(miniTopCtx, lastIcons, 0, ms, iconImgs, highlight); }
+      if (miniBottom && miniBottomCtx) { miniBottom.width = LCD_WIDTH * ms; miniBottom.height = 8 * ms; drawIconRow(miniBottomCtx, lastIcons, 1, ms, iconImgs, highlight); }
     }
   }
   requestAnimationFrame(frame);
