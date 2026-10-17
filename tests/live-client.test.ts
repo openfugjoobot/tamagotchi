@@ -121,6 +121,56 @@ describe("LiveClient", () => {
     expect(frames[1][511]).toBe(1);
   });
 
+  it("delivers the icon bits alongside the LCD, coercing them to 0/1", async () => {
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    const frames: Array<{ lcd: Uint8Array; icons: Uint8Array }> = [];
+    client.onFrame((lcd, icons) => frames.push({ lcd, icons }));
+    client.connect("pet-1", "tok");
+    await waitUntil(() => server!.received.some((m) => m.t === "hello"));
+
+    server.broadcast({ t: "frame", lcd: new Array(512).fill(0), icons: [0, 1, 0, 1, 0, 0, 0, 1] });
+    await waitUntil(() => frames.length === 1);
+    expect(frames[0].icons.length).toBe(8);
+    expect(Array.from(frames[0].icons)).toEqual([0, 1, 0, 1, 0, 0, 0, 1]);
+  });
+
+  it("degrades to an all-zero icon row when a frame carries no icons", async () => {
+    // A server that predates the icon extension must not break rendering.
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    const frames: Array<{ lcd: Uint8Array; icons: Uint8Array }> = [];
+    client.onFrame((lcd, icons) => frames.push({ lcd, icons }));
+    client.connect("pet-1", "tok");
+    await waitUntil(() => server!.received.some((m) => m.t === "hello"));
+
+    server.broadcast({ t: "frame", lcd: new Array(512).fill(0) });
+    await waitUntil(() => frames.length === 1);
+    expect(frames[0].icons.length).toBe(8);
+    expect(Array.from(frames[0].icons)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  it("clamps a short or long icons array to exactly 8 bits", async () => {
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    const frames: Array<{ lcd: Uint8Array; icons: Uint8Array }> = [];
+    client.onFrame((lcd, icons) => frames.push({ lcd, icons }));
+    client.connect("pet-1", "tok");
+    await waitUntil(() => server!.received.some((m) => m.t === "hello"));
+
+    // Short: only 3 bits -> rest zero-filled. Long: extra bits ignored.
+    server.broadcast({ t: "frame", lcd: new Array(512).fill(0), icons: [1, 1, 1] });
+    await waitUntil(() => frames.length === 1);
+    expect(Array.from(frames[0].icons)).toEqual([1, 1, 1, 0, 0, 0, 0, 0]);
+
+    server.broadcast({ t: "frame", lcd: new Array(512).fill(1), icons: [1, 0, 1, 0, 1, 0, 1, 0, 1, 1] });
+    await waitUntil(() => frames.length === 2);
+    expect(Array.from(frames[1].icons)).toEqual([1, 0, 1, 0, 1, 0, 1, 0]);
+  });
+
   it("press() sends a press message with the button name", async () => {
     server = new FakeLiveServer();
     const url = await server.listen();

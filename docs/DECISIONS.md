@@ -88,11 +88,21 @@ Die 8 P1-Menü-Icons sind feste LCD-Segmente, keine Bitmap im ROM (`icons()` ble
 leer). Die Grafiken stammen aus `GMMan/flipperzero-tamagotch-p1` (Lizenz dort unklar,
 privater Gebrauch).
 
-**Live-Ansicht (2026-10-17):** Das Gerät zeichnet die 8 Icons **nicht** mehr.
-Das Task-6-Protokoll überträgt nur `{t:"frame", lcd}` (32×16), nicht die
-Icon-Segmente; der Client hat also keinen echten Icon-Zustand. Eine dauerhaft
-blasse, nie aufleuchtende Reihe hätte den Anschein erweckt, es gäbe einen
-Menüzustand, den der Tab gar nicht kennt. Stattdessen wird nur das LCD gezeigt;
-die echten 8 Icons bleiben als statische Referenz auf der Guide-Seite
-(`renderIconGrid`). Eine Live-Icon-Reihe bräuchte zuerst eine Protokoll-Erweiterung
-(`{t:"frame", lcd, icons}`) – bewusst nicht Teil dieser Runde.
+**Live-Ansicht (2026-10-17):** Das Gerät zeichnet die 8 Icons wieder. Das
+Task-6-Protokoll wurde um die Icon-Segmente erweitert:
+`{t:"frame", lcd, icons}` — `icons` ist ein Array aus 8 Bits (0/1), die aus
+`emu_icons()` (HAL `h_set_lcd_icon`) stammen. Der Client zeichnet daraus die
+Reihen oben/unten (`src/render/icons.ts`, `drawIconRow`); aktive Segmente voll,
+inaktive dezent. Der Change-Detector des Hubs vergleicht **LCD und Icons**, damit
+auch ein reiner Icon-Wechsel ein Frame ausloest.
+
+Wichtig: Beim ausgelieferten P1-ROM treibt das ROM die Segment-Referenzen
+(seg 8/28 in `hw.c`) **nicht** — verifiziert per Live-Probe ueber die echte
+WASM/ROM-Kette: alle 8 Bits bleiben 0. Die Reihe ist daher faktisch durchgehend
+dezent. Sie fasst aber **keinen** hartkodierten leeren Puffer mehr an: die Bits
+sind echt uebertragen und leuchten auf, sobald ein ROM/Gerät die Segmente
+treibt — ohne weitere Protokollaenderung. Eine frühere Runde (Fix B1) hatte die
+Reihe ganz entfernt, weil sie einen nie wechselnden Zustand aus einem
+hartkodierten Null-Puffer zeigte; jetzt ist die Quelle des Zustands echt, daher
+ist die Reihe wieder da. Die statischen Grafiken auf der Guide-Seite
+(`renderIconGrid`) bleiben.

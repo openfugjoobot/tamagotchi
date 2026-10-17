@@ -1,7 +1,7 @@
 import { DEVICES, pickInitialDevice, nextDevice, switchLabel, type Device } from "./emu/devices";
 import { LCD_WIDTH, LCD_HEIGHT, type Btn } from "./emu/constants";
 import { drawLcd } from "./render/lcd";
-import { renderIconGrid } from "./render/icons";
+import { drawIconRow, loadIcons, renderIconGrid, type IconImages } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
 import { LiveClient } from "./net/live";
@@ -34,12 +34,44 @@ import {
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
+const iconsTop = document.getElementById("icons-top") as HTMLCanvasElement;
+const iconsBottom = document.getElementById("icons-bottom") as HTMLCanvasElement;
+const ctxTop = iconsTop.getContext("2d")!;
+const ctxBottom = iconsBottom.getContext("2d")!;
+
+// Echte P1-Icon-Grafiken; nach loadIcons befuellt. Leer = noch nicht geladen.
+let iconImgs: IconImages = [];
 
 // Mini-Vorschau im Menü
 let miniDevice: HTMLElement | null = null;
 let miniWrapEl: HTMLElement | null = null;
 let miniLcd: HTMLCanvasElement | null = null;
 let miniLcdCtx: CanvasRenderingContext2D | null = null;
+let miniTop: HTMLCanvasElement | null = null;
+let miniBottom: HTMLCanvasElement | null = null;
+let miniTopCtx: CanvasRenderingContext2D | null = null;
+let miniBottomCtx: CanvasRenderingContext2D | null = null;
+/** Icon-Canvas der Vorschau-Karten (Karussell): je Karte [oben, unten]. */
+const miniIconCanvases: { top: HTMLCanvasElement; bottom: HTMLCanvasElement }[] = [];
+
+/**
+ * Zeichnet die P1-Icon-Reihen in jede Vorschau-Karte (nach loadIcons). Die
+ * Vorschau zeigt keinen laufenden Emulator, daher leerer Icon-Zustand (alle
+ * Segmente dezent) – aber aus den echten P1-Sprites, nicht mehr hartkodiert.
+ */
+function paintMiniIcons(): void {
+  const ms = 2; // 32x8 logisch -> 64x16 px
+  const blank = new Uint8Array(8);
+  for (const { top, bottom } of miniIconCanvases) {
+    for (const [cv, row] of [[top, 0], [bottom, 1]] as const) {
+      const c = cv.getContext("2d");
+      if (!c) continue;
+      cv.width = LCD_WIDTH * ms;
+      cv.height = 8 * ms;
+      drawIconRow(c, blank, row, ms, iconImgs);
+    }
+  }
+}
 
 const piezo = createPiezo(() => new AudioContext());
 const menuEl = document.getElementById("menu");
@@ -257,8 +289,13 @@ function initUI(): void {
     shellStage.appendChild(wrap);
     miniDevice = clone;
     miniWrapEl = wrap;
-    miniLcd = clone.querySelector("canvas.lcd");
+    const cvs = clone.querySelectorAll("canvas");
+    miniTop = cvs[0] ?? null;
+    miniLcd = cvs[1] ?? null;
+    miniBottom = cvs[2] ?? null;
+    miniTopCtx = miniTop ? miniTop.getContext("2d") : null;
     miniLcdCtx = miniLcd ? miniLcd.getContext("2d") : null;
+    miniBottomCtx = miniBottom ? miniBottom.getContext("2d") : null;
   }
   if (shellbtns && deviceEl) {
     const setShell = (id: string, animate = true) => {
@@ -327,10 +364,14 @@ function initUI(): void {
         `</linearGradient></defs>` +
         `<polygon points="${starPolygon(shell.star)}" fill="url(#sun-${shell.id})" /></svg>` +
         `<span class="mini-screen-stack">` +
+        `<canvas class="mini-icons" width="32" height="8" aria-hidden="true"></canvas>` +
         `<span class="mini-screen"></span>` +
+        `<canvas class="mini-icons" width="32" height="8" aria-hidden="true"></canvas>` +
         `</span>` +
         `</span>`;
       wrap.append(ring, dev);
+      const ics = dev.querySelectorAll<HTMLCanvasElement>(".mini-icons");
+      if (ics.length >= 2) miniIconCanvases.push({ top: ics[0], bottom: ics[1] });
       const name = document.createElement("span");
       name.className = "shell-name";
       name.textContent = shell.id.charAt(0).toUpperCase() + shell.id.slice(1);
@@ -680,6 +721,8 @@ let p2Available = true;
 let active: Device = "p1";
 /** Letzter empfangener LCD-Frame (oder null, solange nichts kam). */
 let lastFrame: Uint8Array | null = null;
+/** Letzter empfangener Icon-Segment-Zustand (8 Bits, aus dem Live-Frame). */
+let lastIcons: Uint8Array = new Uint8Array(8);
 
 /** Schalter-Beschriftung an das aktive Geraet angleichen. */
 function syncDeviceButtons(): void {
@@ -1242,10 +1285,13 @@ async function boot(): Promise<void> {
   syncDeviceButtons();
   bindButtons();
   initTask11();
+  // Die 8 echten P1-Icon-Grafiken laden (fuer Live-Reihen + Vorschau-Karten).
+  iconImgs = await loadIcons();
+  paintMiniIcons();
   // Der Server schickt Frames; hier wird nur gezeichnet. Der Ton entsteht
   // serverseitig (Beep-Latch → Push, Task 7); das Task-6-Protokoll traegt
   // keinen Buzzer-Zustand, daher bleibt der Tab selbst stumm.
-  live.onFrame((lcd) => { lastFrame = lcd; markBooted(); });
+  live.onFrame((lcd, icons) => { lastFrame = lcd; lastIcons = icons; markBooted(); });
   // Verbindungsstatus folgt dem Live-Client statt nur navigator.onLine
   // (Task-10-Mandat b): ein abgerissener Socket wird so sichtbar.
   live.onState(() => updateConnBadge());
@@ -1326,13 +1372,13 @@ function bindButtons(): void {
 }
 
 /**
- * Zeichnet den zuletzt empfangenen Frame. Der Server liefert nur die LCD-Bits -
- * die 8 P1-Menu-Icons sind eigene LCD-Segmente, die das Task-6-Protokoll nicht
- * uebertraegt. Frueher zeichnete der Tab sie als dauerhaft inaktive Reihe
- * (blasse Segmente, die nie aufleuchten und keinen echten Zustand zeigen); das
- * sah wie eine kaputte Statusleiste aus. Da der Client keinerlei Icon-Zustand
- * hat, wird hier nichts vorgetaeuscht: nur das LCD wird gezeichnet. Die echten
- * 8 Icons stehen weiterhin als Referenz auf der Guide-Seite (renderIconGrid).
+ * Zeichnet den zuletzt empfangenen Frame. Der Server liefert die LCD-Bits **und**
+ * die 8 P1-Icon-Segment-Bits (`{t:"frame", lcd, icons}`). Die Icons sind echte
+ * LCD-Segmente des Treibers (`hw_set_lcd_pin`, seg 8/28); die Reihe oben/unten
+ * spiegelt jetzt diesen uebertragenen Zustand statt eines hartkodierten leeren
+ * Puffers. Beim ausgelieferten P1-ROM treibt das ROM die Segmente derzeit nicht,
+ * daher bleibt die Reihe faktisch dezent – sie leuchtet aber auf, sobald ein
+ * ROM/Geraet die Segmente treibt, ohne weitere Protokollaenderung.
  */
 function frame(): void {
   const lcd = lastFrame;
@@ -1341,14 +1387,19 @@ function frame(): void {
     if (canvas.width !== LCD_WIDTH * scale) {
       canvas.width = LCD_WIDTH * scale;
       canvas.height = LCD_HEIGHT * scale;
+      for (const el of [iconsTop, iconsBottom]) { el.width = LCD_WIDTH * scale; el.height = 8 * scale; }
     }
     drawLcd(ctx, lcd, scale);
+    drawIconRow(ctxTop, lastIcons, 0, scale, iconImgs);
+    drawIconRow(ctxBottom, lastIcons, 1, scale, iconImgs);
 
     // Mini-Vorschau nur spiegeln, wenn das Menü offen ist.
     if (miniLcd && miniLcdCtx && menuEl && !menuEl.hidden) {
       const ms = 4;
       miniLcd.width = LCD_WIDTH * ms; miniLcd.height = LCD_HEIGHT * ms;
       drawLcd(miniLcdCtx, lcd, ms);
+      if (miniTop && miniTopCtx) { miniTop.width = LCD_WIDTH * ms; miniTop.height = 8 * ms; drawIconRow(miniTopCtx, lastIcons, 0, ms, iconImgs); }
+      if (miniBottom && miniBottomCtx) { miniBottom.width = LCD_WIDTH * ms; miniBottom.height = 8 * ms; drawIconRow(miniBottomCtx, lastIcons, 1, ms, iconImgs); }
     }
   }
   requestAnimationFrame(frame);

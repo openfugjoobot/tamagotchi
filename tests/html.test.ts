@@ -39,6 +39,15 @@ describe("html page", () => {
     expect(index).not.toContain("guide.html");
   });
 
+  it("hat die geteilten LCD-Segment-Icon-Reihen oben und unten", () => {
+    // Die Live-Ansicht zeichnet die 8 P1-Icon-Segmente wieder; die Bits kommen
+    // aus dem Frame ({t:"frame", lcd, icons}). Beide Canvas-Tags muessen im
+    // device-wrap stehen, sonst hat main.ts keine Ziele zum Zeichnen.
+    expect(index).toMatch(/id="icons-top"/);
+    expect(index).toMatch(/id="icons-bottom"/);
+    expect(index).toMatch(/class="icons"/);
+  });
+
   it("hat die Task-11-Ansichten (Tiere, Speicherstände, Beeps, Status)", () => {
     // Ein Pet-View-Fenster, ein Slots-Fenster und ein Beep-Fenster im win-Stil.
     expect(index).toMatch(/id="pets-pop"/);

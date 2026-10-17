@@ -8,13 +8,17 @@ import { makeTestKey, signJwt, jwksFetch, type TestKey } from "./helpers/jwt";
 const CLIENT = "1234.apps.googleusercontent.com";
 const NOW = Date.UTC(2026, 0, 1, 12, 0, 0);
 
-/** Minimal pet stub: a controllable LCD buffer plus a press recorder. */
+/** Minimal pet stub: a controllable LCD buffer + icon buffer plus a press recorder. */
 class FakePet {
   lcdBuf = new Uint8Array(512);
+  iconBuf = new Uint8Array(8);
   presses: string[] = [];
   alive = true;
   lcd(): Uint8Array {
     return this.lcdBuf;
+  }
+  icons(): Uint8Array {
+    return this.iconBuf;
   }
   press(btn: string): void {
     this.presses.push(btn);
@@ -24,6 +28,9 @@ class FakePet {
   }
   setPixel(i: number, v: number): void {
     this.lcdBuf[i] = v;
+  }
+  setIcon(i: number, v: number): void {
+    this.iconBuf[i] = v;
   }
 }
 
@@ -143,6 +150,38 @@ describe("WsHub", () => {
     expect(frame2.lcd[0]).toBe(1);
   });
 
+  it("carries the 8 icon-segment bits in every frame message", async () => {
+    const pet = new FakePet();
+    pet.setIcon(2, 1);
+    pet.setIcon(5, 1);
+    await startHub(pet);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise<void>((r) => ws.on("open", () => r()));
+
+    const frameP = waitForMessage(ws, (m) => m.t === "frame");
+    ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
+    const frame = await frameP;
+    expect(frame.icons).toEqual([0, 0, 1, 0, 0, 1, 0, 0]);
+  });
+
+  it("re-sends a frame when only the icons change, not just the LCD", async () => {
+    const pet = new FakePet();
+    await startHub(pet);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise<void>((r) => ws.on("open", () => r()));
+    ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
+    await waitForMessage(ws, (m) => m.t === "frame");
+
+    // LCD untouched; only an icon segment lights up. The change detector must
+    // treat the icons as part of the frame state, or the row would freeze.
+    pet.setIcon(7, 1);
+    const frameP = waitForMessage(ws, (m) => m.t === "frame" && m.icons?.[7] === 1);
+    hub.notifyChanged();
+    const frame = await frameP;
+    expect(frame.icons[7]).toBe(1);
+    expect(frame.lcd.every((b: number) => b === 0)).toBe(true);
+  });
+
   it("sends a state message with alive and age", async () => {
     const pet = new FakePet();
     await startHub(pet);
@@ -196,6 +235,21 @@ describe("WsHub", () => {
     ws.close();
     await new Promise<void>((r) => ws.on("close", () => r()));
     expect(hub.hasLiveConnection("uuid-user-1")).toBe(false);
+  });
+
+  it("tolerates a pet whose icons() throws or is absent, still sending the LCD", async () => {
+    // A pet that predates the icons() addition must not break frame streaming.
+    const pet = new FakePet();
+    // @ts-expect-error simulate a legacy LivePet without icons()
+    delete pet.icons;
+    await startHub(pet);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise<void>((r) => ws.on("open", () => r()));
+    const frameP = waitForMessage(ws, (m) => m.t === "frame");
+    ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
+    const frame = await frameP;
+    expect(frame.lcd).toHaveLength(512);
+    expect(frame.icons).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
   });
 
   it("ignores presses before a successful hello", async () => {

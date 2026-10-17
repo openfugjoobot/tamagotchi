@@ -103,7 +103,15 @@ export class PetEmulator {
     return this.mem.subarray(this.lcdPtr, this.lcdPtr + LCD_WIDTH * LCD_HEIGHT);
   }
 
-  /** Icon buffer (P1 exposes none; kept for parity with the browser wrapper). */
+  /**
+   * The 8 icon-segment bits (0/1) from the LCD driver, live view into WASM
+   * memory. These are the P1 menu/status segments the ROM drives through
+   * `hw_set_lcd_pin` (seg 8/28); the frame protocol carries them so the client
+   * can draw the top/bottom icon rows. On the shipped P1 ROM no segment is
+   * currently driven (the printed icons are not ROM segments), so this reads
+   * all-zero for a live P1 pet — but the bits are real, not hardcoded, and a
+   * future ROM/device that drives them lights up with no protocol change.
+   */
   icons(): Uint8Array {
     this.refresh();
     return this.mem.subarray(this.iconsPtr, this.iconsPtr + ICON_COUNT);

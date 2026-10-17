@@ -5,7 +5,9 @@
  * only relays. It speaks the Task-6 protocol:
  *
  *   →  {t:"hello", token, petId}   on (re)connect, to authenticate + bind
- *   ←  {t:"frame", lcd:number[]}   the 32×16 LCD, drawn with render/lcd.ts
+ *   ←  {t:"frame", lcd:number[], icons:number[]}  the 32×16 LCD plus the 8
+ *                              icon-segment bits, drawn with render/lcd.ts and
+ *                              render/icons.ts
  *   ←  {t:"state", alive, ageYears}
  *   →  {t:"press", btn}            a button press (left/middle/right)
  *
@@ -17,7 +19,7 @@
  * against a fake server, with no browser and no network.
  */
 
-import { LCD_WIDTH, LCD_HEIGHT, type Btn } from "../emu/constants";
+import { LCD_WIDTH, LCD_HEIGHT, ICON_COUNT, type Btn } from "../emu/constants";
 
 export type LiveStatus = "live" | "offline";
 
@@ -60,7 +62,7 @@ export class LiveClient {
   private retries = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-  private readonly frameCbs = new Set<(lcd: Uint8Array) => void>();
+  private readonly frameCbs = new Set<(lcd: Uint8Array, icons: Uint8Array) => void>();
   private readonly stateCbs = new Set<(s: LiveState) => void>();
 
   constructor(opts: LiveClientOptions = {}) {
@@ -88,8 +90,11 @@ export class LiveClient {
     this.open();
   }
 
-  /** Register a frame consumer. Returns an unsubscribe function. */
-  onFrame(cb: (lcd: Uint8Array) => void): () => void {
+  /**
+   * Register a frame consumer. The callback gets the 32×16 LCD and the 8 icon
+   * segments, each a fresh `Uint8Array`. Returns an unsubscribe function.
+   */
+  onFrame(cb: (lcd: Uint8Array, icons: Uint8Array) => void): () => void {
     this.frameCbs.add(cb);
     return () => this.frameCbs.delete(cb);
   }
@@ -185,7 +190,7 @@ export class LiveClient {
   }
 
   private onMessage(data: unknown): void {
-    let msg: { t?: unknown; lcd?: unknown; alive?: unknown; ageYears?: unknown };
+    let msg: { t?: unknown; lcd?: unknown; icons?: unknown; alive?: unknown; ageYears?: unknown };
     try {
       msg = JSON.parse(typeof data === "string" ? data : String(data));
     } catch {
@@ -194,7 +199,13 @@ export class LiveClient {
     if (msg.t === "frame" && Array.isArray(msg.lcd)) {
       const lcd = new Uint8Array(LCD_WIDTH * LCD_HEIGHT);
       for (let i = 0; i < lcd.length && i < msg.lcd.length; i++) lcd[i] = msg.lcd[i] ? 1 : 0;
-      for (const cb of this.frameCbs) cb(lcd);
+      // Icons are optional: an older server sends none, and a short/long array
+      // must still yield exactly ICON_COUNT 0/1 bits, so the row always draws.
+      const icons = new Uint8Array(ICON_COUNT);
+      if (Array.isArray(msg.icons)) {
+        for (let i = 0; i < icons.length && i < msg.icons.length; i++) icons[i] = msg.icons[i] ? 1 : 0;
+      }
+      for (const cb of this.frameCbs) cb(lcd, icons);
       return;
     }
     if (msg.t === "state") {

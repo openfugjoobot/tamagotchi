@@ -7,7 +7,7 @@ der Browser ist nur Fenster und Fernbedienung. Die Emulation ist weiterhin die
 ```
 Browser                                  tamagotchi-server (Node)          Postgres
   src/net/live.ts  ──WS /ws────────────▶  server/src/ws.ts                 (pets.state)
-   render/lcd.ts   ◀─{t:"frame"}          server/src/emulator.ts (WASM)
+   render/lcd.ts   ◀─{t:"frame",lcd,icons} server/src/emulator.ts (WASM)
    emu/input.ts    ──{t:"press"}          server/src/tick.ts (ein Loop, 125 ms)
    ui/*.ts         ──REST /api/*────────▶ server/src/api.ts (Fastify)
                                            server/src/beeps.ts (Debounce)
@@ -21,7 +21,8 @@ Browser                                  tamagotchi-server (Node)          Postg
   Tick-Loop (`server/src/tick.ts`, 125 ms ≈ 8 fps). Läuft weiter, auch wenn kein
   Browser offen ist.
 - **Browser = Client.** `src/net/live.ts` verbindet sich per WebSocket, zeichnet die
-  empfangenen LCD-Frames (`src/render/lcd.ts`) und schickt Tastendrücke zurück.
+  empfangenen LCD-Frames (`src/render/lcd.ts`) samt der 8 Icon-Segmente
+  (`src/render/icons.ts`, Reihe oben/unten) und schickt Tastendrücke zurück.
   Kein Emulator-Tick, kein lokaler Spielstand mehr im Tab.
 
 ## Server-Module
@@ -31,7 +32,7 @@ Browser                                  tamagotchi-server (Node)          Postg
 | `server/src/main.ts` | Verdrahtung: Env lesen, Schema anwenden, Tiere rehydrieren, Tick + WS + API + Push-Sweeper starten |
 | `server/src/emulator.ts` | `PetEmulator`: WASM laden, `step(ms)` (reale Zeit → CPU-Schritte), `press`, `lcd`, `save`/`loadState`, `dead` |
 | `server/src/tick.ts` | `TickLoop`: ein Intervall für alle Tiere, Fehler-Isolation pro Tier |
-| `server/src/ws.ts` | `WsHub`: `hello`-Auth → Bind an `(userId, petId)`; Frames raus, Buttons rein; `hasLiveConnection` als Push-Gate |
+| `server/src/ws.ts` | `WsHub`: `hello`-Auth → Bind an `(userId, petId)`; `{t:"frame", lcd, icons}` raus, Buttons rein; `hasLiveConnection` als Push-Gate |
 | `server/src/api.ts` | REST `/api/*` (Fastify), jeder Aufruf nutzer-scoped über das Bearer-Token |
 | `server/src/auth.ts` | Google-ID-Token gegen JWKS prüfen (aus dem früheren Worker übernommen) |
 | `server/src/beeps.ts` | `emu_take_buzzer()`-Latch → entprelltes, **generisches** Beep-Ereignis |
@@ -43,8 +44,9 @@ Browser                                  tamagotchi-server (Node)          Postg
 
 | Modul | Verantwortung |
 |-------|----------------|
-| `src/net/live.ts` | WS-Client: `hello`/`frame`/`state`/`press`, Auto-Reconnect mit Backoff |
+| `src/net/live.ts` | WS-Client: `hello`/`frame` (lcd+icons)/`state`/`press`, Auto-Reconnect mit Backoff |
 | `src/render/lcd.ts` | 32×16-Frame auf die Canvas zeichnen |
+| `src/render/icons.ts` | 8 P1-Icon-Segmente als Reihe oben/unten zeichnen (aus den Frame-Bits) + Guide-Raster |
 | `src/emu/input.ts` | A/B/C → `{t:"press"}` über den Live-Kanal |
 | `src/ui/{pets,slots,settings,beeps}.ts` | Tier-Liste, Speicherstände, Einstellungen, Beep-Historie |
 | `src/ui/api.ts` | fetch-Plumbing (Bearer-Header, JSON, Fehlerform) |

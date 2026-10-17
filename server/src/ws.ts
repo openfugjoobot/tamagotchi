@@ -9,10 +9,15 @@
  *                 JWKS, same code path as the HTTP API); the pet is loaded and
  *                 checked to belong to that user. Only then is the socket bound
  *                 to a `(userId, petId)` pair and registered as "live".
- *   3. streaming — the hub pushes `{t:"frame", lcd}` whenever the pet's LCD
- *                 changed and `{t:"state", alive, ageYears}` on bind *and*
- *                 whenever the life-state (alive) flips — so a pet dying with
- *                 the tab open emits `state{alive:false}` (Task-6 Finding B).
+ *   3. streaming — the hub pushes `{t:"frame", lcd, icons}` whenever the pet's
+ *                 LCD **or** its 8 icon segments changed, and
+ *                 `{t:"state", alive, ageYears}` on bind *and* whenever the
+ *                 life-state (alive) flips — so a pet dying with the tab open
+ *                 emits `state{alive:false}` (Task-6 Finding B). The `icons`
+ *                 array carries the 8 P1 menu/status LCD segments (see
+ *                 docs/DECISIONS.md) so the client can draw the top/bottom icon
+ *                 rows from real state rather than a hardcoded blank. A pet
+ *                 without `icons()` (legacy stub) degrades to an all-zero row.
  *                 `{t:"press", btn}` from the client is forwarded to the bound
  *                 pet.
  *
@@ -35,8 +40,16 @@ const BTNS: readonly Btn[] = ["left", "middle", "right"];
 /** What a bound socket can do with its pet. Satisfied by `PetEmulator`. */
 export interface LivePet {
   lcd(): Uint8Array;
+  /**
+   * The 8 icon-segment bits (0/1), or `undefined`/absent for a legacy stub.
+   * Optional so the hub can stream a pet that predates the icon extension.
+   */
+  icons?(): Uint8Array;
   press(btn: Btn): void;
 }
+
+/** Number of icon segments carried per frame (P1: 8). */
+export const ICON_COUNT = 8;
 
 /** Pet plus life-state resolved for a `hello`. */
 export interface LoadedPet {
@@ -75,6 +88,8 @@ interface Binding {
   ageYears: number;
   /** Last LCD sent, so we only emit on change. */
   lastLcd: Uint8Array | null;
+  /** Last icon-segment state sent, so an icon-only change also emits. */
+  lastIcons: Uint8Array | null;
 }
 
 export class WsHub {
@@ -199,6 +214,7 @@ export class WsHub {
       alive: loaded.alive,
       ageYears: loaded.ageYears,
       lastLcd: null,
+      lastIcons: null,
     };
     this.bindings.set(ws, binding);
     this.addLive(loaded.userId, ws);
@@ -215,13 +231,31 @@ export class WsHub {
     binding.pet.press(btn as Btn);
   }
 
-  /** Emit a frame only when the LCD differs from the last one sent. */
+  /**
+   * Emit a frame only when the LCD **or** the icon segments differ from the last
+   * one sent. The icons are read defensively: a legacy `LivePet` without
+   * `icons()` (or one that throws) degrades to an all-zero row instead of
+   * breaking the frame stream.
+   */
   private pushFrame(ws: WebSocket, binding: Binding): void {
     if (ws.readyState !== WebSocket.OPEN) return;
     const lcd = binding.pet.lcd();
-    if (binding.lastLcd && buffersEqual(binding.lastLcd, lcd)) return;
+    const icons = readIcons(binding.pet);
+    if (
+      binding.lastLcd &&
+      binding.lastIcons &&
+      buffersEqual(binding.lastLcd, lcd) &&
+      buffersEqual(binding.lastIcons, icons)
+    ) {
+      return;
+    }
     binding.lastLcd = new Uint8Array(lcd); // copy: WASM memory can move
-    this.send(ws, { t: "frame", lcd: Array.from(binding.lastLcd) });
+    binding.lastIcons = icons;
+    this.send(ws, {
+      t: "frame",
+      lcd: Array.from(binding.lastLcd),
+      icons: Array.from(binding.lastIcons),
+    });
   }
 
   private addLive(userId: string, ws: WebSocket): void {
@@ -253,4 +287,22 @@ function buffersEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
+}
+
+/**
+ * Read the pet's icon bits as a fresh 8-length 0/1 array. Never throws: a
+ * missing `icons()` or a throwing one yields all-zero, so the frame path stays
+ * total (the old hub streamed LCD-only for exactly this reason).
+ */
+function readIcons(pet: LivePet): Uint8Array {
+  const out = new Uint8Array(ICON_COUNT);
+  if (typeof pet.icons !== "function") return out;
+  try {
+    const src = pet.icons();
+    const n = Math.min(ICON_COUNT, src.length);
+    for (let i = 0; i < n; i++) out[i] = src[i] ? 1 : 0;
+  } catch {
+    return new Uint8Array(ICON_COUNT);
+  }
+  return out;
 }
