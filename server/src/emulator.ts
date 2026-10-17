@@ -11,8 +11,8 @@
  * the death image can flicker (stars animate) and a pet never comes back.
  */
 // Runtime-resolvable relative specifiers, NOT the `@/emu/*` alias: the alias is
-// known only to vitest + tsconfig, so a plain `node dist/server/src/main.js` run
-// would die with ERR_MODULE_NOT_FOUND on the first import (Task-3 F2). The `.js`
+// known only to vitest + tsconfig, so a plain `node dist-server/server/src/main.js`
+// run would die with ERR_MODULE_NOT_FOUND on the first import (Task-3 F2). The `.js`
 // suffix is the ESM-correct specifier for the emitted file; vitest and `tsc`
 // both resolve `death.js` back to `death.ts`.
 import { isAngelFrame } from "../../src/emu/death.js";

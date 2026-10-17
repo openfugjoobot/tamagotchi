@@ -59,6 +59,11 @@ services:
       - .secrets/tamagotchi.env
     environment:
       PORT: "8080"
+      # ROM/WASM live at /app/public/emu in the image (Dockerfile
+      # `COPY public/emu ./public/emu`). The compiled entrypoint derives this
+      # default itself, but pinning it here makes the container self-sufficient
+      # even if a blank PUBLIC_DIR is present in the env_file (Task-9 N1).
+      PUBLIC_DIR: "/app/public"
     networks:
       - default
       - proxy

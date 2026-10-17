@@ -108,6 +108,21 @@ export interface ServerHandle {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Where `emu/rom0.bin`, `emu/rom2.bin` and `emu/tamalib.wasm` live.
+ *
+ * `PUBLIC_DIR` wins when set. Otherwise the default is derived from this
+ * module's own location rather than hard-coded, so it is correct for the
+ * emitted layout wherever the tree is deployed: the compiled module sits at
+ * `<root>/dist-server/server/src/main.js` and the static assets at
+ * `<root>/public/emu/` — locally (repo-root `public/`) and in the Docker image
+ * (`/app/public/`, Dockerfile `COPY public/emu ./public/emu`). Three levels up
+ * from `server/src/` is the tree root in both cases (Task-9 N1).
+ */
+export function resolvePublicDir(env: { PUBLIC_DIR?: string }, moduleDir: string = __dirname): string {
+  return env.PUBLIC_DIR ?? resolve(moduleDir, "../../../public");
+}
+
 /** How long a pet may run unsaved before its state is written back. */
 const SAVE_EVERY_MS = 60_000;
 
@@ -345,7 +360,7 @@ async function main(): Promise<void> {
   if (!vapid.publicKey || !vapid.privateKey) throw new Error("VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY are required");
 
   const pool = new Pool({ connectionString: pgUrl });
-  const publicDir = env.PUBLIC_DIR ?? resolve(__dirname, "../../public");
+  const publicDir = resolvePublicDir(env);
 
   // ROMs are copyrighted Bandai firmware and are NOT in the repo (see
   // emu/README.md). On a clean clone they are missing, so fail fast with a

@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 import { newDb } from "pg-mem";
 import { WebSocket } from "ws";
-import { startServer } from "../server/src/main";
+import { startServer, resolvePublicDir } from "../server/src/main";
 import { TickLoop, type PetLike } from "../server/src/tick";
 import { collectBeep, beepDebounceSize, resetBeepDebounce } from "../server/src/beeps";
 import { signJwt, makeTestKey, jwksFetch, type TestKey } from "./helpers/jwt";
@@ -95,6 +98,35 @@ describe("TickLoop error isolation (Task-3 F1)", () => {
     await new Promise((r) => setTimeout(r, 80));
     loop.stop();
     expect(errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe("PUBLIC_DIR default resolution (Task-9 N1)", () => {
+  it("derives the tree-root public/ from the emitted module location", () => {
+    // The compiled module lives at <root>/dist-server/server/src/main.js, i.e.
+    // server/src/ three levels below the tree root — both locally and in the
+    // Docker image (/app/dist-server/server/src ⇒ /app/public). The old
+    // `../../public` default resolved to <root>/dist-server/public and booted
+    // nothing; the default must climb three levels.
+    const emittedModuleDir = resolve("/app/dist-server/server/src");
+    expect(resolvePublicDir({}, emittedModuleDir)).toBe(resolve("/app/public"));
+    const localModuleDir = resolve("/repo/dist-server/server/src");
+    expect(resolvePublicDir({}, localModuleDir)).toBe(resolve("/repo/public"));
+  });
+
+  it("honours an explicit PUBLIC_DIR over the derived default", () => {
+    expect(resolvePublicDir({ PUBLIC_DIR: "/custom/assets" }, "/app/dist-server/server/src")).toBe(
+      "/custom/assets",
+    );
+  });
+
+  it("the default lands on the real repo-root public/ that holds the assets", () => {
+    // Resolves from this test's own location back to the tree root, then checks
+    // the real emitted-layout default points at the assets on disk.
+    const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const moduleDir = resolve(repoRoot, "dist-server/server/src");
+    expect(resolvePublicDir({}, moduleDir)).toBe(resolve(repoRoot, "public"));
+    expect(existsSync(resolve(repoRoot, "public/emu/rom0.bin"))).toBe(true);
   });
 });
 

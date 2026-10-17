@@ -12,7 +12,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "outDir": "dist",
+    // The client build/verify only type-checks with `tsc`; vite transpiles and
+    // writes `dist/` itself. Emitting here was needless and pushed server JS
+    // into `dist/` (immediately wiped by vite build anyway) — Task-9 N2. The
+    // server build overrides this with `noEmit: false` in tsconfig.server.json.
+    "noEmit": true,
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
