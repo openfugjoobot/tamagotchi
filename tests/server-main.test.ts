@@ -367,6 +367,75 @@ describe("startServer wiring", () => {
     }
   }, 15000);
 
+  it("streams the pet's buzzer state to a watching client via the real tick wiring", async () => {
+    // The end-to-end path that makes the tab audible: the fake pet's piezo level
+    // flips, the tick loop calls hub.notifyChanged, and the bound socket receives
+    // {t:"buzzer", freq, on}. No hub-level test drives this through main.ts, so
+    // without it a regression in the wiring (or a hub that stopped reading
+    // buzzer()) would silently leave the live view mute again.
+    resetBeepDebounce();
+    resetJwksCache();
+    const Pool = memPool();
+    const pool = new Pool();
+    const key: TestKey = await makeTestKey();
+
+    const sounding = {
+      ...fakePet(),
+      piezo: { freq: 0, on: false },
+      buzzer(): { freq: number; on: boolean } {
+        return this.piezo;
+      },
+    };
+    const srv = await startServer(
+      baseDeps(pool, {
+        verify: (token: string, clientId: string) =>
+          verifyIdToken(token, clientId, { fetchImpl: jwksFetch(key.jwk), now: Date.now() }),
+        createPet: () => sounding as never,
+      }),
+    );
+    try {
+      const { Repo } = await import("../server/src/db/repo");
+      const repo = new Repo(pool);
+      const owner = await repo.upsertUser({ sub: "sub-beep" });
+      const pet = await repo.createPet(owner.id, "p1");
+      await srv.rehydrate();
+
+      const token = await signJwt(key.priv, {
+        sub: "sub-beep",
+        aud: CLIENT,
+        iss: "https://accounts.google.com",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+
+      const ws = new WebSocket(`${srv.wsUrl}/ws`);
+      await new Promise<void>((r) => ws.on("open", () => r()));
+      const buzzers: Array<{ freq: number; on: boolean }> = [];
+      const sawOn = new Promise<boolean>((r) => {
+        ws.on("message", (d) => {
+          const m = JSON.parse(String(d));
+          if (m.t === "buzzer") {
+            buzzers.push({ freq: m.freq, on: m.on });
+            if (m.on === true && m.freq === 234060) r(true);
+          }
+        });
+        setTimeout(() => r(false), 5000);
+      });
+      ws.send(JSON.stringify({ t: "hello", token, petId: pet.id }));
+
+      // Bind-time emission reports the initial (silent) level.
+      await new Promise((r) => setTimeout(r, 300));
+      expect(buzzers[0]).toEqual({ freq: 0, on: false });
+
+      // The ROM fires the buzzer: the next tick must push it to the live socket.
+      sounding.piezo = { freq: 234060, on: true };
+      expect(await sawOn).toBe(true);
+      expect(buzzers).toContainEqual({ freq: 234060, on: true });
+      ws.close();
+    } finally {
+      await srv.close();
+    }
+  }, 15000);
+
   it("loads an owned save slot into the live pet via POST /api/pets/:id/slots/:slotId/load (Task-11 D1)", async () => {
     resetBeepDebounce();
     resetJwksCache();

@@ -10,7 +10,10 @@
  *                 checked to belong to that user. Only then is the socket bound
  *                 to a `(userId, petId)` pair and registered as "live".
  *   3. streaming — the hub pushes `{t:"frame", lcd, icons}` whenever the pet's
- *                 LCD **or** its 8 icon segments changed, and
+ *                 LCD **or** its 8 icon segments changed,
+ *                 `{t:"buzzer", freq, on}` whenever the pet's piezo state
+ *                 changed (so a watching tab can drive its local audio — the
+ *                 browser no longer runs the emulator, only renders its output), and
  *                 `{t:"state", alive, ageYears}` on bind *and* whenever the
  *                 life-state (alive) flips — so a pet dying with the tab open
  *                 emits `state{alive:false}` (Task-6 Finding B). The `icons`
@@ -18,6 +21,8 @@
  *                 docs/DECISIONS.md) so the client can draw the top/bottom icon
  *                 rows from real state rather than a hardcoded blank. A pet
  *                 without `icons()` (legacy stub) degrades to an all-zero row.
+ *                 Similarly a legacy `LivePet` without `buzzer()` degrades to
+ *                 "always silent": no buzzer message is ever streamed.
  *                 `{t:"press", btn}` from the client is forwarded to the bound
  *                 pet.
  *
@@ -45,6 +50,12 @@ export interface LivePet {
    * Optional so the hub can stream a pet that predates the icon extension.
    */
   icons?(): Uint8Array;
+  /**
+   * Current piezo state: `freq` (raw HAL-glue value, no rescaling) and the
+   * enable flag. Optional so a pet predating the buzzer extension simply streams
+   * no audio instead of breaking the frame/state path.
+   */
+  buzzer?(): { freq: number; on: boolean };
   press(btn: Btn): void;
 }
 
@@ -90,6 +101,8 @@ interface Binding {
   lastLcd: Uint8Array | null;
   /** Last icon-segment state sent, so an icon-only change also emits. */
   lastIcons: Uint8Array | null;
+  /** Last piezo state sent, so a buzzer change emits exactly once. */
+  lastBuzzer: { freq: number; on: boolean } | null;
 }
 
 export class WsHub {
@@ -146,10 +159,11 @@ export class WsHub {
   }
 
   /**
-   * Signal that a pet's LCD may have changed. Call after each tick: every bound
-   * socket whose pet changed receives a fresh `frame`, and a `state` whenever
-   * the pet's life-state flipped since the last emission. Frames are only sent
-   * on actual change, so an idle pet costs nothing.
+   * Signal that a pet's LCD or buzzer may have changed. Call after each tick:
+   * every bound socket whose pet changed receives a fresh `frame`, a `buzzer`
+   * whenever the pet's piezo state flipped since the last emission, and a
+   * `state` whenever the pet's life-state flipped. Frames and buzzers are only
+   * sent on actual change, so an idle pet costs nothing.
    *
    * `alive` is supplied by the caller (the entrypoint reads `pet.dead()`): the
    * hub itself cannot inspect a `LivePet` for death, so the tick loop passes the
@@ -166,6 +180,7 @@ export class WsHub {
           this.send(client, { t: "state", alive: binding.alive, ageYears: binding.ageYears });
         }
       }
+      this.pushBuzzer(client, binding);
       this.pushFrame(client, binding);
     }
   }
@@ -215,12 +230,14 @@ export class WsHub {
       ageYears: loaded.ageYears,
       lastLcd: null,
       lastIcons: null,
+      lastBuzzer: null,
     };
     this.bindings.set(ws, binding);
     this.addLive(loaded.userId, ws);
 
     this.send(ws, { t: "state", alive: binding.alive, ageYears: binding.ageYears });
     this.pushFrame(ws, binding);
+    this.pushBuzzer(ws, binding);
   }
 
   /** Forward a button press to the bound pet. Ignored before `hello`. */
@@ -258,6 +275,23 @@ export class WsHub {
     });
   }
 
+  /**
+   * Emit the piezo state only when it differs from the last one sent. The read
+   * is defensive: a legacy `LivePet` without `buzzer()` (or one that throws)
+   * yields no message at all, so the frame/state path is unaffected. The values
+   * are streamed verbatim; the client owns the unit conversion, exactly like the
+   * in-browser emulator did.
+   */
+  private pushBuzzer(ws: WebSocket, binding: Binding): void {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    const b = readBuzzer(binding.pet);
+    if (b === null) return; // legacy pet: no buzzer signal at all
+    const last = binding.lastBuzzer;
+    if (last && last.freq === b.freq && last.on === b.on) return;
+    binding.lastBuzzer = b;
+    this.send(ws, { t: "buzzer", freq: b.freq, on: b.on });
+  }
+
   private addLive(userId: string, ws: WebSocket): void {
     let set = this.byUser.get(userId);
     if (!set) {
@@ -287,6 +321,23 @@ function buffersEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
+}
+
+/**
+ * Read the pet's piezo state, or `null` for a pet that has no `buzzer()` (or
+ * whose `buzzer()` throws). Never throws: the buzzer path must stay optional so
+ * a pet predating it still streams frames. `freq` is coerced to a finite
+ * non-negative integer (a NaN/garbage export must not reach the wire).
+ */
+function readBuzzer(pet: LivePet): { freq: number; on: boolean } | null {
+  if (typeof pet.buzzer !== "function") return null;
+  try {
+    const b = pet.buzzer();
+    const freq = Number.isFinite(b.freq) ? Math.max(0, Math.floor(b.freq)) : 0;
+    return { freq, on: b.on === true };
+  } catch {
+    return null;
+  }
 }
 
 /**

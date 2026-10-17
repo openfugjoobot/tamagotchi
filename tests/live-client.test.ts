@@ -182,6 +182,39 @@ describe("LiveClient", () => {
     expect(server.received.find((m) => m.t === "press")).toEqual({ t: "press", btn: "middle" });
   });
 
+  it("delivers buzzer messages to onBuzzer", async () => {
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    const received: Array<{ freq: number; on: boolean }> = [];
+    client.onBuzzer((b) => received.push(b));
+    client.connect("pet-1", "tok");
+    await waitUntil(() => server!.received.some((m) => m.t === "hello"));
+
+    server.broadcast({ t: "buzzer", freq: 234060, on: true });
+    server.broadcast({ t: "buzzer", freq: 0, on: false });
+    await waitUntil(() => received.length === 2);
+    expect(received[0]).toEqual({ freq: 234060, on: true });
+    expect(received[1]).toEqual({ freq: 0, on: false });
+  });
+
+  it("coerces a malformed buzzer message instead of driving the piezo" , async () => {
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    const received: Array<{ freq: number; on: boolean }> = [];
+    client.onBuzzer((b) => received.push(b));
+    client.connect("pet-1", "tok");
+    await waitUntil(() => server!.received.some((m) => m.t === "hello"));
+
+    // A non-string freq and a truthy-but-not-true `on` must not leak through.
+    server.broadcast({ t: "buzzer", freq: NaN, on: "yes" });
+    server.broadcast({ t: "buzzer", freq: -5, on: 1 });
+    await waitUntil(() => received.length === 2);
+    expect(received[0]).toEqual({ freq: 0, on: false });
+    expect(received[1]).toEqual({ freq: 0, on: false });
+  });
+
   it("reports state messages to onState without trusting the docstring", async () => {
     server = new FakeLiveServer();
     const url = await server.listen();

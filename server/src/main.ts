@@ -9,7 +9,8 @@
  *      real wall-clock time since `last_tick_at` — a pet keeps aging while the
  *      server is down;
  *   4. start the single `TickLoop` at 125 ms (8 fps, the browser's frame rate)
- *      and attach the `WsHub` so frames flow out and buttons flow in;
+ *      and attach the `WsHub` so frames and buzzer state flow out and buttons
+ *      flow in;
  *   5. register the REST API and start the push sweeper on an interval.
  *
  * Everything that touches the outside world (Postgres pool, ROM/WASM bytes,
@@ -304,6 +305,9 @@ export async function startServer(deps: StartServerDeps): Promise<ServerHandle> 
   loop.onTickEnd(() => {
     hub.notifyChanged((petId) => live.get(petId)?.alive ?? false);
   });
+  // The hub reads each bound pet's `buzzer()` itself (freq/on, a level — not the
+  // consumed latch) in the same `notifyChanged` sweep, so the live beep reaches
+  // a watching tab without a per-pet beep hook here.
 
   // 5. push sweeper.
   let sweepTimer: ReturnType<typeof setInterval> | null = null;
@@ -318,7 +322,7 @@ export async function startServer(deps: StartServerDeps): Promise<ServerHandle> 
   if (sweepMs > 0) sweepTimer = setInterval(() => void sweep(), sweepMs);
 
   const port = deps.port ?? 0;
-  await app.listen({ port, host: "127.0.0.1" });
+  await app.listen({ port, host: "0.0.0.0" });
   const addr = app.server.address();
   const actualPort = typeof addr === "object" && addr ? addr.port : port;
   const url = `http://127.0.0.1:${actualPort}`;

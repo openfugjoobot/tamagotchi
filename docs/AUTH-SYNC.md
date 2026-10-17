@@ -65,7 +65,8 @@ Body, `404/405` sonst.
 | Richtung | Nachricht | Bedeutung |
 |---|---|---|
 | → | `{t:"hello", token, petId}` | anmelden und an ein Tier binden |
-| ← | `{t:"frame", lcd:number[]}` | aktueller 32×16-LCD (nur bei Änderung) |
+| ← | `{t:"frame", lcd:number[], icons:number[]}` | aktueller 32×16-LCD + 8 Icon-Segmente (nur bei Änderung) |
+| ← | `{t:"buzzer", freq, on}` | Piezo-Zustand des serverseitigen Tiers (nur bei Änderung; der Tab speist damit sein Audio) |
 | ← | `{t:"state", alive, ageYears}` | beim Binden und bei jedem Lebenszustands-Wechsel |
 | → | `{t:"press", btn:"left"\|"middle"\|"right"}` | Tastendruck |
 

@@ -8,6 +8,8 @@
  *   ←  {t:"frame", lcd:number[], icons:number[]}  the 32×16 LCD plus the 8
  *                              icon-segment bits, drawn with render/lcd.ts and
  *                              render/icons.ts
+ *   ←  {t:"buzzer", freq, on}  the pet's piezo state in the ROM's raw units;
+ *                              consumed by emu/audio.ts on the frame loop
  *   ←  {t:"state", alive, ageYears}
  *   →  {t:"press", btn}            a button press (left/middle/right)
  *
@@ -26,6 +28,12 @@ export type LiveStatus = "live" | "offline";
 export interface LiveState {
   alive: boolean;
   ageYears: number;
+}
+
+/** Piezo state as carried on the wire: raw `freq` (0 = silent), `on` flag. */
+export interface LiveBuzzer {
+  freq: number;
+  on: boolean;
 }
 
 export interface LiveClientOptions {
@@ -64,6 +72,7 @@ export class LiveClient {
 
   private readonly frameCbs = new Set<(lcd: Uint8Array, icons: Uint8Array) => void>();
   private readonly stateCbs = new Set<(s: LiveState) => void>();
+  private readonly buzzerCbs = new Set<(b: LiveBuzzer) => void>();
 
   constructor(opts: LiveClientOptions = {}) {
     this.url = opts.url ?? defaultUrl();
@@ -103,6 +112,16 @@ export class LiveClient {
   onState(cb: (s: LiveState) => void): () => void {
     this.stateCbs.add(cb);
     return () => this.stateCbs.delete(cb);
+  }
+
+  /**
+   * Register a piezo-state consumer. The callback fires on bind and whenever the
+   * pet's buzzer state changes (the server only sends on change). Returns an
+   * unsubscribe function.
+   */
+  onBuzzer(cb: (b: LiveBuzzer) => void): () => void {
+    this.buzzerCbs.add(cb);
+    return () => this.buzzerCbs.delete(cb);
   }
 
   /** Send a button press. Ignored while not connected (nothing to press). */
@@ -190,7 +209,7 @@ export class LiveClient {
   }
 
   private onMessage(data: unknown): void {
-    let msg: { t?: unknown; lcd?: unknown; icons?: unknown; alive?: unknown; ageYears?: unknown };
+    let msg: { t?: unknown; lcd?: unknown; icons?: unknown; alive?: unknown; ageYears?: unknown; freq?: unknown; on?: unknown };
     try {
       msg = JSON.parse(typeof data === "string" ? data : String(data));
     } catch {
@@ -215,6 +234,15 @@ export class LiveClient {
         ageYears: typeof msg.ageYears === "number" ? msg.ageYears : 0,
       };
       for (const cb of this.stateCbs) cb(s);
+      return;
+    }
+    if (msg.t === "buzzer") {
+      // Coerce defensively: freq must be a finite non-negative number and `on`
+      // is true only when explicitly true, so a malformed message can never
+      // drive the piezo with a garbage frequency or a phantom tone.
+      const freq = typeof msg.freq === "number" && Number.isFinite(msg.freq) ? Math.max(0, msg.freq) : 0;
+      const b: LiveBuzzer = { freq, on: msg.on === true };
+      for (const cb of this.buzzerCbs) cb(b);
     }
   }
 

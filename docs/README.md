@@ -124,8 +124,6 @@ DATABASE_URL='postgres://tamagotchi:e2epass@127.0.0.1:55433/tamagotchi' node scr
   `theme ∈ {light,dark}` und `shell ∈ {green,blue,pink,dino}`, die UI nutzt aber
   `blossom/day/dusk/night/midnight` bzw. `teal/blue/pink/…`. Dadurch round-trippen
   nur `sound` und `push`; Theme/Shell werden nicht persistiert.
-- **Kein Ton im Tab**: das WS-Protokoll hat keine Buzzer-Nachricht; der
-  Sound-Schalter existiert, aber ohne Live-Feed.
 - **Kein Timeout, wenn kein Frame kommt**: bleibt der WS stumm, dreht der
   Lade-Spinner weiter (kein Fallback nach n Sekunden).
 

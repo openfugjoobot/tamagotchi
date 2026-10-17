@@ -14,11 +14,15 @@ class FakePet {
   iconBuf = new Uint8Array(8);
   presses: string[] = [];
   alive = true;
+  buzzerState: { freq: number; on: boolean } = { freq: 0, on: false };
   lcd(): Uint8Array {
     return this.lcdBuf;
   }
   icons(): Uint8Array {
     return this.iconBuf;
+  }
+  buzzer(): { freq: number; on: boolean } {
+    return this.buzzerState;
   }
   press(btn: string): void {
     this.presses.push(btn);
@@ -250,6 +254,93 @@ describe("WsHub", () => {
     const frame = await frameP;
     expect(frame.lcd).toHaveLength(512);
     expect(frame.icons).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  it("streams the piezo state as a buzzer message on bind", async () => {
+    const pet = new FakePet();
+    pet.buzzerState = { freq: 234060, on: true };
+    await startHub(pet);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise<void>((r) => ws.on("open", () => r()));
+
+    const buzzerP = waitForMessage(ws, (m) => m.t === "buzzer");
+    ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
+    const msg = await buzzerP;
+    expect(msg).toEqual({ t: "buzzer", freq: 234060, on: true });
+  });
+
+  it("re-sends the buzzer only when the piezo state changes", async () => {
+    const pet = new FakePet();
+    pet.buzzerState = { freq: 273070, on: true };
+    await startHub(pet);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise<void>((r) => ws.on("open", () => r()));
+    ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
+    await waitForMessage(ws, (m) => m.t === "buzzer");
+
+    const seen: Array<{ freq: number; on: boolean }> = [];
+    ws.on("message", (d) => {
+      const m = JSON.parse(String(d));
+      if (m.t === "buzzer") seen.push({ freq: m.freq, on: m.on });
+    });
+
+    // Re-notifying with an unchanged piezo must NOT emit a second buzzer.
+    hub.notifyChanged();
+    await new Promise((r) => setTimeout(r, 60));
+    expect(seen).toHaveLength(0);
+
+    // A change (off) emits exactly once, with the fresh values.
+    pet.buzzerState = { freq: 0, on: false };
+    hub.notifyChanged();
+    await new Promise((r) => setTimeout(r, 60));
+    expect(seen).toEqual([{ freq: 0, on: false }]);
+
+    // A frequency-only change (still on) also emits.
+    pet.buzzerState = { freq: 327680, on: true };
+    hub.notifyChanged();
+    await new Promise((r) => setTimeout(r, 60));
+    expect(seen[1]).toEqual({ freq: 327680, on: true });
+  });
+
+  it("tolerates a pet without buzzer() and streams no buzzer message", async () => {
+    // A pet predating the buzzer extension must not break frame/state streaming.
+    const pet = new FakePet();
+    // @ts-expect-error simulate a legacy LivePet without buzzer()
+    delete pet.buzzer;
+    await startHub(pet);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise<void>((r) => ws.on("open", () => r()));
+    const frameP = waitForMessage(ws, (m) => m.t === "frame");
+    ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
+    const frame = await frameP;
+    expect(frame.lcd).toHaveLength(512);
+    // No buzzer message ever arrives, even after a notify.
+    let sawBuzzer = false;
+    ws.on("message", (d) => {
+      if (JSON.parse(String(d)).t === "buzzer") sawBuzzer = true;
+    });
+    hub.notifyChanged();
+    await new Promise((r) => setTimeout(r, 60));
+    expect(sawBuzzer).toBe(false);
+  });
+
+  it("tolerates a buzzer() that throws, still streaming frames", async () => {
+    const pet = new FakePet();
+    pet.buzzer = () => {
+      throw new Error("no piezo");
+    };
+    await startHub(pet);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise<void>((r) => ws.on("open", () => r()));
+    const frameP = waitForMessage(ws, (m) => m.t === "frame");
+    ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
+    const frame = await frameP;
+    expect(frame.lcd).toHaveLength(512);
+    // The throwing piezo read is swallowed: no buzzer, no crash.
+    pet.setPixel(0, 1);
+    const frame2P = waitForMessage(ws, (m) => m.t === "frame" && m.lcd[0] === 1);
+    hub.notifyChanged();
+    expect((await frame2P).lcd[0]).toBe(1);
   });
 
   it("ignores presses before a successful hello", async () => {

@@ -73,3 +73,8 @@ Der Server meldet Beeps **generisch** — nur *dass* das Tier sich meldet, nie *
 (das ROM gibt keine belastbare Ursache her, siehe [BEEPS.md](./BEEPS.md) und
 [DECISIONS.md](./DECISIONS.md)). Beep-Historie und Benachrichtigung nennen deshalb
 keinen Grund.
+
+Wer die Live-Ansicht offen hat, **hört** den Beep (der Server streamt den
+Piezo-Zustand über `{t:"buzzer", freq, on}`; der Sound-Schalter stummschaltet
+ihn). Wer nicht zusieht, bekommt stattdessen eine generische Web-Push-Nachricht
+— nie beides (siehe [AUTH-SYNC.md](./AUTH-SYNC.md)).

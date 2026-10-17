@@ -29,7 +29,7 @@
  * Pure and time-injectable: no DOM, no timers, no clock. Feed it the presses
  * (and call `tick` from the frame loop) and read `selection()` for rendering.
  */
-import { ICON_COUNT } from "./constants";
+import { ICON_COUNT } from "./constants.js";
 
 /**
  * How long after the last A press the derived selection stays visible, in ms.

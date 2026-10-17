@@ -166,4 +166,20 @@ export class PetEmulator {
   takeBuzzer(): boolean {
     return this.ex.emu_take_buzzer() !== 0;
   }
+
+  /**
+   * Current piezo state, for streaming the live beep to a watching client.
+   *
+   * `freq` is the raw HAL-glue frequency (`emu_freq()`); `on` is the piezo
+   * enable flag (`emu_en()`). This is the exact mapping the old in-tab emulator
+   * exposed (`{freq: emu_freq(), on: emu_en() !== 0}`, git f99149c) and fed
+   * straight into `src/emu/audio.ts`, so the server must NOT rescale it — the
+   * client keeps its own conversion (it divides before the oscillator). Unlike
+   * `takeBuzzer()` (a latch that is consumed, used for the debounced push) this
+   * is a *level*, so the hub can diff it and only emit on change. Values are
+   * read straight from the HAL glue (`emu/src/glue.c`).
+   */
+  buzzer(): { freq: number; on: boolean } {
+    return { freq: this.ex.emu_freq(), on: this.ex.emu_en() !== 0 };
+  }
 }
