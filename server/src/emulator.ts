@@ -101,17 +101,32 @@ export class PetEmulator {
   /** Total CPU steps executed since construction (diagnostics/tests). */
   private stepsRun = 0;
   /**
-   * Button presses waiting to be materialised by `step()`, in arrival order.
-   * Each click must be observed on its own, so they queue rather than coalesce;
-   * the queue drains as real time (the owed budget) becomes available.
+   * Legacy discrete taps waiting to be materialised by `step()`, in arrival
+   * order. Each click must be observed on its own, so they queue rather than
+   * coalesce; the queue drains as real time (the owed budget) becomes
+   * available. Taps are strictly sequential: no two legacy taps ever overlap.
    */
   private queue: Btn[] = [];
-  /** The button currently being held down while it is materialised. */
+  /** The button currently being held down by the legacy tap machine. */
   private activeBtn: Btn | null = null;
-  /** Emulator units left before the active hold releases (1/32768 s). */
+  /** Emulator units left before the active legacy tap releases (1/32768 s). */
   private holdUnitsLeft = 0;
-  /** Emulator units left in the button-up gap before the next queued press. */
+  /** Emulator units left in the button-up gap before the next legacy tap. */
   private gapUnitsLeft = 0;
+  /**
+   * Buttons the caller is explicitly holding down (`press(btn, true)`), as a
+   * set so **any combination** can be LOW in the same sampled frame — the whole
+   * point of the simultaneous-press protocol (SELECT+NEXT = A+C toggles sound).
+   */
+  private held = new Set<Btn>();
+  /**
+   * Emulator units of minimum hold still owed per held button (1/32768 s). A
+   * release requested before this is paid is deferred, so a quick tap still
+   * reaches the ROM as a distinct edge (a 100 ms hold is not sampled).
+   */
+  private holdOwed = new Map<Btn, number>();
+  /** Buttons whose release was requested but not yet paid out. */
+  private releaseWanted = new Set<Btn>();
 
   constructor(rom: Uint8Array, wasm: Uint8Array | ArrayBuffer, state?: Uint8Array) {
     const module = new WebAssembly.Module(wasm as BufferSource);
@@ -135,26 +150,57 @@ export class PetEmulator {
    * way emulated time is created: `ms` is real elapsed time handed in by the tick
    * loop (or the offline catch-up), and never anything a button contributed.
    *
-   * Queued button presses (see `press`) are materialised *inside* this call:
-   * each click is played out as a short down→up hold, with a small released gap
-   * between consecutive clicks, so the firmware observes every press as distinct
-   * input. All of that is paid out of the owed budget `ms` just added — the hold
-   * and gap consume time that the wall clock already granted, so N clicks can
-   * never advance the clock further than the wall clock did. A press whose hold
-   * is not fully paid within this call simply continues on the next `step()`.
+   * Input pending from `press` is materialised *inside* this call. Two input
+   * shapes share one owed budget:
+   *
+   *  • **Explicit holds** (`press(btn, true/false)`) assert a *set* of buttons;
+   *    any combination can be LOW in the same sampled frame, so the firmware sees
+   *    genuine simultaneous presses (A+C = sound toggle). A release is deferred
+   *    until the button's `PRESS_HOLD_MS` minimum has been paid, so a quick tap
+   *    still lands as a distinct edge.
+   *  • **Legacy taps** (`press(btn)`) play out sequentially: a `PRESS_HOLD_MS`
+   *    down, a `PRESS_GAP_MS` release gap, then the next — the shape the clock-set
+   *    tap dance needs so its taps stay distinct.
    *
    * Whatever the segmentation, the total steps run are exactly
-   * `floor(Σ unitsForMs(ms) / TS_PER_STEP)`: buttons change *when* the CPU runs,
-   * never *how much*. Fractional-step remainders are carried over, so many small
-   * calls sum to the same result as one large call.
+   * `floor(Σ unitsForMs(ms) / TS_PER_STEP)`: buttons change *when* the CPU runs
+   * and *which pins* are LOW, never *how much* time is granted. Fractional-step
+   * remainders are carried over, so many small calls sum to one large call.
    */
   step(ms: number): void {
     if (!(ms > 0)) return;
     // Accumulate emulator time in stamp units (1/32768 s).
     this.pending += unitsForMs(ms);
 
-    // Walk the owed budget, splitting it at the input edges so the pin is
-    // actually in the right state while the ROM runs each stretch of steps.
+    // Phase 1 — explicit holds: pay each held button's minimum-hold obligation
+    // with all currently-held pins asserted, so simultaneity survives. Releases
+    // take effect the moment their hold is paid.
+    while (this.pending >= TS_PER_STEP && this.holdObligationUnits() > 0) {
+      const steps = Math.min(
+        Math.floor(this.holdObligationUnits() / TS_PER_STEP),
+        Math.floor(this.pending / TS_PER_STEP),
+      );
+      if (steps <= 0) {
+        this.payHold(this.holdObligationUnits());
+        this.applyReleases();
+        continue;
+      }
+      this.runWithHeldPins(steps);
+      const spent = steps * TS_PER_STEP;
+      this.pending -= spent;
+      this.payHold(spent);
+      this.applyReleases();
+    }
+    // Any hold obligation too small to buy a whole step is paid now, so a
+    // release is never blocked by a sub-step remainder.
+    if (this.holdObligationUnits() > 0) {
+      this.payHold(this.holdObligationUnits());
+      this.applyReleases();
+    }
+
+    // Phase 2 — the remaining budget, segmented by legacy taps and by the pins
+    // still held explicitly (a button held across many ticks stays asserted for
+    // every one of them).
     while (this.pending >= TS_PER_STEP) {
       if (this.activeBtn !== null && this.holdUnitsLeft > 0) {
         // Down segment: run steps until the hold is paid out (or the budget runs
@@ -177,7 +223,8 @@ export class PetEmulator {
         this.holdUnitsLeft -= spent;
         if (this.holdUnitsLeft <= 0) this.endHold();
       } else if (this.gapUnitsLeft > 0) {
-        // Released gap between two queued clicks: keep the pin up.
+        // Released gap between two queued clicks: keep the tap pin up, but keep
+        // any explicitly-held pins asserted.
         const steps = Math.min(
           Math.floor(this.gapUnitsLeft / TS_PER_STEP),
           Math.floor(this.pending / TS_PER_STEP),
@@ -186,7 +233,7 @@ export class PetEmulator {
           this.gapUnitsLeft = 0;
           continue;
         }
-        this.run(steps);
+        this.runWithHeldPins(steps);
         const spent = steps * TS_PER_STEP;
         this.pending -= spent;
         this.gapUnitsLeft -= spent;
@@ -195,13 +242,48 @@ export class PetEmulator {
         this.activeBtn = this.queue.shift() as Btn;
         this.holdUnitsLeft = unitsForMs(PRESS_HOLD_MS);
       } else {
-        // Idle: the whole remaining budget is button-up.
+        // Idle (no tap pending): the whole remaining budget runs with any
+        // explicitly-held pins asserted, so a held button stays LOW.
         const steps = Math.floor(this.pending / TS_PER_STEP);
         this.pending -= steps * TS_PER_STEP;
-        this.run(steps);
+        this.runWithHeldPins(steps);
       }
     }
     this.checkDead();
+  }
+
+  /** Total units still owed across all held buttons' minimum holds. */
+  private holdObligationUnits(): number {
+    let total = 0;
+    for (const u of this.holdOwed.values()) total += u;
+    return total;
+  }
+
+  /** Pay `units` off every held button's minimum-hold obligation. */
+  private payHold(units: number): void {
+    for (const [btn, owed] of this.holdOwed) {
+      const left = owed - units;
+      if (left <= 0) this.holdOwed.delete(btn);
+      else this.holdOwed.set(btn, left);
+    }
+  }
+
+  /** Drop any button whose release was requested and whose hold is now paid. */
+  private applyReleases(): void {
+    for (const btn of [...this.releaseWanted]) {
+      if (!this.holdOwed.has(btn)) {
+        this.held.delete(btn);
+        this.releaseWanted.delete(btn);
+        this.setPin(btn, false);
+      }
+    }
+  }
+
+  /** Assert every held pin, run `n` steps. */
+  private runWithHeldPins(n: number): void {
+    if (n <= 0) return;
+    for (const btn of this.held) this.setPin(btn, true);
+    this.run(n);
   }
 
   /** Run `n` CPU steps and account for them. */
@@ -247,29 +329,61 @@ export class PetEmulator {
   }
 
   /**
-   * Press a button. This is an **input event, never a time event**: it enqueues
-   * the press and returns immediately without advancing the emulator clock or
-   * running any CPU steps. The click is materialised by later `step()` calls —
-   * the tick loop's real time — so pressing a button cannot make the game clock
-   * run faster than the wall clock, no matter how often it is clicked.
+   * Press a button. This is an **input event, never a time event**: it returns
+   * immediately without advancing the emulator clock or running any CPU steps.
+   * The input is materialised by later `step()` calls — the tick loop's real
+   * time — so pressing a button cannot make the game clock run faster than the
+   * wall clock, no matter how often it is clicked.
    *
-   * Presses are queued in arrival order (never coalesced), so a fast sequence
-   * like the clock-set tap dance reaches the firmware as distinct edges even when
-   * several clicks land within one tick. The caller passes the logical button
-   * name (A=left, B=middle, C=right).
+   * Two shapes:
+   *
+   *  • `press(btn)` — a **self-contained legacy tap**: a `PRESS_HOLD_MS` down, a
+   *    `PRESS_GAP_MS` release gap, then the next. Taps are strictly sequential
+   *    (never coalesced), so a fast clock-set tap dance reaches the firmware as
+   *    distinct edges even when several clicks land within one tick.
+   *  • `press(btn, true)` / `press(btn, false)` — an **explicit edge**. Any
+   *    combination of buttons can be held at once, so the firmware sees genuine
+   *    simultaneous presses (A+C = SELECT+NEXT = sound toggle). A release is
+   *    deferred until the button's `PRESS_HOLD_MS` minimum has been paid, so a
+   *    quick tap still lands as a distinct edge.
+   *
+   * The caller passes the logical button name (A=left, B=middle, C=right).
    */
-  press(btn: Btn): void {
-    this.queue.push(btn);
+  press(btn: Btn, down?: boolean): void {
+    if (down === undefined) {
+      // Legacy discrete tap: sequential queue.
+      this.queue.push(btn);
+      return;
+    }
+    if (down) {
+      // Assert now (the pin is driven LOW immediately so a following step sees
+      // it), and require a minimum hold before a release may take effect.
+      this.held.add(btn);
+      this.releaseWanted.delete(btn);
+      this.holdOwed.set(btn, unitsForMs(PRESS_HOLD_MS));
+      this.setPin(btn, true);
+    } else {
+      // Release: defer while the minimum hold is still owed.
+      if (this.holdOwed.has(btn)) this.releaseWanted.add(btn);
+      else {
+        this.held.delete(btn);
+        this.releaseWanted.delete(btn);
+        this.setPin(btn, false);
+      }
+    }
   }
 
-  /** Number of queued presses not yet materialised. */
+  /**
+   * Number of pending input actions not yet materialised: queued legacy taps
+   * plus the active tap plus any explicitly-held buttons.
+   */
   pendingPresses(): number {
-    return this.queue.length + (this.activeBtn !== null ? 1 : 0);
+    return this.queue.length + (this.activeBtn !== null ? 1 : 0) + this.held.size;
   }
 
-  /** True while a button hold is still waiting to be materialised by `step()`. */
+  /** True while any input (legacy tap hold or explicit hold) is still pending. */
   buttonHeld(): boolean {
-    return this.activeBtn !== null && this.holdUnitsLeft > 0;
+    return (this.activeBtn !== null && this.holdUnitsLeft > 0) || this.held.size > 0;
   }
 
   /** Full snapshot of the WASM linear memory (the pet's saved state). */

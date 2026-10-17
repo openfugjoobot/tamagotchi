@@ -56,7 +56,13 @@ export interface LivePet {
    * no audio instead of breaking the frame/state path.
    */
   buzzer?(): { freq: number; on: boolean };
-  press(btn: Btn): void;
+  /**
+   * Feed a button event. `down === undefined` is a legacy self-contained tap;
+   * explicit `true`/`false` assert/release a button, and any combination may be
+   * held at once (A+C = sound toggle). A legacy pet that only understands a
+   * single-argument tap still works: the hub drops the `down` flag for it.
+   */
+  press(btn: Btn, down?: boolean): void;
 }
 
 /** Number of icon segments carried per frame (P1: 8). */
@@ -186,7 +192,7 @@ export class WsHub {
   }
 
   private async onMessage(ws: WebSocket, data: unknown): Promise<void> {
-    let msg: { t?: unknown; token?: unknown; petId?: unknown; btn?: unknown };
+    let msg: { t?: unknown; token?: unknown; petId?: unknown; btn?: unknown; down?: unknown };
     try {
       msg = JSON.parse(String(data));
     } catch {
@@ -194,7 +200,10 @@ export class WsHub {
     }
 
     if (msg.t === "hello") return this.onHello(ws, msg.token, msg.petId);
-    if (msg.t === "press") return this.onPress(ws, msg.btn);
+    // A self-contained tap (legacy) or an explicit down/up edge; both are
+    // forwarded to the same pet entry point.
+    if (msg.t === "press") return this.onPress(ws, msg.btn, undefined);
+    if (msg.t === "btn") return this.onPress(ws, msg.btn, msg.down);
   }
 
   /** Authenticate, bind to the pet, send the first frame and the state. */
@@ -241,11 +250,20 @@ export class WsHub {
   }
 
   /** Forward a button press to the bound pet. Ignored before `hello`. */
-  private onPress(ws: WebSocket, btn: unknown): void {
+  /**
+   * Forward a button event to the bound pet. Ignored before `hello`.
+   *
+   * `down === undefined` is a legacy self-contained tap (`{t:"press"}`). A
+   * boolean is an explicit edge (`{t:"btn"}`): `true` asserts, `false` releases.
+   * Both are passed straight through; a legacy `LivePet` that only reads the
+   * button name simply ignores the extra argument, so the channel never breaks.
+   */
+  private onPress(ws: WebSocket, btn: unknown, down: unknown): void {
     const binding = this.bindings.get(ws);
     if (!binding) return;
     if (typeof btn !== "string" || !BTNS.includes(btn as Btn)) return;
-    binding.pet.press(btn as Btn);
+    if (typeof down === "boolean") binding.pet.press(btn as Btn, down);
+    else binding.pet.press(btn as Btn);
   }
 
   /**

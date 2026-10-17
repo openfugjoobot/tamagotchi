@@ -13,6 +13,8 @@ class FakePet {
   lcdBuf = new Uint8Array(512);
   iconBuf = new Uint8Array(8);
   presses: string[] = [];
+  /** Edges from explicit down/up messages: {btn, down}. */
+  edges: Array<{ btn: string; down?: boolean }> = [];
   alive = true;
   buzzerState: { freq: number; on: boolean } = { freq: 0, on: false };
   lcd(): Uint8Array {
@@ -24,8 +26,9 @@ class FakePet {
   buzzer(): { freq: number; on: boolean } {
     return this.buzzerState;
   }
-  press(btn: string): void {
+  press(btn: string, down?: boolean): void {
     this.presses.push(btn);
+    this.edges.push({ btn, down });
   }
   dead(): boolean {
     return !this.alive;
@@ -226,6 +229,48 @@ describe("WsHub", () => {
     // The hub performs the press synchronously; poll briefly.
     await new Promise((r) => setTimeout(r, 50));
     expect(pet.presses).toEqual(["middle"]);
+    // A legacy tap carries no explicit down flag.
+    expect(pet.edges).toEqual([{ btn: "middle", down: undefined }]);
+  });
+
+  it("forwards simultaneous down edges for A+C (sound toggle)", async () => {
+    const pet = new FakePet();
+    await startHub(pet);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise<void>((r) => ws.on("open", () => r()));
+    ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
+    await waitForMessage(ws, (m) => m.t === "state");
+
+    // SELECT (left) and NEXT (right) asserted together, then released together.
+    ws.send(JSON.stringify({ t: "btn", btn: "left", down: true }));
+    ws.send(JSON.stringify({ t: "btn", btn: "right", down: true }));
+    ws.send(JSON.stringify({ t: "btn", btn: "left", down: false }));
+    ws.send(JSON.stringify({ t: "btn", btn: "right", down: false }));
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Every edge arrives, in order, with its explicit down flag preserved — the
+    // server (not the hub) owns the timing, but simultaneity must survive the
+    // hub intact.
+    expect(pet.edges).toEqual([
+      { btn: "left", down: true },
+      { btn: "right", down: true },
+      { btn: "left", down: false },
+      { btn: "right", down: false },
+    ]);
+  });
+
+  it("ignores a btn message with an unknown button or non-boolean down", async () => {
+    const pet = new FakePet();
+    await startHub(pet);
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    await new Promise<void>((r) => ws.on("open", () => r()));
+    ws.send(JSON.stringify({ t: "hello", token, petId: "pet-1" }));
+    await waitForMessage(ws, (m) => m.t === "state");
+    ws.send(JSON.stringify({ t: "btn", btn: "nope", down: true }));
+    ws.send(JSON.stringify({ t: "btn", btn: "left", down: "yes" }));
+    await new Promise((r) => setTimeout(r, 50));
+    // "left" with a non-boolean down falls back to a legacy tap; "nope" is dropped.
+    expect(pet.presses).toEqual(["left"]);
   });
 
   it("clears the live flag when the connection closes", async () => {

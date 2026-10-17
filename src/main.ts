@@ -1271,10 +1271,14 @@ function bindButtons(): void {
   const pressed = new Set<LogicalButton>();
   const set = (b: LogicalButton, down: boolean) => {
     if (down) pressed.add(b); else pressed.delete(b);
-    // Nur der Druck wird gesendet - der Server faehrt den down/up-Zyklus selbst
-    // (Task-6-Protokoll, diskretes {t:"press"}).
+    // Beide Flanken senden: der Server haelt jeden gedrueckten Pin unten, damit
+    // eine echte Zweifinger-Kombi (SELECT+NEXT = A+C, Ton an/aus) als
+    // *gleichzeitiger* Druck beim ROM ankommt. Der Server faehrt die
+    // Mindest-Haltezeit selbst (Protokoll {t:"btn", btn, down}).
     if (down) {
-      live.press(BUTTON_MAP[b] as Btn);
+      live.pressDown(BUTTON_MAP[b] as Btn);
+    } else {
+      live.pressUp(BUTTON_MAP[b] as Btn);
     }
   };
   const releaseAll = () => { for (const b of [...pressed]) set(b, false); };

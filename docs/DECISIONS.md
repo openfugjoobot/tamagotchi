@@ -3,6 +3,30 @@
 Chronologisch, neueste zuerst. Jede Entscheidung nennt den Grund — damit sie
 später nicht versehentlich zurückgedreht wird.
 
+## Gleichzeitige Tastenkombis (SELECT+NEXT = A+C) erreichen das ROM (2026-10-17)
+
+- **Fehler:** Die Server-Ownership (s. unten) reduzierte Tasten auf **diskrete**
+  `{t:"press"}`-Taps, und `PetEmulator.press()` materialisierte **einen** Button
+  nach dem anderen. Zwei Pins waren damit **nie im selben gesampelten Frame** LOW.
+  Das P1-ROM tastet die Matrix aber pro Frame ab, und sein **Ton-Schalter ist A+C
+  zusammen** (SELECT+NEXT); ebenso brauchen Uhrstell-/Menü-Kombis zwei Buttons
+  gleichzeitig. A-then-C ist nicht A+C.
+- **Beweis am echten ROM:** Nach dem Uhrstellen A+C zusammen → Piezo-Mute
+  (`emu_en()` fällt über ein Vernachlässigungsfenster auf ~0), A-dann-C → Tier
+  piepst weiter. Tabelle in [docs/SIMULTANEOUS-PRESS.md](./SIMULTANEOUS-PRESS.md).
+- **Fix:** Das Protokoll trägt jetzt die **Flanke** (`{t:"btn", btn, down}`); der
+  Client sendet down *und* up. Der Server hält eine **Menge** gedrückter Pins und
+  lässt so beliebige Kombis gleichzeitig LOW werden. Ein Release wartet auf die
+  `PRESS_HOLD_MS`-Mindesthaltung, damit auch ein schneller Tipp eine eigene
+  Flanke bleibt.
+- **Zeit-Invariante bleibt:** Der Hold-Pfad zahlt die CPU-Schritte aus demselben
+  realen Budget wie der Tap-Pfad; `steps()` ist weiter exakt
+  `floor(Σ units(ms) / TS_PER_STEP)`, unabhängig von den gehaltenen Buttons
+  (`tests/emu-simultaneous-press.test.ts`). Die gleichzeitige Eingabe ändert nur
+  *welche Pins* LOW sind und *wann*, nie *wie viel* Zeit vergeht.
+- **Back-Compat:** `{t:"press"}` (Legacy-Tap) und `press(btn)` bleiben bestehen;
+  ein Alt-Stub ohne zweiten Parameter ignoriert ihn einfach.
+
 ## Tasten sind Eingabe, nicht Zeit — Zeit-Exploit geschlossen (2026-10-17)
 
 - **Fehler:** `PetEmulator.press()` fuhr pro Druck **800 ms emulierte Zeit**

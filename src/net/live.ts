@@ -11,7 +11,9 @@
  *   ←  {t:"buzzer", freq, on}  the pet's piezo state in the ROM's raw units;
  *                              consumed by emu/audio.ts on the frame loop
  *   ←  {t:"state", alive, ageYears}
- *   →  {t:"press", btn}            a button press (left/middle/right)
+ *   →  {t:"press", btn}            a self-contained button tap (legacy)
+ *   →  {t:"btn", btn, down}       an explicit button edge: true asserts, false
+ *                              releases; any combination held at once (A+C)
  *
  * Reconnection is automatic: any close/error schedules a retry with capped
  * exponential backoff, and each new socket re-sends `hello`. While the link is
@@ -128,6 +130,22 @@ export class LiveClient {
   press(btn: Btn): void {
     if (!this.ws || this.ws.readyState !== 1 /* OPEN */) return;
     this.send({ t: "press", btn });
+  }
+
+  /**
+   * Assert a button (down edge). Any combination may be asserted at once, so a
+   * physical two-button press (SELECT+NEXT = A+C) reaches the ROM as genuine
+   * simultaneity. Ignored while not connected.
+   */
+  pressDown(btn: Btn): void {
+    if (!this.ws || this.ws.readyState !== 1 /* OPEN */) return;
+    this.send({ t: "btn", btn, down: true });
+  }
+
+  /** Release a previously asserted button (up edge). Ignored while offline. */
+  pressUp(btn: Btn): void {
+    if (!this.ws || this.ws.readyState !== 1 /* OPEN */) return;
+    this.send({ t: "btn", btn, down: false });
   }
 
   /** "live" once bound and streaming, otherwise "offline". */

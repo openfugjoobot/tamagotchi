@@ -68,7 +68,8 @@ Body, `404/405` sonst.
 | ← | `{t:"frame", lcd:number[], icons:number[]}` | aktueller 32×16-LCD + 8 Icon-Segmente (nur bei Änderung) |
 | ← | `{t:"buzzer", freq, on}` | Piezo-Zustand des serverseitigen Tiers (nur bei Änderung; der Tab speist damit sein Audio) |
 | ← | `{t:"state", alive, ageYears}` | beim Binden und bei jedem Lebenszustands-Wechsel |
-| → | `{t:"press", btn:"left"\|"middle"\|"right"}` | Tastendruck |
+| → | `{t:"press", btn:"left"\|"middle"\|"right"}` | in sich geschlossener Tastendruck (Legacy-Tap, sequenziell) |
+| → | `{t:"btn", btn:"left"\|"middle"\|"right", down:bool}` | explizite Flanke: `true` hält, `false` lässt los; beliebige Kombis gleichzeitig (A+C = Ton-Schalter) |
 
 ## Spielstand-Sync
 
