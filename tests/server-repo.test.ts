@@ -127,16 +127,61 @@ describe("Repo", () => {
     expect(subs[0].endpoint).toBe(sub.endpoint);
     expect(subs[0].p256dh).toBe("k1");
 
-    // Re-adding the same endpoint must not duplicate (unique endpoint).
+    // Re-adding the same endpoint must not duplicate (unique user_id+endpoint).
     await repo.addPushSub(userId, sub);
     subs = await repo.listPushSubs(userId);
     expect(subs.length).toBe(1);
 
-    await repo.removePushSub(sub.endpoint);
+    await repo.removePushSub(userId, sub.endpoint);
     subs = await repo.listPushSubs(userId);
     expect(subs.length).toBe(0);
     // Removing an unknown endpoint is a no-op, not an error.
-    await expect(repo.removePushSub("https://push/none")).resolves.toBeUndefined();
+    await expect(repo.removePushSub(userId, "https://push/none")).resolves.toBeUndefined();
+  });
+
+  // Task-8 review: the previous global `endpoint unique` + `on conflict (endpoint)`
+  // let one user reassign or delete another user's subscription by presenting the
+  // same endpoint string. These prove the fix against the real schema.
+  describe("push-subscription ownership", () => {
+    it("does not reassign a foreign subscription with the same endpoint", async () => {
+      const a = await repo.upsertUser({ sub: "a" });
+      const b = await repo.upsertUser({ sub: "b" });
+      const endpoint = "https://push/shared";
+
+      await repo.addPushSub(a.id, { endpoint, p256dh: "a-k", auth: "a-a" });
+      await repo.addPushSub(b.id, { endpoint, p256dh: "b-k", auth: "b-a" });
+
+      // Both own their own row; A's is untouched by B's subscribe.
+      const aSubs = await repo.listPushSubs(a.id);
+      const bSubs = await repo.listPushSubs(b.id);
+      expect(aSubs).toHaveLength(1);
+      expect(aSubs[0].p256dh).toBe("a-k");
+      expect(bSubs).toHaveLength(1);
+      expect(bSubs[0].p256dh).toBe("b-k");
+    });
+
+    it("re-subscribing within one account still refreshes in place", async () => {
+      const a = await repo.upsertUser({ sub: "a" });
+      const endpoint = "https://push/one";
+      await repo.addPushSub(a.id, { endpoint, p256dh: "k1", auth: "a1" });
+      await repo.addPushSub(a.id, { endpoint, p256dh: "k2", auth: "a2" });
+      const subs = await repo.listPushSubs(a.id);
+      expect(subs).toHaveLength(1);
+      expect(subs[0].p256dh).toBe("k2");
+    });
+
+    it("deletes only the owner's row, never a foreign one with the same endpoint", async () => {
+      const a = await repo.upsertUser({ sub: "a" });
+      const b = await repo.upsertUser({ sub: "b" });
+      const endpoint = "https://push/shared";
+      await repo.addPushSub(a.id, { endpoint, p256dh: "a-k", auth: "a-a" });
+      await repo.addPushSub(b.id, { endpoint, p256dh: "b-k", auth: "b-a" });
+
+      // B unsubscribing its own endpoint leaves A's row intact.
+      await repo.removePushSub(b.id, endpoint);
+      expect(await repo.listPushSubs(b.id)).toHaveLength(0);
+      expect(await repo.listPushSubs(a.id)).toHaveLength(1);
+    });
   });
 
   it("records a beep as pending, joined to its owner, then marks it notified", async () => {

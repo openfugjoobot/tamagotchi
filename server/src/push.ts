@@ -58,11 +58,14 @@ export interface PushRepo {
   listPushSubs(userId: string): Promise<PushSubLike[]>;
   markBeepNotified(id: string): Promise<void>;
   /**
-   * Drop a push subscription on `410 Gone`. Keyed by **endpoint**, matching
-   * `Repo.removePushSub(endpoint)` and the `push_subs.endpoint` unique key —
-   * not by row `id`, which would silently match nothing.
+   * Drop a push subscription on `410 Gone`. Scoped to its owner — keyed by
+   * `(user_id, endpoint)` to match `Repo.removePushSub(userId, endpoint)`. A
+   * bare endpoint key could delete a *foreign* subscription that happens to
+   * share the string (proven cross-user delete, Task-8 review); both args are
+   * `string`, so only the real-`Repo` integration test in
+   * `tests/server-push.test.ts` can pin the arity.
    */
-  removePushSub(endpoint: string): Promise<void>;
+  removePushSub(userId: string, endpoint: string): Promise<void>;
 }
 
 /**
@@ -159,9 +162,10 @@ export async function sendPendingPush(
         delivered++;
       } catch (err) {
         if (isGone(err)) {
-          // The subscription is dead: drop it so we stop retrying it. Keyed by
-          // endpoint — `Repo.removePushSub` deletes `where endpoint = $1`.
-          await deps.repo.removePushSub(sub.endpoint);
+          // The subscription is dead: drop it so we stop retrying it. Scoped to
+          // the beep's owner — `Repo.removePushSub(userId, endpoint)` deletes
+          // `where user_id = $1 and endpoint = $2`.
+          await deps.repo.removePushSub(beep.userId, sub.endpoint);
         }
         // Any other error: leave the beep pending for the next sweep.
       }

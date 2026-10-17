@@ -136,9 +136,10 @@ class FakeRepo implements ApiRepo {
   }
 
   async addPushSub(userId: string, sub: PushSub): Promise<PushSubRow> {
-    const existing = this.pushSubs.find((s) => s.endpoint === sub.endpoint);
+    // Per-user key: only the caller's own row for this endpoint is refreshed —
+    // a foreign row with the same endpoint is never reassigned (Task-8 fix).
+    const existing = this.pushSubs.find((s) => s.endpoint === sub.endpoint && s.user_id === userId);
     if (existing) {
-      existing.user_id = userId;
       existing.p256dh = sub.p256dh;
       existing.auth = sub.auth;
       existing.ua = sub.ua ?? null;
@@ -159,8 +160,8 @@ class FakeRepo implements ApiRepo {
     return row;
   }
 
-  async removePushSub(endpoint: string): Promise<void> {
-    this.pushSubs = this.pushSubs.filter((s) => s.endpoint !== endpoint);
+  async removePushSub(userId: string, endpoint: string): Promise<void> {
+    this.pushSubs = this.pushSubs.filter((s) => !(s.endpoint === endpoint && s.user_id === userId));
   }
 
   async listBeeps(userId: string, limit: number): Promise<BeepRow[]> {
@@ -414,6 +415,31 @@ describe("HTTP API", () => {
       await authed(app, "POST", "/api/push/subscribe", { ...sub, p256dh: "k2" });
       expect(repo.pushSubs).toHaveLength(1);
       expect(repo.pushSubs[0].p256dh).toBe("k2");
+    });
+
+    it("does not let a second user steal an endpoint via subscribe (Task-8 regression)", async () => {
+      const sub = { endpoint: "https://push/shared", p256dh: "k", auth: "a" };
+      // User 1 subscribes.
+      await authed(app, "POST", "/api/push/subscribe", sub);
+      const owner1 = repo.pushSubs[0].user_id;
+
+      // User 2 presents the same endpoint string. It must create its own row, not
+      // reassign user 1's — the old `on conflict (endpoint)` stole the row.
+      await authed(app, "POST", "/api/push/subscribe", sub, GOOD2);
+      expect(repo.pushSubs).toHaveLength(2);
+      expect(repo.pushSubs.filter((s) => s.user_id === owner1)).toHaveLength(1);
+      // Both are addressed by their own owners now.
+      const owner2 = repo.pushSubs.find((s) => s.user_id !== owner1)!.user_id;
+      expect(owner2).not.toBe(owner1);
+    });
+
+    it("cannot unsubscribe another user's endpoint (Task-8 regression)", async () => {
+      const sub = { endpoint: "https://push/mine", p256dh: "k", auth: "a" };
+      await authed(app, "POST", "/api/push/subscribe", sub); // user 1
+      await authed(app, "POST", "/api/push/unsubscribe", { endpoint: sub.endpoint }, GOOD2); // user 2
+      // User 1's subscription survives a foreign unsubscribe.
+      expect(repo.pushSubs).toHaveLength(1);
+      expect(repo.pushSubs[0].endpoint).toBe(sub.endpoint);
     });
   });
 

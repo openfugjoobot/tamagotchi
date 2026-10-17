@@ -237,16 +237,24 @@ export class Repo {
   }
 
   /**
-   * Register a push subscription. `endpoint` is unique, so re-subscribing the
-   * same browser refreshes it in place instead of duplicating.
+   * Register a push subscription, **scoped to its owner**. `endpoint` is unique,
+   * so re-subscribing the same browser refreshes it in place instead of
+   * duplicating.
+   *
+   * The conflict target is the compound `(user_id, endpoint)` key, so an insert
+   * can only ever touch the caller's own row. Keying the conflict on `endpoint`
+   * alone let any authenticated user *hijack* another user's subscription just
+   * by presenting the same endpoint string — the row was reassigned with
+   * `set user_id = excluded.user_id` (proven cross-user write, Task-8 review).
+   * The migration replaces the global unique with a per-user unique so two users
+   * can hold the same endpoint without colliding at all (see `schema.sql`).
    */
   async addPushSub(userId: string, sub: PushSub): Promise<PushSubRow> {
     const { rows } = await this.pool.query<PushSubRow>(
       `insert into push_subs (user_id, endpoint, p256dh, auth, ua)
        values ($1, $2, $3, $4, $5)
-       on conflict (endpoint) do update
-         set user_id = excluded.user_id,
-             p256dh = excluded.p256dh,
+       on conflict (user_id, endpoint) do update
+         set p256dh = excluded.p256dh,
              auth = excluded.auth,
              ua = excluded.ua,
              failed_at = null
@@ -256,9 +264,16 @@ export class Repo {
     return rows[0];
   }
 
-  /** Drop a subscription by endpoint (used on `410 Gone`). No-op if absent. */
-  async removePushSub(endpoint: string): Promise<void> {
-    await this.pool.query(`delete from push_subs where endpoint = $1`, [endpoint]);
+  /**
+   * Drop a subscription by endpoint (used on `410 Gone`), **scoped to its
+   * owner**. A foreign endpoint matches nothing — it must never delete another
+   * user's row (a bare `where endpoint = $1` was a proven cross-user delete).
+   */
+  async removePushSub(userId: string, endpoint: string): Promise<void> {
+    await this.pool.query(`delete from push_subs where user_id = $1 and endpoint = $2`, [
+      userId,
+      endpoint,
+    ]);
   }
 
   /** Record that a pet beeped. No cause is stored (spec §3 — no `kind`). */

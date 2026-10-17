@@ -37,7 +37,7 @@ interface SenderCall {
  */
 function makeRepo(beeps: PendingBeep[], subs: PushSubLike[]) {
   const notified: string[] = [];
-  const removed: string[] = [];
+  const removed: Array<{ userId: string; endpoint: string }> = [];
   const row: PushRepo = {
     async pendingBeeps() {
       return beeps.filter((b) => !notified.includes(b.id));
@@ -48,9 +48,10 @@ function makeRepo(beeps: PendingBeep[], subs: PushSubLike[]) {
     async markBeepNotified(id: string) {
       notified.push(id);
     },
-    // Endpoint semantics, matching the real `Repo.removePushSub(endpoint)`.
-    async removePushSub(endpoint: string) {
-      removed.push(endpoint);
+    // Owner-scoped endpoint semantics, matching
+    // `Repo.removePushSub(userId, endpoint)`.
+    async removePushSub(userId: string, endpoint: string) {
+      removed.push({ userId, endpoint });
     },
   };
   return { row, notified, removed };
@@ -187,7 +188,7 @@ describe("sendPendingPush — Web Push gated on hasLiveConnection", () => {
       vapid: { subject: "mailto:ops@example.com", publicKey: "pub", privateKey: "priv" },
     });
 
-    expect(repo.removed).toEqual([SUB.endpoint]);
+    expect(repo.removed).toEqual([{ userId: "user-1", endpoint: SUB.endpoint }]);
     // No successful delivery, so the beep stays pending for a retry.
     expect(repo.notified).toEqual([]);
     expect(result).toEqual({ sent: 0, beeps: 0 });
@@ -294,11 +295,12 @@ describe("webPushSender — production wiring", () => {
  *
  * Finding 1 of the Task-7 review: the unit tests above pass a hand-rolled fake,
  * so a contract drift between `push.ts`'s `PushRepo` and the real `Repo` is
- * invisible (`removePushSub(id)` vs `removePushSub(endpoint)` are both `string`,
- * and `tsc` cannot tell them apart). This block closes that gap: it seeds a real
- * pg-mem database through the real `Repo`, runs the real sweeper, and asserts on
- * the *database* — so the 410 cleanup and the owner join are checked against the
- * code that will actually run in production, not a double.
+ * invisible (`removePushSub(a, b)` vs `removePushSub(a)` still type-check against
+ * a loose fake, and both args are `string`). This block closes that gap: it seeds
+ * a real pg-mem database through the real `Repo`, runs the real sweeper, and
+ * asserts on the *database* — so the 410 cleanup, its `(userId, endpoint)`
+ * owner scoping, and the owner join are checked against the code that will
+ * actually run in production, not a double.
  */
 function newTestPool(): Queryable {
   const db = newDb();
@@ -397,12 +399,52 @@ describe("sendPendingPush — wired to the real Repo (pg-mem)", () => {
       vapid: VAPID,
     });
 
-    // The crux of the fix: endpoint-keyed remove deletes the actual row. The old
-    // id-keyed call left SUBS_AFTER at 1.
+    // The crux of the fix: owner-scoped remove deletes the actual row. The old
+    // bare-endpoint call could also hit a foreign row (see the cross-user test
+    // below), so the arity is pinned here against the real SQL.
     expect(await subCount(pool, userId)).toBe(0);
     // No successful delivery, so the beep stays pending for the next sweep.
     expect(result).toEqual({ sent: 0, beeps: 0 });
     expect(await pendingCount(pool)).toBe(1);
+  });
+
+  /**
+   * Regression (Task-8 review): the 410 cleanup must delete **only the beep
+   * owner's** row. Two users can now legitimately hold subscriptions with the
+   * same endpoint string (per-user unique key), and a bare-endpoint delete would
+   * have destroyed the other user's row. This wires the real `Repo` so the
+   * `(userId, endpoint)` scoping is checked against actual SQL.
+   */
+  it("prunes only the owner's dead subscription, never a foreign row with the same endpoint", async () => {
+    const pool = newTestPool();
+    const repo = new Repo(pool);
+    const a = await repo.upsertUser({ sub: "owner-a" });
+    const b = await repo.upsertUser({ sub: "owner-b" });
+    // Same endpoint string under two owners: with the global unique this was
+    // impossible (the second insert stole the first row); with the per-user key
+    // both coexist.
+    const shared = "https://push.example/shared";
+    await repo.addPushSub(a.id, { endpoint: shared, p256dh: "ka", auth: "aa" });
+    await repo.addPushSub(b.id, { endpoint: shared, p256dh: "kb", auth: "ab" });
+    expect(await subCount(pool, a.id)).toBe(1);
+    expect(await subCount(pool, b.id)).toBe(1);
+
+    const pet = await repo.createPet(a.id, "p1");
+    await repo.recordBeep(pet.id);
+
+    const gone: PushSender = {
+      async send() {
+        const err = new Error("Gone") as Error & { statusCode: number };
+        err.statusCode = 410;
+        throw err;
+      },
+    };
+
+    await sendPendingPush({ repo, sender: gone, hasLiveConnection: () => false, vapid: VAPID });
+
+    // A's dead row is gone; B's row with the same endpoint survives untouched.
+    expect(await subCount(pool, a.id)).toBe(0);
+    expect(await subCount(pool, b.id)).toBe(1);
   });
 
   it("does not push while the owner has a live connection (real Repo)", async () => {

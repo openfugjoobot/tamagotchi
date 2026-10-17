@@ -49,7 +49,7 @@ export interface ApiRepo {
     userId: string,
     sub: { endpoint: string; p256dh: string; auth: string; ua?: string | null },
   ): Promise<unknown>;
-  removePushSub(endpoint: string): Promise<void>;
+  removePushSub(userId: string, endpoint: string): Promise<void>;
   listBeeps(userId: string, limit?: number): Promise<BeepRow[]>;
 }
 
@@ -265,7 +265,9 @@ export function registerApi(app: FastifyInstance, deps: ApiDeps): void {
     if (typeof endpoint !== "string" || endpoint.length === 0) {
       return reply.code(400).send({ error: "bad endpoint" });
     }
-    await repo.removePushSub(endpoint);
+    // Scoped to the caller: a foreign endpoint matches nothing and cannot be
+    // deleted by someone who merely knows the string (Task-8 review).
+    await repo.removePushSub(userId(req), endpoint);
     return reply.code(204).send();
   });
 
