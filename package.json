@@ -11,6 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "server:dev": "node server/src/main.ts",
+    "server:test": "vitest run tests/server-*.test.ts",
     "verify": "tsc --noEmit && vitest run && vite build && node scripts/gen-precache.mjs"
   },
   "devDependencies": {
