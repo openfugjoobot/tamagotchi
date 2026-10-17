@@ -98,6 +98,31 @@ export interface BeepRow {
 }
 
 /**
+ * A manual save slot (spec §3 `save_slots`). Slots belong to a **user**, not a
+ * pet: they are addressed under a pet for create/list (the pet supplies the
+ * `device`/`age_years` metadata and the snapshot), but they outlive that pet, so
+ * the row carries `user_id` and no `pet_id`.
+ */
+export interface SlotRow {
+  id: string;
+  user_id: string;
+  label: string;
+  snapshot: Buffer;
+  device: string;
+  age_years: number;
+  created_at: Date;
+}
+
+/** A slot as a list returns it — metadata only, never the snapshot bytes. */
+export interface SlotMetaRow {
+  id: string;
+  label: string;
+  device: string;
+  age_years: number;
+  created_at: Date;
+}
+
+/**
  * A pending beep joined to its owner. `pendingBeeps()` needs the owner because a
  * push goes to a *user*, while a beep row only names a pet. These names match
  * the `PendingBeep` interface the sweeper consumes (`server/src/push.ts`) — the
@@ -146,6 +171,20 @@ export class Repo {
       [userId],
     );
     return rows;
+  }
+
+  /**
+   * One pet, **scoped to its owner**. The `user_id` predicate is not optional:
+   * a load that only matched `id` would bind a foreign pet. Returns null when the
+   * pet does not exist *or* belongs to someone else, so callers cannot tell the
+   * two apart (no existence oracle).
+   */
+  async getPet(userId: string, petId: string): Promise<PetRow | null> {
+    const { rows } = await this.pool.query<PetRow>(
+      `select * from pets where id = $1 and user_id = $2`,
+      [petId, userId],
+    );
+    return rows[0] ?? null;
   }
 
   /** A new, living pet for the given device. */
@@ -250,5 +289,94 @@ export class Repo {
   /** Mark a beep as delivered so it is not pushed again. */
   async markBeepNotified(id: string): Promise<void> {
     await this.pool.query(`update beeps set notified_at = now() where id = $1`, [id]);
+  }
+
+  /**
+   * Recent beeps for a user's pets, newest first — the notification history. The
+   * owner is enforced through the `pets` join (a beep only names a pet).
+   */
+  async listBeeps(userId: string, limit = 50): Promise<BeepRow[]> {
+    const { rows } = await this.pool.query<BeepRow>(
+      `select b.*
+         from beeps b
+         join pets p on p.id = b.pet_id
+        where p.user_id = $1
+        order by b.at desc
+        limit $2`,
+      [userId, limit],
+    );
+    return rows;
+  }
+
+  /** A user's settings object (empty object when never set). */
+  async getSettings(userId: string): Promise<Record<string, unknown>> {
+    const { rows } = await this.pool.query<{ settings: Record<string, unknown> | string }>(
+      `select settings from users where id = $1`,
+      [userId],
+    );
+    const raw = rows[0]?.settings;
+    if (raw === undefined || raw === null) return {};
+    // real `pg` parses `jsonb` into an object; pg-mem hands back the raw text.
+    return typeof raw === "string" ? (JSON.parse(raw) as Record<string, unknown>) : raw;
+  }
+
+  /** Replace a user's settings object with the given one. */
+  async setSettings(userId: string, settings: Record<string, unknown>): Promise<void> {
+    await this.pool.query(`update users set settings = $2::jsonb where id = $1`, [
+      userId,
+      JSON.stringify(settings),
+    ]);
+  }
+
+  /**
+   * Snapshot a pet into a labelled save slot. The snapshot is moved as hex
+   * (`encode`/`decode`) like `pets.state`, so arbitrary WASM bytes survive.
+   */
+  async createSlot(
+    userId: string,
+    slot: { label: string; snapshot: Uint8Array; device: string; ageYears: number },
+  ): Promise<SlotRow> {
+    const { rows } = await this.pool.query<SlotRow>(
+      `insert into save_slots (user_id, label, snapshot, device, age_years)
+       values ($1, $2, decode($3, 'hex'), $4, $5)
+       returning id, user_id, label, encode(snapshot, 'hex') as snapshot, device, age_years, created_at`,
+      [userId, slot.label, toHex(slot.snapshot), slot.device, slot.ageYears],
+    );
+    const row = rows[0];
+    return { ...row, snapshot: Buffer.from(row.snapshot as unknown as string, "hex") };
+  }
+
+  /** All save slots of a user, newest first — metadata only, no snapshot bytes. */
+  async listSlots(userId: string): Promise<SlotMetaRow[]> {
+    const { rows } = await this.pool.query<SlotMetaRow>(
+      `select id, label, device, age_years, created_at
+         from save_slots
+        where user_id = $1
+        order by created_at desc`,
+      [userId],
+    );
+    return rows;
+  }
+
+  /**
+   * Load one save slot, **user-scoped**, returning the full row including the
+   * snapshot. Used to restore a snapshot into a running pet; null when the slot
+   * does not exist or belongs to someone else.
+   */
+  async getSlot(userId: string, slotId: string): Promise<SlotRow | null> {
+    const { rows } = await this.pool.query<SlotRow & { snapshot: string }>(
+      `select id, user_id, label, encode(snapshot, 'hex') as snapshot, device, age_years, created_at
+         from save_slots
+        where id = $1 and user_id = $2`,
+      [slotId, userId],
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return { ...row, snapshot: Buffer.from(row.snapshot, "hex") };
+  }
+
+  /** Delete one save slot, **user-scoped**. No-op when it is not the caller's. */
+  async deleteSlot(userId: string, slotId: string): Promise<void> {
+    await this.pool.query(`delete from save_slots where id = $1 and user_id = $2`, [slotId, userId]);
   }
 }

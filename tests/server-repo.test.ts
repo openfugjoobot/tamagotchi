@@ -155,4 +155,84 @@ describe("Repo", () => {
     pending = await repo.pendingBeeps();
     expect(pending.length).toBe(0);
   });
+
+  it("loads a pet scoped to its owner and hides foreign pets", async () => {
+    const a = await repo.upsertUser({ sub: "a" });
+    const b = await repo.upsertUser({ sub: "b" });
+    const pet = await repo.createPet(a.id, "p1");
+
+    const own = await repo.getPet(a.id, pet.id);
+    expect(own?.id).toBe(pet.id);
+    // The same id under a different user is invisible — no existence oracle.
+    expect(await repo.getPet(b.id, pet.id)).toBeNull();
+    expect(await repo.getPet(a.id, "00000000-0000-0000-0000-000000000000")).toBeNull();
+  });
+
+  it("stores and reads per-user settings", async () => {
+    const { id: userId } = await repo.upsertUser(PROFILE);
+    expect(await repo.getSettings(userId)).toEqual({});
+
+    await repo.setSettings(userId, { theme: "dark", lang: "it", shell: "green", sound: false, push: true });
+    const stored = await repo.getSettings(userId);
+    expect(stored).toMatchObject({ theme: "dark", lang: "it", sound: false });
+  });
+
+  it("lists recent beeps only for the user's own pets", async () => {
+    const a = await repo.upsertUser({ sub: "a" });
+    const b = await repo.upsertUser({ sub: "b" });
+    const mine = await repo.createPet(a.id, "p1");
+    const theirs = await repo.createPet(b.id, "p2");
+    await repo.recordBeep(mine.id);
+    await repo.recordBeep(theirs.id);
+
+    const rows = await repo.listBeeps(a.id);
+    expect(rows.length).toBe(1);
+    expect(rows[0].pet_id).toBe(mine.id);
+  });
+
+  // `save_slots` had no repo writer after Task 4 (carried mandate). These tests
+  // prove create/list/load/delete against the real schema on pg-mem, including
+  // the byte-exact snapshot round-trip and user scoping.
+  describe("save slots", () => {
+    it("round-trips a snapshot byte-for-byte through create → load", async () => {
+      const { id: userId } = await repo.upsertUser(PROFILE);
+      const snapshot = new Uint8Array(256);
+      for (let i = 0; i < snapshot.length; i++) snapshot[i] = (i * 13 + 200) % 256; // bytes >= 0x80
+
+      const slot = await repo.createSlot(userId, { label: "before boss", snapshot, device: "p1", ageYears: 4 });
+      expect(slot.label).toBe("before boss");
+      expect(slot.device).toBe("p1");
+      expect(slot.age_years).toBe(4);
+
+      const loaded = await repo.getSlot(userId, slot.id);
+      expect(loaded).not.toBeNull();
+      expect(new Uint8Array(loaded!.snapshot)).toEqual(snapshot);
+    });
+
+    it("lists slot metadata newest-first, without snapshot bytes", async () => {
+      const { id: userId } = await repo.upsertUser(PROFILE);
+      await repo.createSlot(userId, { label: "one", snapshot: new Uint8Array([1]), device: "p1", ageYears: 1 });
+      await repo.createSlot(userId, { label: "two", snapshot: new Uint8Array([2]), device: "p1", ageYears: 2 });
+
+      const slots = await repo.listSlots(userId);
+      expect(slots.length).toBe(2);
+      expect(slots.map((s) => s.label)).toEqual(["two", "one"]);
+      expect("snapshot" in slots[0]).toBe(false);
+    });
+
+    it("scopes load and delete to the owning user", async () => {
+      const a = await repo.upsertUser({ sub: "a" });
+      const b = await repo.upsertUser({ sub: "b" });
+      const slot = await repo.createSlot(a.id, { label: "s", snapshot: new Uint8Array([9]), device: "p1", ageYears: 0 });
+
+      // Another user sees nothing and cannot delete it.
+      expect(await repo.getSlot(b.id, slot.id)).toBeNull();
+      await repo.deleteSlot(b.id, slot.id);
+      expect((await repo.listSlots(a.id)).length).toBe(1);
+
+      // The owner can.
+      await repo.deleteSlot(a.id, slot.id);
+      expect((await repo.listSlots(a.id)).length).toBe(0);
+    });
+  });
 });
