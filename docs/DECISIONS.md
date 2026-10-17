@@ -120,20 +120,3 @@ Reihe ganz entfernt, weil sie einen nie wechselnden Zustand aus einem
 hartkodierten Null-Puffer zeigte; jetzt ist die Quelle des Zustands echt, daher
 ist die Reihe wieder da. Die statischen Grafiken auf der Guide-Seite
 (`renderIconGrid`) bleiben.
-
-**Auswahl-Hervorhebung (2026-10-17, clientseitig abgeleitet):** Weil die
-Segment-Bits dauerhaft 0 bleiben, ist auf der Leiste nicht zu sehen, welches
-Icon der Nutzer gerade angewählt hat. Diese Auswahl ist aber aus den
-Tastendrücken selbst ableitbar und wird in `src/emu/menu.ts` (`MenuTracker`)
-geführt: A (`SELECT`/`left`) wandert über den 8er-**Ring** der Icons (am Ende
-Umbruch auf das erste), B/C verlassen das Blättern und **suspendieren** die
-Ableitung (im Item ist der ROM-Zustand maßgeblich), und nach
-`MENU_BROWSE_TIMEOUT_MS` (5 s) ohne A-Druck erlischt sie (das P1 verlässt das
-Menü selbst). Bei Tod/neuem Tier `reset()`.
-
-`drawIconRow(..., highlight)` zeichnet für den ausgewählten Slot einen
-1-Pixel-Ring **zusätzlich** zu den Icons; die Segment-Opazität bleibt exakt der
-übertragene `bits`-Wert. Die Hervorhebung fälscht also **keinen** ROM-Zustand:
-sie ist ein bewusst separat gezeichneter, clientseitig abgeleiteter Hinweis.
-Rein und zeit-injizierbar (kein DOM/Timer/Uhr), daher voll unit-testbar
-(`tests/menu-tracking.test.ts`, `tests/icons-render.test.ts`).
