@@ -432,8 +432,9 @@ main { flex: 1 0 auto; display: flex; flex-direction: column; }
   width: 16px; height: 16px; border: 3px solid var(--shell-top); border-radius: 50%; margin-bottom: -5px; flex: none;
 }
 .shell-card .device { width: 84px; margin: 0; flex: none; position: relative; }
-/* Vorschau spiegelt den Screen-Stack des echten Geraets: Zacken + Icons oben/
-   unten + LCD, mit demselben gelben Rahmen (.screen-stack). */
+/* Vorschau spiegelt den Screen-Stack des echten Geraets: Zacken + LCD, mit
+   demselben gelben Rahmen (.screen-stack). Die Icon-Reihe oben/unten gibt es
+   nicht mehr (Task-10 Fix B1: das Task-6-Protokoll traegt keinen Icon-Zustand). */
 .shell-card .mini-screen-wrap { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); width: 64%; z-index: 2; }
 .shell-card .mini-star { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 140%; aspect-ratio: 1; }
 .shell-card .mini-screen-stack {

@@ -16,6 +16,7 @@ import { createPetsView, type PetSummary } from "./ui/pets";
 import { createBootOverlay } from "./ui/boot";
 import { createSlotsView } from "./ui/slots";
 import { createSettingsView, type Settings } from "./ui/settings";
+import { createAppearanceHandlers } from "./ui/appearance";
 import { createBeepsView, type BeepSummary } from "./ui/beeps";
 import { api } from "./ui/api";
 import {
@@ -56,6 +57,26 @@ const openGuideOnBoot = params.get("guide") === "1";
 // ---- Hintergrund-Themes (Definition in src/theme.ts) ----
 // "auto" wählt nach Tageszeit; gespeichert wird die Auswahl, angezeigt das Theme.
 let selectedBg = "day";
+
+/**
+ * True, solange `applyServerSettings()` geladene Werte in die UI schreibt. In
+ * diesem Fenster stammen Theme-/Shell-Wechsel vom Server, nicht vom Nutzer, und
+ * dürfen nicht zurückgeschrieben werden (sonst Schleife bzw. Überschreiben der
+ * Wahl eines anderen Geräts).
+ */
+let applyingFromServer = false;
+
+/**
+ * Theme/Shell-Auswahl persistieren (Fix A2b, Task-11 D2). Die Handler werden vom
+ * Theme-Grid, dem Shell-Grid und dem Shell-Karussell gerufen. `isApplying`
+ * entschärft den Rückweg: Werte, die `applyServerSettings` gerade in die UI
+ * schreibt, werden nicht erneut gespeichert. `persistSetting` ist eine gehoistete
+ * Funktionsdeklaration weiter unten, daher hier bereits sicher referenzierbar.
+ */
+const appearance = createAppearanceHandlers({
+  persist: (patch) => persistSetting(patch),
+  isApplying: () => applyingFromServer,
+});
 
 // Kurzes Crossfade beim Umschalten: den alten Hintergrund als Layer darüberlegen
 // und ausblenden, sobald das neue Theme steht. Bei reduced motion: kein Fade.
@@ -196,7 +217,7 @@ function initUI(): void {
       b.title = t.id;
       b.style.background = t.c;
       b.setAttribute("aria-label", "Background: " + t.id);
-      b.addEventListener("click", () => applyBg(t.id));
+      b.addEventListener("click", () => { applyBg(t.id); appearance.selectTheme(t.id); });
       if (t.id === AUTO) {
         const mark = document.createElement("span");
         mark.className = "bgbtn-a";
@@ -264,7 +285,7 @@ function initUI(): void {
       b.title = s.id;
       b.style.background = `linear-gradient(180deg, ${s.top}, ${s.bot})`;
       b.setAttribute("aria-label", "Shell: " + s.id);
-      b.addEventListener("click", () => setShell(s.id));
+      b.addEventListener("click", () => { setShell(s.id); appearance.selectShell(s.id); });
       const label = document.createElement("span");
       label.textContent = s.id.charAt(0).toUpperCase() + s.id.slice(1);
       item.append(b, label);
@@ -418,8 +439,10 @@ function initUI(): void {
         i = centeredIndex();
       }
       const sel = cards[i];
-      if (sel && sel.dataset.shell && sel.dataset.shell !== current) pickShell(sel.dataset.shell);
-      else markCards();
+      if (sel && sel.dataset.shell && sel.dataset.shell !== current) {
+        pickShell(sel.dataset.shell);
+        appearance.selectShell(sel.dataset.shell);
+      } else markCards();
     };
 
     carousel.addEventListener("scroll", () => {
@@ -827,16 +850,26 @@ function applyServerSettings(s: Settings): void {
   // Der Server fuehrt dieselben UI-IDs wie die Oberflaeche (theme: blossom/day/
   // …/auto, shell: teal/pink/…); die Pruefung unten ist nur ein Guertel, falls
   // ein unbekannter Wert aus einer alten Zeile kommt. Klang und Push sind boolesch.
-  if (SHELLS.some((x) => x.id === s.shell)) {
-    const el = document.querySelector(".device-wrap") as HTMLElement | null;
-    if (el) applyShell(el, s.shell, localStorage);
+  // `applyingFromServer` verhindert, dass die hier angewandten Werte über die
+  // Auswahl-Handler wieder zurückgeschrieben werden (Fix A2b).
+  applyingFromServer = true;
+  try {
+    if (SHELLS.some((x) => x.id === s.shell)) {
+      const el = document.querySelector(".device-wrap") as HTMLElement | null;
+      if (el) applyShell(el, s.shell, localStorage);
+      if (miniDevice) miniDevice.dataset.shell = s.shell;
+      if (miniWrapEl) miniWrapEl.dataset.shell = s.shell;
+      document.querySelectorAll<HTMLElement>(".shellbtn").forEach((el) => el.classList.toggle("active", el.dataset.id === s.shell));
+    }
+    if (THEMES.some((x) => x.id === s.theme)) applyBg(s.theme, false);
+    soundOn = s.sound !== false;
+    piezo.setMuted(!soundOn);
+    updateSoundLabel();
+    notifyEnabled = s.push;
+    updateNotifyLabel();
+  } finally {
+    applyingFromServer = false;
   }
-  if (THEMES.some((x) => x.id === s.theme)) applyBg(s.theme, false);
-  soundOn = s.sound !== false;
-  piezo.setMuted(!soundOn);
-  updateSoundLabel();
-  notifyEnabled = s.push;
-  updateNotifyLabel();
 }
 
 /** Speicherstände des aktuellen Tiers neu laden und rendern. */
