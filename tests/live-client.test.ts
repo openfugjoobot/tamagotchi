@@ -182,6 +182,52 @@ describe("LiveClient", () => {
     expect(server!.openSockets()).toBe(1);
   });
 
+  it("disconnect() on a still-CONNECTING socket does not crash and leaves no socket open", async () => {
+    // Regression: closeSocket() used to null `onerror` *before* calling close().
+    // Closing a CONNECTING socket makes Node's `ws` abort the handshake and emit
+    // `'error'` on the next tick; with no listener attached, the EventEmitter
+    // threw "WebSocket was closed before the connection was established" as an
+    // uncaught exception (vitest reports it as an unhandled error even when the
+    // test itself passes). connect() + disconnect() in the same tick is the
+    // shortest way to hit it, and is a real reconnect/teardown interleaving.
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    client.connect("pet-1", "tok");
+    client.disconnect(); // same tick — socket is still CONNECTING
+
+    // Give the aborted handshake's asynchronous 'error' a chance to surface.
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(client.status()).toBe("offline");
+    // No reconnect: a disconnected client must stay quiet.
+    expect(server.received.filter((m) => m.t === "hello").length).toBe(0);
+    await waitUntil(() => server!.openSockets() === 0, 2000);
+    expect(server.openSockets()).toBe(0);
+  });
+
+  it("connect() again on a still-CONNECTING socket does not crash and rebinds", async () => {
+    // Same race, but via the reconnect/switch path: connect(p1) then immediately
+    // connect(p2) drops a CONNECTING socket inside closeSocket(). The old bug
+    // surfaced here as an uncaught handshake-abort error; the fix must swallow it
+    // while still opening the new socket and binding to the new pet.
+    server = new FakeLiveServer();
+    const url = await server.listen();
+    client = new LiveClient({ url, WebSocketImpl: NodeWs as unknown as typeof WebSocket, reconnectDelayMs: 10 });
+    client.connect("pet-1", "tok-1");
+    client.connect("pet-2", "tok-2"); // same tick — first socket still CONNECTING
+
+    await waitUntil(() => server!.received.some((m) => m.t === "hello" && m.petId === "pet-2"), 3000);
+    // Let the aborted first handshake's async 'error' surface before we finish.
+    await new Promise((r) => setTimeout(r, 150));
+
+    const hellos = server.received.filter((m) => m.t === "hello");
+    expect(hellos.some((m) => m.petId === "pet-2")).toBe(true);
+    // Only the second pet's socket should remain.
+    await waitUntil(() => server!.openSockets() <= 1, 2000);
+    expect(server.openSockets()).toBe(1);
+  });
+
   it("goes offline on close and live once bound, and stops reconnecting on disconnect()", async () => {
     server = new FakeLiveServer();
     const url = await server.listen();

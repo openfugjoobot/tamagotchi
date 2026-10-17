@@ -128,7 +128,18 @@ export class LiveClient {
     this.ws = null;
     this.bound = false;
     if (ws) {
-      ws.onopen = ws.onmessage = ws.onclose = ws.onerror = null;
+      // Keep the socket's own error/close listeners alive until it has fully
+      // closed. Closing a still-CONNECTING socket aborts the handshake, and
+      // Node's `ws` then emits `'error'` on a later tick; removing `onerror`
+      // first would leave that event unhandled and Node's EventEmitter would
+      // throw an uncaught exception (browsers/undici stay silent, so this
+      // only bites the test transport). The handlers below swallow the
+      // resulting error/close without scheduling a reconnect — the socket is
+      // already detached from `this.ws`, so `onDown`'s `this.active` check is
+      // moot, but the no-op keeps intent explicit.
+      ws.onopen = ws.onmessage = null;
+      ws.onerror = () => {};
+      ws.onclose = () => {};
       try { ws.close(); } catch { /* already closed */ }
     }
   }
