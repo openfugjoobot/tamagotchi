@@ -11,6 +11,7 @@ Browser                                  tamagotchi-server (Node)          Postg
    net/lcd-codec.ts ◀── pack/unpack (shared by client + server)
    emu/audio.ts    ◀─{t:"buzzer",freq,on}   server/src/ws.ts (Sampler, 20 ms)
    emu/tone-replay.ts ◀─{t:"tones",ev:[{at,freq,play}]} server/src/ws.ts (verlustfreier Ring)
+                       legt die µs-Stempel auf die AudioContext-Uhr (ctx.currentTime)
    ui/*.ts         ──REST /api/*────────▶ server/src/api.ts (Fastify)
                                            server/src/tick.ts (LCD, 125 ms)
                                            server/src/beeps.ts (Debounce)
@@ -50,8 +51,8 @@ Browser                                  tamagotchi-server (Node)          Postg
 |-------|----------------|
 | `src/net/live.ts` | WS-Client: `hello`/`frame` (lcd+icons, kompakt base64; akzeptiert weiter das Legacy-Array)/`buzzer`/`tones` (verlustfreier Ton-Ereignisstrom)/`state`, `pressDown`+`pressUp` (explizite `{t:"btn"}`-Flanken, gleichzeitige Kombis), Auto-Reconnect mit Backoff |
 | `src/net/lcd-codec.ts` | Kompakter Wire-Codec: 512 LCD-Bits → 64 B base64, 8 Icon-Bits → 1 B; von Server (`ws.ts`) und Client (`live.ts`) geteilt |
-| `src/emu/audio.ts` | WebAudio-Piezo: `{freq,on}` → Square-Oscillator (der Tab hört das serverseitige Tier) |
-| `src/emu/tone-replay.ts` | Spielt den verlustfreien `tones`-Strom mit korrekter Zeit: Emulator-µs-Deltas → Wanduhr-Verzögerungen → Piezo; bricht frühere Pläne bei neuem Batch/Offline ab |
+| `src/emu/audio.ts` | WebAudio-Piezo: `{freq,on,atSec?}` → Square-Oscillator mit **absoluten Rampen auf `ctx.currentTime`** (der Tab hört das serverseitige Tier sample-accurate) |
+| `src/emu/tone-replay.ts` | Legt den verlustfreien `tones`-Strom auf die **AudioContext-Uhr** (Emulator-µs-Deltas → `at0Sec + Δ` Sekunden → Piezo-Rampen); `setTimeout` ist nur Wecker; bricht frühere Pläne bei neuem Batch/Offline ab, plant nie in die Vergangenheit |
 | `src/render/lcd.ts` | 32×16-Frame auf die Canvas zeichnen |
 | `src/render/icons.ts` | 8 P1-Icon-Segmente als Reihe oben/unten zeichnen (aus den Frame-Bits) + Guide-Raster |
 | `src/emu/input.ts` | A/B/C → logische Buttons → `{t:"btn"}`-Flanken über den Live-Kanal |

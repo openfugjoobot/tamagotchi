@@ -2,8 +2,27 @@ import { describe, it, expect, vi } from "vitest";
 import { createPiezo } from "@/emu/audio";
 
 function fakeCtx() {
-  const osc = { type: "", frequency: { value: 0 }, connect: vi.fn(), start: vi.fn(), stop: vi.fn() };
-  const gain = { gain: { setValueAtTime: vi.fn(), value: 0.0001 }, connect: vi.fn() };
+  const osc = {
+    type: "",
+    frequency: {
+      value: 0,
+      setValueAtTime: vi.fn(function (this: { value: number }, v: number) {
+        this.value = v;
+      }),
+    },
+    connect: vi.fn(),
+    start: vi.fn(),
+    stop: vi.fn(),
+  };
+  const gain = {
+    gain: {
+      value: 0.0001,
+      setValueAtTime: vi.fn(function (this: { value: number }, v: number) {
+        this.value = v;
+      }),
+    },
+    connect: vi.fn(),
+  };
   return { currentTime: 0, state: "running", createOscillator: () => osc, createGain: () => gain, destination: {}, resume: vi.fn(), osc, gain } as unknown as AudioContext & { osc: typeof osc; gain: typeof gain };
 }
 

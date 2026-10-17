@@ -108,7 +108,28 @@ The 512-slot ring never overflows in normal operation.
 end audible while the next begins audible, so cancelling an old replay plan can
 never leave the piezo stuck on.
 
-The client (`src/emu/tone-replay.ts`) turns each event's `at` into a wall-clock
-delay relative to the batch anchor (`at - at0`, µs → ms) and drives the same
-`emu/audio.ts` piezo, so a burst plays back with its real duration and shape —
-not collapsed to a click and not shifted by network latency.
+The client (`src/emu/tone-replay.ts`) turns each event's `at` into an
+**absolute AudioContext position** — `at0Sec + (at - at0)/1e6`, with `at0Sec`
+the `ctx.currentTime` when the batch arrived — and drives the same
+`emu/audio.ts` piezo, whose ramps (`osc.start(atSec)`,
+`frequency.setValueAtTime(hz, atSec)`, `gain.setValueAtTime(…, atSec)`) sit on
+that same clock. So a burst plays back with its real duration and shape — not
+collapsed to a click and not shifted by network latency — **sample-accurately**,
+because the audible time is the audio graph's, not the event loop's.
+
+The scheduled time is never pushed into the past: the batch anchor is a lower
+bound, so a late-arriving batch sounds immediately (no arrival-latency shift) and
+the batch span stays exactly the emulator span (no stretch).
+
+## `setTimeout` cannot hold a sample-accurate onset (2026-10-17)
+
+Measured on this host (node v26.10.0, a burst of events at deltas
+`0/1/2/5/5.5/10 ms`, 2 ms of load per hop, n = 400 bursts): replaying via
+relative `setTimeout` delays delivered each event **mean 4.84 ms, p95 7.89 ms,
+max 9.63 ms late** — far beyond the 15 µs / 1 ms structure the stream encodes.
+With the burst's last edge at 10.8 ms, that drift is the same order as the whole
+chirp, so the two-tone shape smears and the short blip collapses.
+
+Hence the timer demoted to a mere *wake-up*; the onset is set on
+`ctx.currentTime`, where WebAudio renders at the block rate (~2.7 ms at 48 kHz)
+regardless of what the event loop was doing.
