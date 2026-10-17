@@ -18,10 +18,10 @@
  * `main()` reads the real environment and calls `startServer` with real deps.
  *
  * Runtime imports use relative specifiers (`./api.js`, `../../src/emu/*`), not
- * the vitest/tsconfig-only `@` alias, so plain `node dist/server/src/main.js`
+ * the vitest/tsconfig-only `@` alias, so plain `node dist-server/server/src/main.js`
  * works (Task-3 F2). The published build emits ESM, hence the `.js` suffixes.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { type Server as HttpServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -293,6 +293,11 @@ export async function startServer(deps: StartServerDeps): Promise<ServerHandle> 
       loop.stop();
       await hub.close();
       await app.close();
+      // General teardown: drop every pet's beep-debounce entry too, not only the
+      // ones that died. Otherwise the debounce map leaks one key per pet that
+      // was alive at shutdown (Task-9 minor).
+      for (const id of live.keys()) forgetPet(id);
+      live.clear();
     },
   };
 }
@@ -342,14 +347,31 @@ async function main(): Promise<void> {
   const pool = new Pool({ connectionString: pgUrl });
   const publicDir = env.PUBLIC_DIR ?? resolve(__dirname, "../../public");
 
+  // ROMs are copyrighted Bandai firmware and are NOT in the repo (see
+  // emu/README.md). On a clean clone they are missing, so fail fast with a
+  // message that names the exact missing file and how to provision it — instead
+  // of a bare ENOENT from deep inside readFileSync at first pet hydration.
+  const romPath = (device: string): string =>
+    resolve(publicDir, `emu/rom${device === "p2" ? "2" : "0"}.bin`);
+  const wasmPath = resolve(publicDir, "emu/tamalib.wasm");
+  for (const p of [romPath("p1"), romPath("p2"), wasmPath]) {
+    if (!existsSync(p)) {
+      throw new Error(
+        `missing emulator asset: ${p}\n` +
+          "The Tamagotchi ROMs are copyrighted firmware and are not committed " +
+          "(see emu/README.md). Provision rom0.bin (P1), rom2.bin (P2) and " +
+          "tamalib.wasm under public/emu/ before starting the server.",
+      );
+    }
+  }
+
   const srv = await startServer({
     pool,
     clientId,
     vapid,
     port,
-    loadRom: (device) =>
-      new Uint8Array(readFileSync(resolve(publicDir, `emu/rom${device === "p2" ? "2" : "0"}.bin`))),
-    loadWasm: () => new Uint8Array(readFileSync(resolve(publicDir, "emu/tamalib.wasm"))),
+    loadRom: (device) => new Uint8Array(readFileSync(romPath(device))),
+    loadWasm: () => new Uint8Array(readFileSync(wasmPath)),
   });
   console.log(`[server] listening on ${srv.url} (ws ${srv.wsUrl}/ws)`);
 

@@ -11,6 +11,9 @@ export default defineConfig({
   },
   build: {
     target: "es2022",
+    // The client build owns `dist/`. The server compiles to `dist-server/`
+    // (tsconfig.server.json) so a `vite build` — which empties its outDir —
+    // can never delete the compiled server entrypoint (Task-9 D1).
     outDir: "dist",
     rollupOptions: {
       input: {

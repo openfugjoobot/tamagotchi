@@ -68,3 +68,8 @@ export function forgetPet(petId: string): void {
 export function resetBeepDebounce(): void {
   lastBeepAt.clear();
 }
+
+/** Test/diagnostic hook: how many pets currently hold debounce state. */
+export function beepDebounceSize(): number {
+  return lastBeepAt.size;
+}

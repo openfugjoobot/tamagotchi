@@ -14,8 +14,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "server:build": "tsc -p tsconfig.server.json",
-    "server:dev": "npm run server:build && node dist/server/src/main.js",
+    "server:build": "tsc -p tsconfig.server.json && node scripts/copy-server-assets.mjs",
+    "server:dev": "npm run server:build && node dist-server/server/src/main.js",
+    "server:start": "node dist-server/server/src/main.js",
     "server:test": "vitest run tests/server-*.test.ts",
     "verify": "tsc --noEmit && vitest run && vite build && node scripts/gen-precache.mjs"
   },

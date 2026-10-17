@@ -3,7 +3,7 @@ import { newDb } from "pg-mem";
 import { WebSocket } from "ws";
 import { startServer } from "../server/src/main";
 import { TickLoop, type PetLike } from "../server/src/tick";
-import { resetBeepDebounce } from "../server/src/beeps";
+import { collectBeep, beepDebounceSize, resetBeepDebounce } from "../server/src/beeps";
 import { signJwt, makeTestKey, jwksFetch, type TestKey } from "./helpers/jwt";
 import { verifyIdToken } from "../server/src/auth";
 
@@ -129,6 +129,28 @@ describe("startServer wiring", () => {
     } finally {
       await srv.close();
     }
+  }, 15000);
+
+  it("forgets a pet's beep debounce on general teardown (close)", async () => {
+    resetBeepDebounce();
+    const Pool = memPool();
+    const pool = new Pool();
+    const srv = await startServer(baseDeps(pool));
+    const { Repo } = await import("../server/src/db/repo");
+    const repo = new Repo(pool);
+    const u = await repo.upsertUser({ sub: "sub-teardown" });
+    const pet = await repo.createPet(u.id, "p1");
+    await srv.rehydrate();
+    expect(srv.livePetIds()).toContain(pet.id);
+
+    // A live beep burst seeds the debounce map keyed by this pet id…
+    await collectBeep(repo, pet.id, true, Date.now());
+    expect(beepDebounceSize()).toBe(1);
+
+    // …and a general teardown (not only a death) must drop it, so the map does
+    // not leak one key per pet that was alive at shutdown (Task-9 minor).
+    await srv.close();
+    expect(beepDebounceSize()).toBe(0);
   }, 15000);
 
   it("scopes WS loadPet to its owner: a foreign pet never binds", async () => {
