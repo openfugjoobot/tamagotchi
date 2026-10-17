@@ -1,4 +1,4 @@
-import { LCD_WIDTH } from "../emu/emulator";
+import { LCD_WIDTH } from "../emu/constants";
 
 /** Echte P1-Icons (14×14 PNGs, aus GMMan/flipperzero-tamagotch-p1). */
 export const ICON_SRCS = Array.from({ length: 8 }, (_, i) => `/emu/icons/${i}.png`);

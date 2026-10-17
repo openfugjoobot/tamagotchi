@@ -1,15 +1,12 @@
-import { createEmulator, LCD_WIDTH, LCD_HEIGHT } from "./emu/emulator";
-import { DEVICES, DEVICE_IDS, pickInitialDevice, nextDevice, switchLabel, type Device } from "./emu/devices";
-import { STEPS_PER_SECOND, unitsForMs, Pacer } from "./emu/clock";
-import type { Emulator } from "./emu/emulator";
+import { DEVICES, pickInitialDevice, nextDevice, switchLabel, type Device } from "./emu/devices";
+import { LCD_WIDTH, LCD_HEIGHT, type Btn } from "./emu/constants";
 import { drawLcd } from "./render/lcd";
 import { drawIconRow, loadIcons, renderIconGrid, type IconImages } from "./render/icons";
 import { handleKey, BUTTON_MAP, type LogicalButton } from "./emu/input";
 import { createPiezo } from "./emu/audio";
-import { saveEmu, loadEmu, readSaveRecord, migrateLegacyEmu, emuKey } from "./storage/persist";
+import { LiveClient } from "./net/live";
 import { AUTH_ENABLED } from "./auth/config";
 import { currentSession, restoreSession, renderSignInButton, signOut, initGsi, onSessionRefresh, type Session } from "./auth/google";
-import { deleteRemote, readSave, planSync, pushSave, type CloudSave, type SyncAction } from "./sync/cloud";
 import { SHELLS, applyShell, savedShell, starPolygon, type Shell } from "./shell";
 import { buildGrass } from "./grass";
 import { applyI18n, currentLang, iconNames, t } from "./i18n";
@@ -26,8 +23,6 @@ import {
   enableWakeLock,
   disableWakeLock,
   storageInfo,
-  requestBackgroundSync,
-  onBackgroundSync,
 } from "./pwa";
 
 const canvas = document.getElementById("lcd") as HTMLCanvasElement;
@@ -66,7 +61,6 @@ function paintMiniIcons(): void {
   }
 }
 const piezo = createPiezo(() => new AudioContext());
-const loadingEl = document.getElementById("loading");
 const menuEl = document.getElementById("menu");
 
 // Service Worker registrieren (ausgelagert, damit kein Inline-Script nötig ist → strikte CSP).
@@ -75,9 +69,6 @@ const menuEl = document.getElementById("menu");
 void registerServiceWorker();
 
 const params = new URLSearchParams(location.search);
-const SPEED = Math.max(1, Number(params.get("speed") ?? "1") || 1);
-// Testmodus: feste Schrittzahl, ein Frame, dann Stopp (kein rAF-Loop).
-const STATIC = Number(params.get("static") ?? "0") || 0;
 const shellParam = params.get("shell");
 /** Manifest-Shortcut "How to play" oeffnet direkt die Anleitung. */
 const openGuideOnBoot = params.get("guide") === "1";
@@ -560,7 +551,8 @@ function initUI(): void {
     else if (menu && !menu.hidden) trap(menu, e);
   });
   document.getElementById("btn-confirm-reset")?.addEventListener("click", () => {
-    try { localStorage.removeItem(emuKey("p1")); localStorage.removeItem(emuKey("p2")); } catch { /* ignore */ }
+    // Der Spielstand liegt auf dem Server; ein lokaler Reset raeumt nur noch die
+    // Geraetewahl und startet die Ansicht neu.
     location.reload();
   });
 
@@ -676,28 +668,23 @@ function initUI(): void {
 }
 initUI();
 
-// Zeitmodell siehe src/emu/clock.ts: alles relativ, kein Zeitlimit mehr.
-const MAX_STEPS_PER_FRAME = 120 * STEPS_PER_SECOND;
-const MAX_FRAME_CATCHUP_MS = 120 * 1000; // pro Frame höchstens 120 s reales Delta annehmen
-const CATCHUP_CHUNK_STEPS = 4 * 1000 * 1000; // Nachhol-Modus: alle ~4 Mio. Schritte kurz freigeben
+// ---- Live-Kanal: das Tier laeuft auf dem Server, der Tab ist Fenster + Fernbedienung ----
+//
+// Der in-tab-Emulator ist weg. Der Browser haengt an einem WebSocket (`/ws`),
+// empfaengt LCD-Frames und schickt Tastendruecke zurueck. Faellt die Verbindung
+// aus, laeuft das Tier serverseitig weiter - der Tab zeigt es nur nicht.
+const live = new LiveClient();
 
-const pacer = new Pacer();
-
-function pump(maxSteps: number): void {
-  const steps = pacer.take(maxSteps);
-  if (steps <= 0) return;
-  for (const id of DEVICE_IDS) emus[id]?.step(steps);
-}
-
-/** Ist der P2-ROM geladen? Steuert, ob der Schalter umschalten darf. */
+/** Ist der P1/P2-Schalter bedienbar? (ROM-/Tier-Verfuegbarkeit serverseitig.) */
 let p2Available = true;
-
-/** Laufende Emulatoren je Geraet. Beide laufen; gezeichnet wird nur `active`. */
-const emus: Partial<Record<Device, Emulator>> = {};
 /** Welches Geraet der Nutzer gerade bedient. */
 let active: Device = "p1";
-/** Aktive Instanz oder null, solange noch nichts geladen ist. */
-const cur = (): Emulator | null => emus[active] ?? null;
+/** Letzter empfangener LCD-Frame (oder null, solange nichts kam). */
+let lastFrame: Uint8Array | null = null;
+/** Letzter empfangener Icon-Stand (P1 liefert keine echten Icons - leere Reihe). */
+const blankIcons = new Uint8Array(8);
+/** Laeuft der Stream schon? Steuert das Lade-Overlay. */
+let booted = false;
 
 /** Schalter-Beschriftung an das aktive Geraet angleichen. */
 function syncDeviceButtons(): void {
@@ -709,7 +696,7 @@ function syncDeviceButtons(): void {
   btn.setAttribute("aria-label", t("switchTo").replace("{device}", DEVICES[nextDevice(active)].label));
 }
 
-/** P2 ist nicht ladbar (ROM fehlt): Schalter sperren statt still scheitern. */
+/** P2 ist nicht verfuegbar: Schalter sperren statt still scheitern. */
 function disableP2(): void {
   p2Available = false;
   const b = document.getElementById("dev-toggle") as HTMLButtonElement | null;
@@ -718,15 +705,17 @@ function disableP2(): void {
   b.title = t("p2Unavailable");
 }
 
-/** Umschalten: Auswahl merken, Schalter nachziehen, LCD sofort neu zeichnen. */
+/**
+ * Umschalten auf ein anderes Geraet: Auswahl merken, Schalter nachziehen und
+ * den Live-Stream des neuen Tiers starten. Ein Wechsel ist hier nur eine andere
+ * Ansicht - der Server haelt das jeweilige Tier weiter.
+ */
 function setActive(device: Device): void {
-  if (!emus[device]) return;
-  // Buttons des verlassenen Geraets freigeben, sonst bleibt dort eine Taste haengen.
-  for (const b of ["left", "middle", "right"] as const) emus[active]?.setButton(b, false);
   active = device;
   try { localStorage.setItem(DEVICE_KEY, device); } catch { /* Quota */ }
   syncDeviceButtons();
-  lastTs = performance.now();
+  live.disconnect();
+  void startStream();
 }
 
 /** Klick auf den Titel-Schalter: auf das andere Geraet wechseln. Der Titel ist
@@ -739,197 +728,67 @@ function initDeviceSwitch(): void {
     setActive(nextDevice(active, { p2Available }));
   });
 }
+
 let iconImgs: IconImages = [];
-let lastTs = 0;let saveTick = 0;
-let booted = false;
 
 const loadtxtEl = document.querySelector<HTMLElement>("#loading .loadtxt");
 const loadbarEl = document.getElementById("loadbar");
-const loadbarFill = document.getElementById("loadbar-fill");
 
-function showCatchup(frac: number): void {
-  const pct = Math.round(Math.min(1, Math.max(0, frac)) * 100);
-  const label = t("loading").replace(/…/g, "").trim();
-  if (loadtxtEl) loadtxtEl.textContent = `${label} ${pct}%`;
-  if (loadbarEl) loadbarEl.hidden = false;
-  if (loadbarFill) loadbarFill.style.width = pct + "%";
+/** Ersten Frame abwarten, dann das Lade-Overlay ausblenden. */
+function markBooted(): void {
+  if (booted) return;
+  booted = true;
+  if (loadtxtEl) loadtxtEl.textContent = t("loading");
+  if (loadbarEl) loadbarEl.hidden = true;
+  document.getElementById("loading")?.classList.add("hidden");
 }
 
-const nextTick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-// Holt beliebig viel Emulator-Zeit nach – in Chunks mit Fortschritt, statt den
-// Tab minutenlang einzufrieren. Ohne Limit: auch Tage/Wochen Abwesenheit.
-//
-// Laeuft pro Geraet getrennt (siehe boot): beide koennen unterschiedlich lange
-// weg gewesen sein, und ein gemeinsamer Pacer wuerde ihre Zeiten vermischen.
-async function catchUpAllFor(device: Device, units: number): Promise<void> {
-  if (!emus[device] || units <= 0) return;
-  const scratch = new Pacer();
-  scratch.add(units);
-  const total = units;
-  let lastPaint = 0;
-  while (scratch.owedUnits > 0) {
-    const steps = scratch.take(CATCHUP_CHUNK_STEPS);
-    if (steps > 0) emus[device]!.step(steps);
-    const now = performance.now();
-    if (now - lastPaint > 100) { lastPaint = now; showCatchup(1 - scratch.owedUnits / total); }
-    await nextTick();
-  }
-  showCatchup(1);
+/** Lade-Overlay: kurzer Hinweis, solange der erste Frame aussteht. */
+function showConnecting(): void {
+  if (booted) return;
   if (loadtxtEl) loadtxtEl.textContent = t("loading");
   if (loadbarEl) loadbarEl.hidden = true;
 }
 
-// ---- Konto & Cloud-Speicher (siehe docs/AUTH-SYNC.md) ----
-let cloudDirty = false;
-let cloudTimer: number | null = null;
+// ---- Pet-Aufloesung: welches Tier zeigt der aktive Slot? ----
+// Die Tier-Liste bekommt in Task 11 eine eigene Ansicht; hier genuegt die
+// Zuordnung Slot -> petId ueber die bestehende API, damit der Stream laeuft.
+interface PetSummary { id: string; device: Device; alive: boolean }
 
-// Nach jedem lokalen Speichern den Cloud-Push entprellt nachziehen (max. alle 30 s).
-function markCloudDirty(): void {
-  if (!AUTH_ENABLED) return;
-  cloudDirty = true;
-  if (cloudTimer !== null) return;
-  cloudTimer = window.setTimeout(() => { cloudTimer = null; void flushCloud(); }, 30_000);
-}
-
-async function flushCloud(): Promise<void> {
-  const s = currentSession();
-  if (!s || !cloudDirty) return;
-  // Je Geraet ein eigener Slot. Getrennte Versuche: scheitert P2, darf P1s
-  // Push nicht ausfallen.
-  let allOk = true;
-  for (const id of DEVICE_IDS) {
-    const rec = readSaveRecord(localStorage, id);
-    if (!rec) continue;
-    const ok = await pushSave(s.token, id, { snapshot: rec.d, updatedAt: new Date(rec.t).toISOString(), saveVer: 1 });
-    if (!ok) allOk = false;
-  }
-  if (allOk) cloudDirty = false;
-  // Ohne Netz: der Service Worker holt den Push nach, sobald wieder Verbindung besteht.
-  else void requestBackgroundSync();
-}
-
-/** Fragt, welcher Spielstand gelten soll (Cloud oder dieses Gerät). */
-function askWhichSave(localAt: number, cloudAt: string): Promise<"push" | "pull"> {
-  return new Promise((resolve) => {
-    const panel = document.getElementById("save-modal");
-    const hint = document.getElementById("save-hint");
-    const keepBtn = document.getElementById("save-keep");
-    const cloudBtn = document.getElementById("save-cloud");
-    if (!panel || !hint || !keepBtn || !cloudBtn) {
-      resolve("pull");
-      return;
-    }
-    const fmt = (v: number | string): string =>
-      new Date(v).toLocaleString(currentLang(), { dateStyle: "short", timeStyle: "short" });
-    hint.textContent = t("saveBody").replace("{cloud}", fmt(cloudAt)).replace("{local}", fmt(localAt));
-    const finish = (choice: "push" | "pull"): void => {
-      panel.hidden = true;
-      keepBtn.removeEventListener("click", onKeep);
-      cloudBtn.removeEventListener("click", onCloud);
-      resolve(choice);
-    };
-    const onKeep = (): void => finish("push");
-    const onCloud = (): void => finish("pull");
-    keepBtn.addEventListener("click", onKeep);
-    cloudBtn.addEventListener("click", onCloud);
-    panel.hidden = false;
-  });
-}
-
-/**
- * Nach dem Login den geladenen Cloud-Stand in den laufenden Emulator bringen.
- *
- * Frueher rief der Login-Pfad location.reload() auf. Das war schlecht: die
- * Session lag damals in sessionStorage und starb mit dem Tab - nach dem Reload
- * war sie weg, syncBeforeBoot stieg wieder aus, und der Abgleich machte sich
- * selbst zunichte. (Die Session liegt inzwischen in localStorage und ueberlebt
- * ein Reload; der Emulator wird trotzdem neu gestartet statt die Seite zu laden -
- * schneller und ohne den uebrigen Zustand zu verwerfen.)
- */
-async function reloadAfterCloud(): Promise<void> {
-  const e = cur();
-  if (!e) { location.reload(); return; }
-  let saved: Awaited<ReturnType<typeof loadEmu>> = null;
-  try { saved = await loadEmu(localStorage, active); } catch { /* Quota/kaputt */ }
-  if (!saved) { location.reload(); return; }
-  try { e.loadState(saved.bytes); } catch { location.reload(); return; }
-  if (saved.at) await catchUpAllFor(active, unitsForMs(Math.max(0, Date.now() - saved.at)));
-  lastTs = performance.now();
-}
-
-/** Cloud-Stand lokal ablegen; mitten in der Sitzung danach neu laden. */
-function applyCloudSave(cloud: CloudSave, reload: boolean, device: Device): void {
-  const at = Date.parse(cloud.updatedAt);
+async function listPets(token: string): Promise<PetSummary[]> {
   try {
-    localStorage.setItem(emuKey(device), JSON.stringify({ t: Number.isFinite(at) ? at : Date.now(), d: cloud.snapshot }));
-  } catch { /* Quota */ }
-  if (reload && device === active) location.reload();
-}
-function asCloud(rec: { d: string; t: number }): CloudSave {
-  return { snapshot: rec.d, updatedAt: new Date(rec.t).toISOString(), saveVer: 1 };
-}
-
-/**
- * Direkt nach dem Anmelden abgleichen - ohne Neuladen: bei Konflikt fragen,
- * sonst den neueren Stand gewinnen lassen.
- *
- * Achtung: Hier laeuft der Emulator bereits. Ein Cloud-Stand kann daher nicht
- * einfach "hineingeladen" werden wie beim Boot - er wird im localStorage
- * abgelegt und der Emulator anschliessend aus dem neuen Stand neu gestartet
- * (siehe reloadAfterCloud), statt die ganze Seite neu zu laden.
- */
-async function syncAfterSignIn(): Promise<void> {
-  const s = currentSession();
-  if (!s) return;
-  for (const id of DEVICE_IDS) await syncDeviceAfterSignIn(s.token, id);
-}
-
-/** Abgleich eines einzelnen Geraets. Getrennt aufgerufen, damit ein Fehler bei
- *  P2 den P1-Abgleich nicht abbricht. */
-async function syncDeviceAfterSignIn(token: string, device: Device): Promise<void> {
-  try {
-    const local = readSaveRecord(localStorage, device);
-    // readSave unterscheidet "keine Cloud" von "Abruf gescheitert". Ein
-    // gescheiterter Abruf fuehrt zu "none" - es wird NICHT mehr still
-    // hochgeladen, nur weil man nicht nachsehen konnte.
-    const cloud = await readSave(token, device);
-    // Beim Anmelden: sobald ein Cloud-Stand da ist, die Wahl anbieten - auch wenn
-    // die lokale Session (frisch gestartet) zeitlich "neuer" ist. Ihr Stand ist
-    // wertlos, darf die Cloud also nicht still ueberschreiben.
-    let action: SyncAction = planSync(cloud, local?.t ?? null, { forceAsk: true });
-    if (action === "ask") action = await askWhichSave(local?.t ?? 0, cloud.kind === "found" ? cloud.save.updatedAt : "");
-    if (action === "pull" && cloud.kind === "found") {
-      applyCloudSave(cloud.save, false, device);
-      if (device === active) await reloadAfterCloud();
-      return;
-    }
-    if (action === "push" && local) await pushSave(token, device, asCloud(local));
+    const res = await fetch("/api/pets", { headers: { authorization: `Bearer ${token}` }, cache: "no-store" });
+    if (!res.ok) return [];
+    const body = (await res.json()) as { pets?: PetSummary[] } | PetSummary[];
+    const arr = Array.isArray(body) ? body : body.pets ?? [];
+    return arr.filter((p) => p && typeof p.id === "string" && (p.device === "p1" || p.device === "p2"));
   } catch {
-    /* Ein Geraet darf den Abgleich der anderen nicht verhindern. */
+    return [];
   }
 }
 
-/** Vor dem Laden des Spielstands: Cloud und lokal abgleichen (neuerer gewinnt). */
-async function syncBeforeBoot(): Promise<void> {
+/** Neuestes lebendes Tier des Geraets, sonst das neueste ueberhaupt, sonst nichts. */
+function pickPet(pets: PetSummary[], device: Device): PetSummary | null {
+  const ofDevice = pets.filter((p) => p.device === device);
+  return ofDevice.find((p) => p.alive) ?? ofDevice[0] ?? null;
+}
+
+/**
+ * Den Live-Stream fuer das aktive Geraet starten.
+ *
+ * Ohne Anmeldung oder ohne passendes Tier bleibt der Tab offline - das Tier
+ * laeuft serverseitig weiter, es gibt nur nichts zu zeigen.
+ */
+async function startStream(): Promise<void> {
   const s = currentSession();
-  if (!s) return;
-  for (const id of DEVICE_IDS) {
-    try {
-      const local = readSaveRecord(localStorage, id);
-      const cloud = await readSave(s.token, id);
-      // Immer fragen, wenn beide Seiten einen Stand haben - nichts still ueberschreiben.
-      let action: SyncAction = planSync(cloud, local?.t ?? null);
-      if (action === "ask") action = await askWhichSave(local?.t ?? 0, cloud.kind === "found" ? cloud.save.updatedAt : "");
-      if (action === "pull" && cloud.kind === "found") {
-        applyCloudSave(cloud.save, false, id);
-      } else if (action === "push" && local) {
-        void pushSave(s.token, id, asCloud(local));
-      }
-    } catch {
-      /* Ein Geraet darf den Abgleich der anderen nicht verhindern. */
-    }
+  showConnecting();
+  if (!AUTH_ENABLED || !s) return;
+  const pet = pickPet(await listPets(s.token), active);
+  if (!pet) {
+    if (active === "p2") disableP2();
+    return;
   }
+  live.connect(pet.id, s.token);
 }
 
 /** Anleitung als Fenster im Menue-Stil (Inhalt steht in index.html). */
@@ -990,7 +849,7 @@ function initAccount(): void {
     const slot = bodyEl.querySelector<HTMLElement>(".gsi-slot");
     if (!slot) return;
     gsiAsked = true;
-    void renderSignInButton(slot, () => { render(); void syncAfterSignIn(); }).then((ok) => { if (!ok) gsiAsked = false; });
+    void renderSignInButton(slot, () => { render(); live.disconnect(); void startStream(); }).then((ok) => { if (!ok) gsiAsked = false; });
   }
 
   /** Avatar (Google-Bild, sonst Anfangsbuchstabe) – fuer Kopfzeile und Dialog. */
@@ -1111,9 +970,8 @@ function initAccount(): void {
   accountModal?.addEventListener("click", (e) => { if (e.target === accountModal) accountModal.hidden = true; });
   document.getElementById("account-confirm")?.addEventListener("click", () => {
     void (async () => {
-      const tok = currentSession()?.token;
-      if (tok) await deleteRemote(tok, active);
-      try { localStorage.removeItem(emuKey("p1")); localStorage.removeItem(emuKey("p2")); } catch { /* ignore */ }
+      // Das Konto loeschen liegt serverseitig noch nicht an (kein DELETE /api/pets);
+      // hier wird nur lokal abgemeldet. Die Tier-Daten bleiben auf dem Server.
       signOut();
       location.reload();
     })();
@@ -1162,101 +1020,54 @@ function initAccount(): void {
     renderFace();
     onSessionRefresh(() => {
       render();
-      void syncAfterSignIn();
+      // Frisches Token: den Live-Stream (neu) aufbauen.
+      live.disconnect();
+      void startStream();
     });
   });
 }
 
 function saveNow(): void {
-  if (SPEED !== 1) return;
-  for (const id of DEVICE_IDS) {
-    const e = emus[id];
-    if (!e) continue;
-    try { void saveEmu(localStorage, id, e.saveState()).catch(() => { /* Quota */ }); } catch { /* ignore */ }
-  }
-  markCloudDirty();
+  // Der Spielstand liegt jetzt auf dem Server; der Tab hat nichts mehr zu sichern.
+  // Beim Verlassen wird nur noch die Live-Verbindung abgeraeumt (der Server
+  // laesst das Tier ohnehin weiterlaufen).
 }
 
 async function boot(): Promise<void> {
   // PWA-Lifecycle zuerst: Update-Prompt und Offline-Banner sollen früh stehen,
-  // auch wenn der Emulator noch laedt.
+  // auch wenn noch kein Frame da ist.
   initPwa({ toast: showToast });
-  // Sync-Anforderung aus dem Service Worker (Background/Periodic Sync).
-  onBackgroundSync(() => { void flushCloud(); });
-
-  const wasm = await fetch("/emu/tamalib.wasm").then((r) => r.arrayBuffer());
-  // Bestandsstand von vor dem Umbau auf den P1-Slot heben, bevor irgendwer liest.
-  migrateLegacyEmu(localStorage);
-
-  for (const id of DEVICE_IDS) {
-    const spec = DEVICES[id];
-    try {
-      const romBuf = await fetch(spec.rom).then((r) => {
-        if (!r.ok) throw new Error(`${spec.rom}: HTTP ${r.status}`);
-        return r.arrayBuffer();
-      });
-      emus[id] = await createEmulator({ wasm, rom: new Uint8Array(romBuf) });
-    } catch {
-      // P2 kann fehlen (ROM nicht vorhanden) - P1 allein laeuft weiter.
-      if (id === "p2") { disableP2(); continue; }
-      throw new Error(`ROM fuer ${id} konnte nicht geladen werden`);
-    }
-  }
 
   active = pickInitialDevice(localStorage.getItem(DEVICE_KEY), { p2Available });
   syncDeviceButtons();
   iconImgs = await loadIcons();
   paintMiniIcons();
+  bindButtons();
+  // Der Server schickt Frames; hier wird nur gezeichnet. Der Ton entsteht
+  // serverseitig (Beep-Latch → Push, Task 7); das Task-6-Protokoll traegt
+  // keinen Buzzer-Zustand, daher bleibt der Tab selbst stumm.
+  live.onFrame((lcd) => { lastFrame = lcd; markBooted(); });
+  requestAnimationFrame(frame);
+
   if (params.has("debug")) {
     const w = window as unknown as {
-      __emu: () => Emulator | null;
-      __emus: Partial<Record<Device, Emulator>>;
+      __live: LiveClient;
+      __frame: () => Uint8Array | null;
       __setActive: (d: Device) => void;
       __notify: (t: string, b: string) => Promise<void>;
-      __sync: () => Promise<void>;
       __audio: () => ReturnType<typeof piezo.state>;
     };
-    w.__emu = cur;
-    w.__emus = emus;
+    w.__live = live;
+    w.__frame = () => lastFrame;
     w.__setActive = setActive;
     w.__notify = notify;
-    w.__sync = syncAfterSignIn;
     w.__audio = () => piezo.state();
   }
 
-  // Jedes Geraet aus seinem eigenen Slot laden und die Abwesenheit nachholen.
-  for (const id of DEVICE_IDS) {
-    const e = emus[id];
-    if (!e || SPEED !== 1) continue;
-    let saved: Awaited<ReturnType<typeof loadEmu>> = null;
-    try { saved = await loadEmu(localStorage, id); } catch { /* Quota */ }
-    if (saved) {
-      try { e.loadState(saved.bytes); } catch { /* inkompatibler Save */ }
-    }
-    // Die komplette Abwesenheit nachholen – kein Zeitlimit. In Chunks, damit der
-    // Tab nicht einfriert; der Fortschritt läuft im Lade-Overlay.
-    if (saved?.at) {
-      await catchUpAllFor(id, unitsForMs(Math.max(0, Date.now() - saved.at)));
-    }
-  }
-
-  if (AUTH_ENABLED) await syncBeforeBoot();
-
-  bindButtons();
-  lastTs = performance.now();
-  // Robust speichern: beim Verlassen/Verstecken der Seite sofort sichern.
-  window.addEventListener("pagehide", saveNow);
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) { saveNow(); void flushCloud(); return; }
-    // Zurück im Vordergrund: verpasste Zeit nachholen (Mobile drosselt Timer im
-    // Hintergrund). Kurze Lücken frisst der Frame-Loop; lange laufen mit Fortschritt.
-    const dt = Math.min(performance.now() - lastTs, 30 * 24 * 3600 * 1000);
-    lastTs = performance.now();
-    if (dt <= 0) return;
-    if (dt > 30 * 1000) void catchUpAllFor(active, unitsForMs(dt * SPEED));
-    else pacer.add(unitsForMs(dt * SPEED));
-  });
-  requestAnimationFrame(frame);
+  // Nach dem Anmelden den Stream fuer das aktive Geraet starten. Die Anmeldung
+  // laeuft parallel (initAccount) und stoesst startStream erneut an, sobald eine
+  // Session da ist (siehe onSessionRefresh).
+  void startStream();
 }
 
 function bindButtons(): void {
@@ -1270,7 +1081,9 @@ function bindButtons(): void {
   const pressed = new Set<LogicalButton>();
   const set = (b: LogicalButton, down: boolean) => {
     if (down) pressed.add(b); else pressed.delete(b);
-    cur()?.setButton(BUTTON_MAP[b], down);
+    // Nur der Druck wird gesendet - der Server faehrt den down/up-Zyklus selbst
+    // (Task-6-Protokoll, diskretes {t:"press"}).
+    if (down) live.press(BUTTON_MAP[b] as Btn);
   };
   const releaseAll = () => { for (const b of [...pressed]) set(b, false); };
 
@@ -1306,72 +1119,38 @@ function bindButtons(): void {
   window.addEventListener("keyup", (e) => { if (dialogOpen()) return; const b = handleKey(e.key); if (b) set(b, false); });
 }
 
-function frame(ts: number): void {
-  const e = cur();
-  if (!e) return;
-  if (STATIC > 0) {
-    for (const id of DEVICE_IDS) emus[id]?.step(STATIC);
-  } else {
-    const dt = Math.min(Math.max(0, ts - lastTs), MAX_FRAME_CATCHUP_MS);
-    lastTs = ts;
-    pacer.add(unitsForMs(dt * SPEED));
-    pump(MAX_STEPS_PER_FRAME);
-  }
-
-  const scale = Math.max(1, Math.floor(canvas.clientWidth / LCD_WIDTH));
-  if (canvas.width !== LCD_WIDTH * scale) {
-    canvas.width = LCD_WIDTH * scale;
-    canvas.height = LCD_HEIGHT * scale;
-    for (const el of [iconsTop, iconsBottom]) { el.width = LCD_WIDTH * scale; el.height = 8 * scale; }
-  }
-  drawLcd(ctx, e.lcd(), scale);
-
-  const icons = e.icons();
-  drawIconRow(ctxTop, icons, 0, scale, iconImgs);
-  drawIconRow(ctxBottom, icons, 1, scale, iconImgs);
-
-  // Mini-Vorschau nur spiegeln, wenn das Menü offen ist.
-  if (miniLcd && miniLcdCtx && menuEl && !menuEl.hidden) {
-    const ms = 4;
-    miniLcd.width = LCD_WIDTH * ms; miniLcd.height = LCD_HEIGHT * ms;
-    drawLcd(miniLcdCtx, e.lcd(), ms);
-    if (miniTop && miniTopCtx) { miniTop.width = LCD_WIDTH * ms; miniTop.height = 8 * ms; drawIconRow(miniTopCtx, icons, 0, ms, iconImgs); }
-    if (miniBottom && miniBottomCtx) { miniBottom.width = LCD_WIDTH * ms; miniBottom.height = 8 * ms; drawIconRow(miniBottomCtx, icons, 1, ms, iconImgs); }
-  }
-
-  // Ton nur vom aktiven Geraet - beide Piezos gleichzeitig waere Laerm.
-  const b = e.buzzer();
-  piezo.update(b.freq, b.on);
-  if (e.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
-    void notify(t("notifyTitle"), t("notifyBody"));
-    refreshBadge(true);
-  }
-
-  // periodisch speichern (alle ~5s)
-  if (SPEED === 1 && STATIC === 0 && ++saveTick % 300 === 0) {
-    for (const id of DEVICE_IDS) {
-      const inst = emus[id];
-      if (inst) void saveEmu(localStorage, id, inst.saveState()).catch(() => { /* Quota */ });
+/**
+ * Zeichnet den zuletzt empfangenen Frame. Der Server liefert die LCD-Bits; die
+ * Icon-Reihen kennt P1 nicht (der Server schickt nur das LCD), daher bleiben sie
+ * leer - exakt das Aussehen des alten P1-Stands.
+ */
+function frame(): void {
+  const lcd = lastFrame;
+  if (lcd) {
+    const scale = Math.max(1, Math.floor(canvas.clientWidth / LCD_WIDTH));
+    if (canvas.width !== LCD_WIDTH * scale) {
+      canvas.width = LCD_WIDTH * scale;
+      canvas.height = LCD_HEIGHT * scale;
+      for (const el of [iconsTop, iconsBottom]) { el.width = LCD_WIDTH * scale; el.height = 8 * scale; }
     }
-    markCloudDirty();
+    drawLcd(ctx, lcd, scale);
+    drawIconRow(ctxTop, blankIcons, 0, scale, iconImgs);
+    drawIconRow(ctxBottom, blankIcons, 1, scale, iconImgs);
+
+    // Mini-Vorschau nur spiegeln, wenn das Menü offen ist.
+    if (miniLcd && miniLcdCtx && menuEl && !menuEl.hidden) {
+      const ms = 4;
+      miniLcd.width = LCD_WIDTH * ms; miniLcd.height = LCD_HEIGHT * ms;
+      drawLcd(miniLcdCtx, lcd, ms);
+      if (miniTop && miniTopCtx) { miniTop.width = LCD_WIDTH * ms; miniTop.height = 8 * ms; drawIconRow(miniTopCtx, blankIcons, 0, ms, iconImgs); }
+      if (miniBottom && miniBottomCtx) { miniBottom.width = LCD_WIDTH * ms; miniBottom.height = 8 * ms; drawIconRow(miniBottomCtx, blankIcons, 1, ms, iconImgs); }
+    }
   }
-  if (!booted && pacer.owedUnits <= 0) { booted = true; loadingEl?.classList.add("hidden"); }
-  if (STATIC === 0) requestAnimationFrame(frame);
+  requestAnimationFrame(frame);
 }
 
-// Im Hintergrund weiterlaufen lassen und bei Rufen benachrichtigen.
-setInterval(() => {
-  const e = cur();
-  if (!document.hidden || !e || SPEED !== 1) return;
-  const now = performance.now();
-  const dt = Math.min((now - lastTs) / 1000, 3600);
-  lastTs = now;
-  pacer.add(unitsForMs(dt * 1000));
-  pump(MAX_STEPS_PER_FRAME);
-  if (e.takeBuzzer() && (!document.hasFocus() || document.hidden)) {
-    void notify(t("notifyTitle"), t("notifyBody"));
-    refreshBadge(true);
-  }
-}, 5000);
+// Beim Verlassen/Verstecken der Seite nur noch die Verbindung abraeumen - der
+// Server laesst das Tier weiterlaufen (der Tab war nie die Quelle der Zeit).
+window.addEventListener("pagehide", saveNow);
 
 boot();

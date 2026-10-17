@@ -14,7 +14,7 @@
  * sit 44+ above it. tests/emu-death.test.ts asserts this margin directly and
  * fails if BOX is shrunk below the figure (see the "calibration" describe).
  */
-import { LCD_WIDTH, LCD_HEIGHT } from "./emulator.js";
+import { LCD_WIDTH, LCD_HEIGHT } from "./constants.js";
 
 /** Central figure box (x0,y0,x1,y1) — excludes the animating star border. */
 export const BOX = { x0: 17, y0: 1, x1: 27, y1: 14 };

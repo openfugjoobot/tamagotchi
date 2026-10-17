@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { drawLcd } from "@/render/lcd";
-import { LCD_WIDTH, LCD_HEIGHT } from "@/emu/emulator";
+import { LCD_WIDTH, LCD_HEIGHT } from "@/emu/constants";
 
 function mockCtx() {
   return {

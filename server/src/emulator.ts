@@ -16,7 +16,7 @@
 // suffix is the ESM-correct specifier for the emitted file; vitest and `tsc`
 // both resolve `death.js` back to `death.ts`.
 import { isAngelFrame } from "../../src/emu/death.js";
-import { TS_PER_STEP } from "../../src/emu/clock.js";
+import { TS_PER_STEP } from "../../src/emu/constants.js";
 
 export const LCD_WIDTH = 32;
 export const LCD_HEIGHT = 16;

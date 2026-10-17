@@ -1,4 +1,4 @@
-import { LCD_WIDTH, LCD_HEIGHT } from "../emu/emulator";
+import { LCD_WIDTH, LCD_HEIGHT } from "../emu/constants";
 
 /** Zeichnet den 32×16-LCD-Puffer (0/1) integer-skaliert auf einen 2D-Canvas. */
 export function drawLcd(
