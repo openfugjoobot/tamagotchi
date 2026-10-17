@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { verifyIdToken, resetJwksCache } from "@/worker/auth";
+import { verifyIdToken, resetJwksCache } from "../server/src/auth";
 import { makeTestKey, signJwt, jwksFetch } from "./helpers/jwt";
 
 const CLIENT = "1234.apps.googleusercontent.com";
