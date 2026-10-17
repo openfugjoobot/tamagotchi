@@ -277,4 +277,78 @@ describe("startServer wiring", () => {
       await srv.close();
     }
   }, 15000);
+
+  it("emits state{alive:false} to a watching client when a pet dies (Task-13 §2.1 seam)", async () => {
+    // The death-flip emission is correct today only by accident of the
+    // `?? false` fallback: `onFrame` deletes the dead pet from `live` *before*
+    // `onTickEnd` calls `notifyChanged((petId) => live.get(petId)?.alive ?? false)`.
+    // The hub-level test proves the flip with a synthetic `() => pet.alive`; no
+    // test drove it through the real `main.ts` wiring where `live.delete()`
+    // precedes the lookup. If the fallback (or the delete ordering) ever changes,
+    // the watching client silently stops being told the pet died — this pins it.
+    resetBeepDebounce();
+    resetJwksCache();
+    const Pool = memPool();
+    const pool = new Pool();
+    const key: TestKey = await makeTestKey();
+
+    // A controllable fake: alive on rehydrate, then flips dead for the next tick.
+    let isDead = false;
+    const dying = {
+      ...fakePet(),
+      dead: () => isDead,
+    };
+    const srv = await startServer(
+      baseDeps(pool, {
+        verify: (token: string, clientId: string) =>
+          verifyIdToken(token, clientId, { fetchImpl: jwksFetch(key.jwk), now: Date.now() }),
+        createPet: () => dying as never,
+      }),
+    );
+    try {
+      const { Repo } = await import("../server/src/db/repo");
+      const repo = new Repo(pool);
+      const owner = await repo.upsertUser({ sub: "sub-die" });
+      const pet = await repo.createPet(owner.id, "p1");
+      await srv.rehydrate();
+      // Fresh row is alive and the fake reports alive, so the live entry is alive.
+      expect(srv.livePetIds()).toContain(pet.id);
+
+      const token = await signJwt(key.priv, {
+        sub: "sub-die",
+        aud: CLIENT,
+        iss: "https://accounts.google.com",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+
+      const ws = new WebSocket(`${srv.wsUrl}/ws`);
+      await new Promise<void>((r) => ws.on("open", () => r()));
+      const states: boolean[] = [];
+      const sawAliveFalse = new Promise<boolean>((r) => {
+        ws.on("message", (d) => {
+          const m = JSON.parse(String(d));
+          if (m.t === "state") {
+            states.push(m.alive);
+            if (m.alive === false) r(true);
+          }
+        });
+        setTimeout(() => r(false), 5000);
+      });
+      ws.send(JSON.stringify({ t: "hello", token, petId: pet.id }));
+
+      // Wait until the initial living state has been delivered, then flip.
+      await new Promise((r) => setTimeout(r, 300));
+      expect(states).toContain(true);
+      isDead = true;
+
+      // One tick (TICK_MS=125) is enough: onFrame drops the pet from `live`,
+      // onTickEnd notifies, and the bound socket must receive alive:false.
+      expect(await sawAliveFalse).toBe(true);
+      expect(states).toContain(false);
+      expect(srv.livePetIds()).not.toContain(pet.id);
+      ws.close();
+    } finally {
+      await srv.close();
+    }
+  }, 15000);
 });
