@@ -12,6 +12,11 @@ import { buildGrass } from "./grass";
 import { applyI18n, currentLang, iconNames, t } from "./i18n";
 import { THEMES, BG_KEY, AUTO, savedBg, resolveTheme } from "./theme";
 import { SOUND_KEY, NOTIFY_KEY, DEVICE_KEY, BADGE_KEY, WAKELOCK_KEY } from "./storage/keys";
+import { createPetsView, type PetSummary } from "./ui/pets";
+import { createSlotsView } from "./ui/slots";
+import { createSettingsView, type Settings } from "./ui/settings";
+import { createBeepsView, type BeepSummary } from "./ui/beeps";
+import { api } from "./ui/api";
 import {
   initPwa,
   registerServiceWorker,
@@ -566,6 +571,7 @@ function initUI(): void {
     try { localStorage.setItem(SOUND_KEY, soundOn ? "1" : "0"); } catch { /* ignore */ }
     piezo.setMuted(!soundOn);
     updateSoundLabel();
+    persistSetting({ sound: soundOn });
   });
 
   document.getElementById("btn-notify")?.addEventListener("click", async () => {
@@ -574,6 +580,7 @@ function initUI(): void {
       try { localStorage.setItem(NOTIFY_KEY, "0"); } catch { /* ignore */ }
       updateNotifyLabel();
       clearAppBadge();
+      persistSetting({ push: false });
       return;
     }
     if (!("Notification" in window)) return;
@@ -583,6 +590,7 @@ function initUI(): void {
       try { localStorage.setItem(NOTIFY_KEY, notifyEnabled ? "1" : "0"); } catch { /* ignore */ }
     } catch { notifyEnabled = false; }
     updateNotifyLabel();
+    persistSetting({ push: notifyEnabled });
   });
 
   // ---- i18n (Sprache folgt der Browsersprache) ----
@@ -751,21 +759,8 @@ function showConnecting(): void {
 }
 
 // ---- Pet-Aufloesung: welches Tier zeigt der aktive Slot? ----
-// Die Tier-Liste bekommt in Task 11 eine eigene Ansicht; hier genuegt die
-// Zuordnung Slot -> petId ueber die bestehende API, damit der Stream laeuft.
-interface PetSummary { id: string; device: Device; alive: boolean }
-
-async function listPets(token: string): Promise<PetSummary[]> {
-  try {
-    const res = await fetch("/api/pets", { headers: { authorization: `Bearer ${token}` }, cache: "no-store" });
-    if (!res.ok) return [];
-    const body = (await res.json()) as { pets?: PetSummary[] } | PetSummary[];
-    const arr = Array.isArray(body) ? body : body.pets ?? [];
-    return arr.filter((p) => p && typeof p.id === "string" && (p.device === "p1" || p.device === "p2"));
-  } catch {
-    return [];
-  }
-}
+// Die Tier-Liste hat jetzt eine eigene Ansicht (src/ui/pets.ts); hier bleibt nur
+// die Zuordnung Slot -> petId ueber die API, damit der Stream das richtige Tier zeigt.
 
 /** Neuestes lebendes Tier des Geraets, sonst das neueste ueberhaupt, sonst nichts. */
 function pickPet(pets: PetSummary[], device: Device): PetSummary | null {
@@ -782,13 +777,223 @@ function pickPet(pets: PetSummary[], device: Device): PetSummary | null {
 async function startStream(): Promise<void> {
   const s = currentSession();
   showConnecting();
-  if (!AUTH_ENABLED || !s) return;
-  const pet = pickPet(await listPets(s.token), active);
-  if (!pet) {
-    if (active === "p2") disableP2();
+  if (!AUTH_ENABLED || !s) {
+    // Ohne Konto gibt es nichts zu streamen: das Lade-Overlay darf nicht ewig
+    // stehen bleiben (Task-10-Mandat c). Stattdessen ein klarer Hinweis.
+    showSignedOut();
     return;
   }
+  const pets = await fetchPets(s.token);
+  const pet = pickPet(pets, active);
+  if (!pet) {
+    if (active === "p2") disableP2();
+    // Kein passendes Tier: der Nutzer kann in der Tier-Liste eines anlegen.
+    noPetAvailable();
+    return;
+  }
+  currentPetId = pet.id;
   live.connect(pet.id, s.token);
+}
+
+// ---- Task 11: Tier-Liste, Speicherstände, Einstellungen, Beep-Verlauf ----
+//
+// Diese Ansichten haengen an der Task-8-HTTP-API. Sie sind bewusst duenn: die
+// Logik steckt in src/ui/*, hier wird nur verdrahtet (oeffnen/schliessen,
+// Token, Toast). Ohne Anmeldung bleiben sie leer statt zu scheitern.
+
+/** Aktuell gestreamte petId (fuer die Tier-Liste). */
+let currentPetId: string | null = null;
+
+/**
+ * Alle Tiere des Nutzers laden.
+ *
+ * Nutzt den zentralen API-Helper statt eigenem fetch (Task-11-Konsolidierung);
+ * liefert eine leere Liste statt zu werfen, damit die UI nie blockiert.
+ */
+async function fetchPets(token: string): Promise<PetSummary[]> {
+  const res = await api.get<PetSummary[]>("/api/pets", token);
+  if (!res.ok || !Array.isArray(res.data)) return [];
+  return res.data.filter((p) => p && typeof p.id === "string" && (p.device === "p1" || p.device === "p2"));
+}
+
+const petsView = createPetsView({
+  live,
+  token: () => currentSession()?.token ?? null,
+  host: document.getElementById("pets-list") ?? undefined,
+  onSelect: (petId) => {
+    currentPetId = petId;
+    // Auswahl uebernimmt das Tier in den Stream; das Menue schliesst.
+    const pet = lastPets.find((p) => p.id === petId);
+    if (pet) setActive(pet.device);
+    closeTask11Windows();
+  },
+});
+
+let lastPets: PetSummary[] = [];
+
+const slotsView = createSlotsView({
+  token: () => currentSession()?.token ?? null,
+  host: document.getElementById("slots-list") ?? undefined,
+  notify: (msg) => { if (msg) showToast(msg); },
+  onChange: () => void refreshSlots(),
+});
+
+const settingsView = createSettingsView({
+  token: () => currentSession()?.token ?? null,
+  onApply: (s) => applyServerSettings(s),
+  notify: (msg) => { if (msg) showToast(msg); },
+  failMessage: () => t("settingsFailed"),
+});
+
+const beepsView = createBeepsView({ host: document.getElementById("beeps-list") ?? undefined });
+
+/**
+ * Eine Einstellung serverseitig sichern, wenn ein Konto da ist.
+ *
+ * Ohne Anmeldung passiert nichts: die lokalen Schalter gelten weiter. So bleibt
+ * das Verhalten offline unveraendert und der Server ist die Quelle, sobald man
+ * angemeldet ist (Spec §3).
+ */
+function persistSetting(patch: Partial<Settings>): void {
+  if (!currentSession()) return;
+  void settingsView.save(patch);
+}
+
+/** Ein geladenes Settings-Objekt auf die vorhandene UI anwenden. */
+function applyServerSettings(s: Settings): void {
+  // Shell/Hintergrund nur anwenden, wenn der Server-Wert eine echte UI-ID ist.
+  // Die Server-Allow-List (green/blue/pink/dino, light/dark) deckt sich NICHT
+  // mit den UI-IDs (teal/pink/…, blossom/day/…); ein unbekannter Wert wuerde die
+  // Auswahl nur kaputtmachen. Klang und Push passen sauber (boolesch).
+  if (SHELLS.some((x) => x.id === s.shell)) {
+    const el = document.querySelector(".device-wrap") as HTMLElement | null;
+    if (el) applyShell(el, s.shell, localStorage);
+  }
+  if (THEMES.some((x) => x.id === s.theme)) applyBg(s.theme, false);
+  soundOn = s.sound !== false;
+  piezo.setMuted(!soundOn);
+  updateSoundLabel();
+  notifyEnabled = s.push;
+  updateNotifyLabel();
+}
+
+/** Speicherstände des aktuellen Tiers neu laden und rendern. */
+async function refreshSlots(): Promise<void> {
+  if (!currentPetId) { slotsView.render([], ""); return; }
+  const slots = await slotsView.list(currentPetId);
+  slotsView.render(slots, currentPetId);
+}
+
+/** Beep-Verlauf laden und rendern. */
+async function refreshBeeps(): Promise<void> {
+  const token = currentSession()?.token ?? null;
+  const res = await api.get<BeepSummary[]>("/api/beeps", token);
+  beepsView.render(res.ok && Array.isArray(res.data) ? res.data : []);
+}
+
+/** Tier-Liste neu laden und rendern. */
+async function refreshPets(): Promise<void> {
+  const token = currentSession()?.token ?? null;
+  lastPets = token ? await fetchPets(token) : [];
+  petsView.render(lastPets, currentPetId);
+}
+
+/** Ein neues Tier anlegen und direkt streamen. */
+async function createPet(device: Device): Promise<void> {
+  const token = currentSession()?.token ?? null;
+  if (!token) return;
+  await api.post("/api/pets", token, { device });
+  await refreshPets();
+  const pet = pickPet(lastPets, device);
+  if (pet) { currentPetId = pet.id; setActive(device); }
+}
+
+/** Lade-Hinweis fuer abgemeldete Nutzer (kein ewiges Spinner, Mandat c). */
+function showSignedOut(): void {
+  if (booted) return;
+  if (loadtxtEl) loadtxtEl.textContent = t("signInToPlay");
+  if (loadbarEl) loadbarEl.hidden = true;
+}
+
+/**
+ * Angemeldet, aber kein passendes Tier: das Overlay aufloesen statt ewig zu
+ * spinnen. Der Nutzer legt das Tier in der Tier-Liste an (Menue > Tiere).
+ */
+function noPetAvailable(): void {
+  markBooted();
+}
+
+/** Alle Task-11-Fenster schliessen (Menue + Scrim mitnehmen). */
+function closeTask11Windows(): void {
+  for (const id of ["pets-pop", "slots-pop", "beeps-pop"]) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  }
+  const menu = document.getElementById("menu");
+  const scrim = document.getElementById("scrim");
+  if (scrim && menu && menu.hidden) scrim.hidden = true;
+}
+
+/** Ein Task-11-Fenster oeffnen (und die anderen schliessen). */
+function openWindow(id: string, onOpen: () => void): void {
+  const menu = document.getElementById("menu");
+  if (menu && !menu.hidden) {
+    menu.hidden = true;
+    document.getElementById("btn-menu")?.setAttribute("aria-expanded", "false");
+  }
+  closeTask11Windows();
+  const panel = document.getElementById(id);
+  if (panel) panel.hidden = false;
+  const scrim = document.getElementById("scrim");
+  if (scrim) scrim.hidden = false;
+  onOpen();
+}
+
+/** Verbindungsstatus als diskreter Indikator (Task-10-Mandat b). */
+function updateConnBadge(): void {
+  const badge = document.getElementById("conn-badge");
+  const text = document.getElementById("conn-text");
+  if (!badge) return;
+  const st = live.status();
+  badge.hidden = false;
+  badge.dataset.state = st;
+  if (text) text.textContent = t(st === "live" ? "connectionLive" : "connectionOffline");
+  badge.title = `${t(st === "live" ? "connectionLive" : "connectionOffline")} — ${t("connectionHint")}`;
+}
+
+/** Die drei Task-11-Menueknoepfe und ihre Fenster verdrahten. */
+function initTask11(): void {
+  document.getElementById("btn-pets")?.addEventListener("click", () => openWindow("pets-pop", () => void refreshPets()));
+  document.getElementById("btn-slots")?.addEventListener("click", () => openWindow("slots-pop", () => void refreshSlots()));
+  document.getElementById("btn-beeps")?.addEventListener("click", () => openWindow("beeps-pop", () => void refreshBeeps()));
+  document.getElementById("pets-close")?.addEventListener("click", closeTask11Windows);
+  document.getElementById("slots-close")?.addEventListener("click", closeTask11Windows);
+  document.getElementById("beeps-close")?.addEventListener("click", closeTask11Windows);
+  document.getElementById("pet-new-p1")?.addEventListener("click", () => void createPet("p1"));
+  document.getElementById("pet-new-p2")?.addEventListener("click", () => void createPet("p2"));
+  document.getElementById("slot-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = document.getElementById("slot-name") as HTMLInputElement | null;
+    if (!input || !currentPetId) return;
+    const label = input.value;
+    input.value = "";
+    void slotsView.create(currentPetId, label).then(() => refreshSlots());
+  });
+  // Verbindungsstatus regelmaessig nachziehen (WS-Zustand kennt keinen Event).
+  window.setInterval(updateConnBadge, 1500);
+  updateConnBadge();
+
+  // Schliessen per Escape und per Klick auf den Scrim, wie die uebrigen Fenster.
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (["pets-pop", "slots-pop", "beeps-pop"].some((id) => !document.getElementById(id)?.hidden)) {
+      closeTask11Windows();
+    }
+  });
+  document.getElementById("scrim")?.addEventListener("click", () => {
+    const open = ["pets-pop", "slots-pop", "beeps-pop"].some((id) => !document.getElementById(id)?.hidden);
+    if (open) closeTask11Windows();
+  });
 }
 
 /** Anleitung als Fenster im Menue-Stil (Inhalt steht in index.html). */
@@ -1043,11 +1248,19 @@ async function boot(): Promise<void> {
   iconImgs = await loadIcons();
   paintMiniIcons();
   bindButtons();
+  initTask11();
   // Der Server schickt Frames; hier wird nur gezeichnet. Der Ton entsteht
   // serverseitig (Beep-Latch → Push, Task 7); das Task-6-Protokoll traegt
   // keinen Buzzer-Zustand, daher bleibt der Tab selbst stumm.
   live.onFrame((lcd) => { lastFrame = lcd; markBooted(); });
+  // Verbindungsstatus folgt dem Live-Client statt nur navigator.onLine
+  // (Task-10-Mandat b): ein abgerissener Socket wird so sichtbar.
+  live.onState(() => updateConnBadge());
   requestAnimationFrame(frame);
+
+  // Einstellungen vom Server laden, sobald ein Konto da ist. Ohne Konto
+  // bleiben die lokalen Schalter wie gehabt.
+  if (currentSession()) void settingsView.load();
 
   if (params.has("debug")) {
     const w = window as unknown as {

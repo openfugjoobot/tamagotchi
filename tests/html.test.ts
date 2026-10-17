@@ -38,4 +38,21 @@ describe("html page", () => {
     expect(existsSync("guide.html")).toBe(false);
     expect(index).not.toContain("guide.html");
   });
+
+  it("hat die Task-11-Ansichten (Tiere, Speicherstände, Beeps, Status)", () => {
+    // Ein Pet-View-Fenster, ein Slots-Fenster und ein Beep-Fenster im win-Stil.
+    expect(index).toMatch(/id="pets-pop"/);
+    expect(index).toMatch(/id="pets-list"/);
+    expect(index).toMatch(/id="slots-pop"/);
+    expect(index).toMatch(/id="slots-list"/);
+    expect(index).toMatch(/id="beeps-pop"/);
+    expect(index).toMatch(/id="beeps-list"/);
+    // Die Menueknoepfe, ueber die man sie oeffnet.
+    expect(index).toMatch(/id="btn-pets"/);
+    expect(index).toMatch(/id="btn-slots"/);
+    expect(index).toMatch(/id="btn-beeps"/);
+    // Der Verbindungsstatus-Indikator (Task-10-Mandat b).
+    expect(index).toMatch(/id="conn-badge"/);
+    expect(index).toMatch(/data-state="offline"/);
+  });
 });

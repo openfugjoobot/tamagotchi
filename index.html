@@ -72,6 +72,10 @@
         <button class="account-btn" id="account-btn" hidden aria-haspopup="dialog" aria-expanded="false" data-i18n-aria="account">
           <span class="account-face" id="account-face" aria-hidden="true"></span>
         </button>
+        <span class="conn-badge" id="conn-badge" hidden data-state="offline" role="status" aria-live="polite">
+          <span class="conn-dot" aria-hidden="true"></span>
+          <span id="conn-text" data-i18n="connectionOffline">offline</span>
+        </span>
       </div>
     </div>
   </header>
@@ -166,7 +170,32 @@
     <button id="toast-close" class="toast-close" type="button" aria-label="Close">✕</button>
   </div>
 
-  <div class="menu" id="menu" hidden role="dialog" aria-modal="true" aria-labelledby="menu-title">
+  <div id="pets-pop" class="win pets-pop" hidden role="dialog" aria-modal="true" aria-labelledby="pets-title">
+    <div class="menu-head"><b id="pets-title" data-i18n="pets">Pets</b><button class="menu-x" id="pets-close" aria-label="Close">✕</button></div>
+    <div class="pets-body">
+      <ul class="pets-list" id="pets-list"></ul>
+      <div class="pet-new-row">
+        <button type="button" id="pet-new-p1" data-i18n="petNewP1">New P1</button>
+        <button type="button" id="pet-new-p2" data-i18n="petNewP2">New P2</button>
+      </div>
+    </div>
+  </div>
+  <div id="slots-pop" class="win slots-pop" hidden role="dialog" aria-modal="true" aria-labelledby="slots-title">
+    <div class="menu-head"><b id="slots-title" data-i18n="slots">Save slots</b><button class="menu-x" id="slots-close" aria-label="Close">✕</button></div>
+    <div class="slots-body">
+      <ul class="slots-list" id="slots-list"></ul>
+      <form class="slot-form" id="slot-form">
+        <input type="text" id="slot-name" maxlength="60" data-i18n-aria="slotNamePlaceholder" data-i18n-placeholder="slotNamePlaceholder" aria-label="Name of this slot" />
+        <button type="submit" class="slot-create" id="slot-create" data-i18n="slotCreate">Save slot</button>
+      </form>
+    </div>
+  </div>
+  <div id="beeps-pop" class="win beeps-pop" hidden role="dialog" aria-modal="true" aria-labelledby="beeps-title">
+    <div class="menu-head"><b id="beeps-title" data-i18n="beeps">Beep history</b><button class="menu-x" id="beeps-close" aria-label="Close">✕</button></div>
+    <ul class="beeps-list" id="beeps-list"></ul>
+  </div>
+
+  <div id="menu" class="menu" hidden role="dialog" aria-modal="true" aria-labelledby="menu-title">
     <div class="menu-head"><b id="menu-title" data-i18n="menu">Menu</b><button class="menu-x" id="menu-close" aria-label="Close">✕</button></div>
     <div class="menu-sec">
       <span class="menu-label" data-i18n="shell">Shell</span>
@@ -240,6 +269,37 @@
           <span data-i18n="updateCheck">Check for updates</span>
         </span>
         <span class="chev" id="update-state"></span>
+      </button>
+      <button class="menu-row" id="btn-pets">
+        <span class="menu-row-main">
+          <svg class="mi" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="8" r="3.4" fill="none" stroke="currentColor" stroke-width="1.7"/>
+            <path d="M5.5 19.5a6.5 6.5 0 0 1 13 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+          </svg>
+          <span data-i18n="pets">Pets</span>
+        </span>
+        <span class="chev">›</span>
+      </button>
+      <button class="menu-row" id="btn-slots">
+        <span class="menu-row-main">
+          <svg class="mi" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="4" y="4.4" width="16" height="15.2" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+            <path d="M8 4.4v5h8v-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            <path d="M8 19.6v-5.4h8v5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+          </svg>
+          <span data-i18n="slots">Save slots</span>
+        </span>
+        <span class="chev">›</span>
+      </button>
+      <button class="menu-row" id="btn-beeps">
+        <span class="menu-row-main">
+          <svg class="mi" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6.6 16.6c-.7-.7-1.1-1.7-1.1-4.2A6.5 6.5 0 0 1 12 5.9a6.5 6.5 0 0 1 6.5 6.5c0 2.5-.4 3.5-1.1 4.2z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            <path d="M10.4 19.1a1.8 1.8 0 0 0 3.2 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+          </svg>
+          <span data-i18n="beeps">Beep history</span>
+        </span>
+        <span class="chev">›</span>
       </button>
       <button class="menu-row danger" id="btn-reset">
         <span class="menu-row-main">
