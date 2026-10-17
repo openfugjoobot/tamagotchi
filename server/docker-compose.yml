@@ -1,0 +1,37 @@
+# Postgres for the tamagotchi server.
+#
+# Secrets are never inlined here: the password lives in `.secrets/tamagotchi.env`
+# (gitignored), one `KEY=value` per line, e.g.
+#
+#   POSTGRES_PASSWORD=<long-random-string>
+#
+# Generate one with: openssl rand -base64 32
+#
+# The env_file path is resolved relative to this compose file, i.e.
+# `server/.secrets/tamagotchi.env`.
+#
+# Start:  docker compose -f server/docker-compose.yml up -d
+# Connect: docker compose -f server/docker-compose.yml exec postgres \
+#            psql -U tamagotchi -d tamagotchi
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tamagotchi-postgres
+    restart: unless-stopped
+    env_file:
+      - .secrets/tamagotchi.env
+    environment:
+      POSTGRES_USER: tamagotchi
+      POSTGRES_DB: tamagotchi
+    ports:
+      - "127.0.0.1:5432:5432"  # localhost only — the DB is not exposed publicly
+    volumes:
+      - tamagotchi-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tamagotchi -d tamagotchi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  tamagotchi-pgdata:
